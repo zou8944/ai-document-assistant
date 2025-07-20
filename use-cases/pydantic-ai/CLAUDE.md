@@ -33,7 +33,8 @@ This file contains the global rules and principles that apply to ALL PydanticAI 
   - `models.py` - Pydantic output models and dependency classes
   - `dependencies.py` - Context dependencies and external service integrations
 - **Use clear, consistent imports** - Import from pydantic_ai package appropriately
-- **Use environment variables for API keys** - Never hardcode sensitive information
+- **Use python-dotenv and load_dotenv()** for environment variables - Follow examples/main_agent_reference/settings.py pattern
+- **Never hardcode sensitive information** - Always use .env files for API keys and configuration
 
 ## 🤖 PydanticAI Development Standards
 
@@ -49,25 +50,50 @@ This file contains the global rules and principles that apply to ALL PydanticAI 
 - **Implement proper parameter validation** - Use Pydantic models for tool parameters
 - **Handle tool errors gracefully** - Implement retry mechanisms and error recovery
 
-### Model Provider Configuration
+### Environment Variable Configuration with python-dotenv
 ```python
-# Use environment-based configuration, never hardcode model strings
+# Use python-dotenv and pydantic-settings for proper configuration management
 from pydantic_settings import BaseSettings
+from pydantic import Field, ConfigDict
+from dotenv import load_dotenv
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.models.openai import OpenAIModel
 
 class Settings(BaseSettings):
-    # LLM Configuration
-    llm_provider: str = "openai"
-    llm_api_key: str
-    llm_model: str = "gpt-4"
-    llm_base_url: str = "https://api.openai.com/v1"
+    """Application settings with environment variable support."""
     
-    class Config:
-        env_file = ".env"
+    model_config = ConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore"
+    )
+    
+    # LLM Configuration
+    llm_provider: str = Field(default="openai", description="LLM provider")
+    llm_api_key: str = Field(..., description="API key for the LLM provider")
+    llm_model: str = Field(default="gpt-4", description="Model name to use")
+    llm_base_url: str = Field(
+        default="https://api.openai.com/v1", 
+        description="Base URL for the LLM API"
+    )
+
+def load_settings() -> Settings:
+    """Load settings with proper error handling and environment loading."""
+    # Load environment variables from .env file
+    load_dotenv()
+    
+    try:
+        return Settings()
+    except Exception as e:
+        error_msg = f"Failed to load settings: {e}"
+        if "llm_api_key" in str(e).lower():
+            error_msg += "\nMake sure to set LLM_API_KEY in your .env file"
+        raise ValueError(error_msg) from e
 
 def get_llm_model():
-    settings = Settings()
+    """Get configured LLM model with proper environment loading."""
+    settings = load_settings()
     provider = OpenAIProvider(
         base_url=settings.llm_base_url, 
         api_key=settings.llm_api_key
@@ -96,6 +122,7 @@ def get_llm_model():
 # Follow main_agent_reference patterns - no result_type unless structured output needed
 from pydantic_ai import Agent, RunContext
 from dataclasses import dataclass
+from .settings import load_settings
 
 @dataclass
 class AgentDependencies:
@@ -103,9 +130,12 @@ class AgentDependencies:
     api_key: str
     session_id: str = None
 
+# Load settings with proper dotenv handling
+settings = load_settings()
+
 # Simple agent with string output (default)
 agent = Agent(
-    get_llm_model(),  # Use environment-based configuration
+    get_llm_model(),  # Uses load_settings() internally
     deps_type=AgentDependencies,
     system_prompt="You are a helpful assistant..."
 )
@@ -120,7 +150,8 @@ async def example_tool(
 ```
 
 ### Security Best Practices
-- **API key management** - Use environment variables, never commit keys
+- **API key management** - Use python-dotenv with .env files, never commit keys to version control
+- **Environment variable loading** - Always use load_dotenv() following examples/main_agent_reference/settings.py
 - **Input validation** - Use Pydantic models for all tool parameters
 - **Rate limiting** - Implement proper request throttling for external APIs
 - **Prompt injection prevention** - Validate and sanitize user inputs
