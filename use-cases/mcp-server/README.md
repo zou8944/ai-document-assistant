@@ -4,6 +4,44 @@ This use case demonstrates how to use **Context Engineering** and the **PRP (Pro
 
 > A PRP is PRD + curated codebase intelligence + agent/runbook—the minimum viable packet an AI needs to plausibly ship production-ready code on the first pass.
 
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Node.js and npm installed
+- Cloudflare account (free tier works)
+- GitHub account for OAuth
+- PostgreSQL database (local or hosted)
+
+### Step 1: Setup Your Project
+
+```bash
+# Clone the context engineering repository
+git clone https://github.com/coleam00/Context-Engineering-Intro.git
+cd Context-Engineering-Intro/use-cases/mcp-server
+
+# Copy template to your new project directory
+python copy_template.py my-mcp-server-project
+
+# Navigate to your new project
+cd my-mcp-server-project
+
+# Install dependencies
+npm install
+
+# Install Wrangler CLI globally
+npm install -g wrangler
+
+# Authenticate with Cloudflare
+wrangler login
+```
+
+**What copy_template.py does:**
+- Copies all template files except build artifacts (respects .gitignore)
+- Renames README.md to README_TEMPLATE.md (so you can create your own README)
+- Includes all source code, examples, tests, and configuration files
+- Preserves the complete context engineering setup
+
 ## 🎯 What You'll Learn
 
 This use case teaches you how to:
@@ -16,9 +54,11 @@ This use case teaches you how to:
 
 ## 📋 How It Works - The PRP Process for MCP Servers
 
-### 1. Define Your MCP Server (initial.md)
+> **Step 1 is the Quick Start setup above** - clone repo, copy template, install dependencies, setup Wrangler
 
-Start by describing the exact MCP server you want to build in `PRPs/INITIAL.md`:
+### Step 2: Define Your MCP Server
+
+Edit `PRPs/INITIAL.md` to describe your specific MCP server requirements:
 
 ```markdown
 ## FEATURE:
@@ -38,7 +78,7 @@ with caching and rate limiting.
 - Coordinate validation for location queries
 ```
 
-### 2. Generate Your PRP
+### Step 3: Generate Your PRP
 
 Use the specialized MCP PRP command to create a comprehensive implementation plan:
 
@@ -55,7 +95,7 @@ Use the specialized MCP PRP command to create a comprehensive implementation pla
 
 > It's important after your PRP is generated to validate everything! With the PRP framework, you are meant to be a part of the process to ensure the quality of all context! An execution is only as good as your PRP. Use /prp-mcp-create as a solid starting point.
 
-### 3. Execute Your PRP
+### Step 4: Execute Your PRP
 
 Use the specialized MCP execution command to build your server:
 
@@ -69,6 +109,32 @@ Use the specialized MCP execution command to build your server:
 - Implements each component following proven patterns
 - Runs comprehensive validation (TypeScript, tests, deployment)
 - Ensures your MCP server works end-to-end
+
+### Step 5: Configure Environment
+
+```bash
+# Create environment file
+cp .dev.vars.example .dev.vars
+
+# Edit .dev.vars with your credentials
+# - GitHub OAuth app credentials
+# - Database connection string
+# - Cookie encryption key
+```
+
+### Step 6: Test and Deploy
+
+```bash
+# Test locally
+wrangler dev --config <your wrangler config (.jsonc)>
+
+# Test with MCP Inspector
+npx @modelcontextprotocol/inspector@latest
+# Connect to: http://localhost:8792/mcp
+
+# Deploy to production
+wrangler deploy
+```
 
 ## 🏗️ MCP-Specific Context Engineering
 
@@ -135,89 +201,6 @@ The `examples/` folder shows how to create MCP tools:
 - **📊 Monitoring** - Optional Sentry integration for production
 - **🧪 Testing** - Comprehensive validation from TypeScript to deployment
 
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Node.js and npm installed
-- Cloudflare account (free tier works)
-- GitHub account for OAuth
-- PostgreSQL database (local or hosted)
-
-### Step 1: Clone and Setup
-
-```bash
-# Clone the context engineering template
-git clone https://github.com/coleam00/Context-Engineering-Intro.git
-cd Context-Engineering-Intro/use-cases/mcp-server
-
-# Install dependencies
-npm install
-
-# Install Wrangler CLI globally
-npm install -g wrangler
-
-# Authenticate with Cloudflare
-wrangler login
-```
-
-### Step 2: Configure Environment
-
-```bash
-# Create environment file
-cp .dev.vars.example .dev.vars
-
-# Edit .dev.vars with your credentials
-# - GitHub OAuth app credentials
-# - Database connection string
-# - Cookie encryption key
-```
-
-### Step 3: Define Your MCP Server
-
-Edit `PRPs/INITIAL.md` to describe your specific MCP server requirements:
-
-```markdown
-## FEATURE:
-Describe exactly what your MCP server should do - be specific about
-functionality, data sources, and user interactions.
-
-## ADDITIONAL FEATURES:
-- List specific features beyond basic CRUD operations
-- Include integrations with external APIs
-- Mention any special requirements
-
-## OTHER CONSIDERATIONS:
-- Authentication requirements
-- Performance considerations
-- Security requirements
-- Rate limiting needs
-```
-
-### Step 4: Generate and Execute PRP
-
-```bash
-# Generate comprehensive PRP
-/prp-mcp-create INITIAL.md
-
-# Execute the PRP to build your server
-/prp-mcp-execute PRPs/your-server-name.md
-```
-
-### Step 5: Test and Deploy
-
-```bash
-# Test locally
-wrangler dev
-
-# Test with MCP Inspector
-npx @modelcontextprotocol/inspector@latest
-# Connect to: http://localhost:8792/mcp
-
-# Deploy to production
-wrangler deploy
-```
-
 ## 🔍 Key Files to Understand
 
 To fully understand this use case, examine these files:
@@ -262,4 +245,4 @@ The goal is to make MCP server development predictable and successful through co
 
 ---
 
-**Ready to build your MCP server?** Start by editing `PRPs/INITIAL.md` and run `/prp-mcp-create INITIAL.md` to generate your comprehensive implementation plan.
+**Ready to build your MCP server?** Follow the complete process above: setup your project with the copy template, configure your environment, define your requirements in `PRPs/INITIAL.md`, then generate and execute your PRP to build your production-ready MCP server.
