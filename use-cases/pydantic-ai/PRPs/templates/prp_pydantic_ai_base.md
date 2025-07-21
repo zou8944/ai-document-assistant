@@ -25,6 +25,7 @@ description: "Template for generating comprehensive PRPs for PydanticAI agent de
 - ❌ **Don't add unnecessary abstractions** - Follow main_agent_reference patterns directly
 - ❌ **Don't build complex workflows** unless specifically required
 - ❌ **Don't add structured output** unless validation is specifically needed (default to string)
+- ❌ **Don't build in the examples/ folder**
 
 ### What TO do:
 - ✅ **Start simple** - Build the minimum viable agent that meets requirements
