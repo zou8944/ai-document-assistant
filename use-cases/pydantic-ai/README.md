@@ -17,7 +17,9 @@ python copy_template.py /path/to/my-agent-project
 # 2. Navigate to your project
 cd /path/to/my-agent-project
 
-# 3. Start building with the PRP workflow
+# 3. Fill out PRPs/INITIAL.md with the agent you want to create
+
+# 4. Start building with the PRP workflow
 # Edit PRPs/INITIAL.md with your requirements, then:
 /generate-pydantic-ai-prp PRPs/INITIAL.md
 /execute-pydantic-ai-prp PRPs/generated_prp.md
