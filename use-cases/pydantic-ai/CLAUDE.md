@@ -20,6 +20,7 @@ This file contains the global rules and principles that apply to ALL PydanticAI 
 
 ## 📚 Project Awareness & Context
 
+- **Use a virtual environment** to run all code and tests. If one isn't already in the codebase when needed, create it
 - **Use consistent PydanticAI naming conventions** and agent structure patterns
 - **Follow established agent directory organization** patterns (agent.py, tools.py, models.py)
 - **Leverage PydanticAI examples extensively** - Study existing patterns before creating new agents

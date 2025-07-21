@@ -17,15 +17,13 @@ python copy_template.py /path/to/my-agent-project
 # 2. Navigate to your project
 cd /path/to/my-agent-project
 
-# 3. Set up environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# 4. Start building with the PRP workflow
+# 3. Start building with the PRP workflow
 # Edit PRPs/INITIAL.md with your requirements, then:
 /generate-pydantic-ai-prp PRPs/INITIAL.md
 /execute-pydantic-ai-prp PRPs/generated_prp.md
 ```
+
+If you are not using Claude Code, you can simply tell your AI coding assistant to use the generate-pydantic-ai-prp and execute-pydantic-ai-prp slash commands in .claude/commands as prompts.
 
 ## 📖 What is This Template?
 
