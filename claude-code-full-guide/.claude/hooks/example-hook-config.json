@@ -6,8 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/format-after-edit.sh",
-            "description": "Automatically format code after file edits"
+            "command": ".claude/hooks/log-tool-usage.sh",
+            "description": "Automatically logs file edits"
           }
         ]
       }

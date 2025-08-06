@@ -381,7 +381,7 @@ This repository includes a simple hook example in `.claude/hooks/`:
 
 1. **Create hook script** in `.claude/hooks/`
 2. **Make it executable**: `chmod +x your-hook.sh`
-3. **Add to settings** in `.claude/settings.json`:
+3. **Add to settings** in `.claude/settings.local.json`:
 
 ```json
 {
