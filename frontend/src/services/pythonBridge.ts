@@ -15,6 +15,21 @@ class EventEmitter<T extends Record<string, any[]> = Record<string, any[]>> {
     return this
   }
 
+  off<K extends keyof T>(event: K, listener: (...args: T[K]) => void): this {
+    const eventListeners = this.listeners.get(event)
+    if (eventListeners) {
+      const index = eventListeners.indexOf(listener)
+      if (index !== -1) {
+        eventListeners.splice(index, 1)
+      }
+      // Clean up empty listener array
+      if (eventListeners.length === 0) {
+        this.listeners.delete(event)
+      }
+    }
+    return this
+  }
+
   emit<K extends keyof T>(event: K, ...args: T[K]): boolean {
     const eventListeners = this.listeners.get(event)
     if (!eventListeners) return false

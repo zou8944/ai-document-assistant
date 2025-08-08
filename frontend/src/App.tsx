@@ -278,17 +278,19 @@ export const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      {/* Title Bar */}
-      <div className="flex-shrink-0 h-12 bg-gradient-to-r from-white/80 to-white/60 backdrop-blur-xl border-b border-white/20">
-        <div className="flex items-center justify-between h-full px-6">
-          <div className="flex items-center space-x-3">
+      {/* Title Bar with drag region */}
+      <div className="flex-shrink-0 h-12 bg-gradient-to-r from-white/80 to-white/60 backdrop-blur-xl border-b border-white/20" style={{ WebkitAppRegion: 'drag' }}>
+        <div className="flex items-center justify-between h-full">
+          {/* Left side - reserve space for system buttons (about 78px) */}
+          <div className="flex items-center space-x-3 pl-20">
             <div className="w-6 h-6 bg-gradient-to-r from-macos-blue to-purple-500 rounded-full" />
             <h1 className="text-lg font-semibold text-macos-gray-900 font-sf-pro">
               AI 文档助手
             </h1>
           </div>
           
-          <div className="flex items-center space-x-2">
+          {/* Right side controls */}
+          <div className="flex items-center space-x-2 pr-6" style={{ WebkitAppRegion: 'no-drag' }}>
             <button className="p-1.5 hover:bg-white/20 rounded-full transition-colors">
               <Cog6ToothIcon className="w-4 h-4 text-macos-gray-600" />
             </button>
@@ -329,16 +331,21 @@ export const App: React.FC = () => {
                   className={clsx(
                     'w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left transition-all duration-200',
                     isActive
-                      ? 'bg-macos-blue text-white macos-shadow'
+                      ? 'bg-macos-blue text-white macos-shadow border-0'
                       : isDisabled
-                      ? 'text-macos-gray-400 cursor-not-allowed'
-                      : 'text-macos-gray-700 hover:bg-white/40 hover:scale-105',
-                    'glass-button'
+                      ? 'text-macos-gray-400 cursor-not-allowed glass-button'
+                      : 'text-macos-gray-700 hover:bg-white/40 hover:scale-105 glass-button'
                   )}
+                  style={isActive ? {
+                    background: '#007AFF',
+                    color: 'white',
+                    backdropFilter: 'blur(10px)',
+                    border: 'none'
+                  } : {}}
                 >
-                  <Icon className="w-5 h-5 flex-shrink-0" />
+                  <Icon className={clsx('w-5 h-5 flex-shrink-0', isActive ? 'text-white' : '')} />
                   <div className="flex-1">
-                    <div className="font-medium">{tab.name}</div>
+                    <div className={clsx('font-medium', isActive ? 'text-white' : '')}>{tab.name}</div>
                     <div className={clsx(
                       'text-xs',
                       isActive ? 'text-white/80' : 'text-macos-gray-500'
