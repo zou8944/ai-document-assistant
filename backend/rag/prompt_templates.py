@@ -80,7 +80,7 @@ def format_sources(sources: list) -> str:
     """Format source citations for display"""
     if not sources:
         return ""
-    
+
     formatted_sources = []
     for i, source in enumerate(sources, 1):
         source_info = f"{i}. **{source.get('source', 'Unknown')}**"
@@ -89,5 +89,5 @@ def format_sources(sources: list) -> str:
         if source.get('score'):
             source_info += f" (相关度: {source['score']:.2f})"
         formatted_sources.append(source_info)
-    
+
     return SOURCE_CITATION_TEMPLATE.format(sources="\n".join(formatted_sources))

@@ -2,11 +2,13 @@
 Pytest configuration and fixtures for backend tests.
 """
 
-import pytest
-import tempfile
 import os
+import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
 
 # Test fixtures
 @pytest.fixture
@@ -72,7 +74,7 @@ def sample_documents():
             "metadata": {"type": "test"}
         },
         {
-            "id": "doc2", 
+            "id": "doc2",
             "content": "This is the second test document. It has different content for variety.",
             "source": "test2.txt",
             "start_index": 100,

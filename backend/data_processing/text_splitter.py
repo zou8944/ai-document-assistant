@@ -4,11 +4,11 @@ Following 2024 best practices for document preprocessing and metadata preservati
 """
 
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -28,11 +28,11 @@ class DocumentProcessor:
     Document text processing and chunking using LangChain's RecursiveCharacterTextSplitter.
     Optimized for RAG applications with proper metadata preservation.
     """
-    
+
     def __init__(self, chunk_size: int = 1000, chunk_overlap: int = 200):
         """
         Initialize document processor with standard 2024 configuration.
-        
+
         Args:
             chunk_size: Size of each chunk (default 1000 - 2024 recommendation)
             chunk_overlap: Overlap between chunks (default 200 - standard overlap)
@@ -45,26 +45,26 @@ class DocumentProcessor:
             separators=["\n\n", "\n", " ", ""],  # Default separators
             keep_separator=False
         )
-        
+
         logger.info(f"Initialized DocumentProcessor with chunk_size={chunk_size}, overlap={chunk_overlap}")
-    
-    def process_text(self, text: str, source: str = "unknown", 
+
+    def process_text(self, text: str, source: str = "unknown",
                     additional_metadata: Optional[Dict[str, Any]] = None) -> List[DocumentChunk]:
         """
         Process raw text into structured chunks with metadata.
-        
+
         Args:
             text: Raw text content to process
             source: Source identifier (file path, URL, etc.)
             additional_metadata: Optional metadata to include with each chunk
-            
+
         Returns:
             List of DocumentChunk objects with preserved metadata
         """
         if not text.strip():
             logger.warning(f"Empty text provided for source: {source}")
             return []
-        
+
         try:
             # Create LangChain Document
             doc = Document(
@@ -74,10 +74,10 @@ class DocumentProcessor:
                     **(additional_metadata or {})
                 }
             )
-            
+
             # Split the document
             splits = self.text_splitter.split_documents([doc])
-            
+
             # Convert to our DocumentChunk format
             chunks = []
             for split in splits:
@@ -89,30 +89,30 @@ class DocumentProcessor:
                     metadata=split.metadata
                 )
                 chunks.append(chunk)
-            
+
             logger.info(f"Processed text from '{source}' into {len(chunks)} chunks")
             return chunks
-            
+
         except Exception as e:
             logger.error(f"Failed to process text from '{source}': {e}")
             return []
-    
+
     def process_documents(self, documents: List[Document]) -> List[DocumentChunk]:
         """
         Process multiple LangChain Documents into chunks.
-        
+
         Args:
             documents: List of LangChain Document objects
-            
+
         Returns:
             List of DocumentChunk objects
         """
         all_chunks = []
-        
+
         try:
             # Split all documents at once for efficiency
             splits = self.text_splitter.split_documents(documents)
-            
+
             # Convert to our format
             for split in splits:
                 chunk = DocumentChunk(
@@ -123,24 +123,24 @@ class DocumentProcessor:
                     metadata=split.metadata
                 )
                 all_chunks.append(chunk)
-            
+
             logger.info(f"Processed {len(documents)} documents into {len(all_chunks)} chunks")
             return all_chunks
-            
+
         except Exception as e:
             logger.error(f"Failed to process documents: {e}")
             return []
-    
-    def process_file_content(self, file_path: str, content: str, 
+
+    def process_file_content(self, file_path: str, content: str,
                            file_type: str = "unknown") -> List[DocumentChunk]:
         """
         Process content from a file with appropriate metadata.
-        
+
         Args:
             file_path: Path to the source file
             content: File content as string
             file_type: Type of file (pdf, txt, docx, etc.)
-            
+
         Returns:
             List of DocumentChunk objects
         """
@@ -149,23 +149,23 @@ class DocumentProcessor:
             "file_type": file_type,
             "processing_timestamp": "2024"  # Could use datetime.now().isoformat()
         }
-        
+
         return self.process_text(
             text=content,
             source=file_path,
             additional_metadata=metadata
         )
-    
-    def process_web_content(self, url: str, content: str, 
+
+    def process_web_content(self, url: str, content: str,
                           page_title: str = "") -> List[DocumentChunk]:
         """
         Process content from web crawling with appropriate metadata.
-        
+
         Args:
             url: Source URL
             content: Web page content as markdown/text
             page_title: Title of the web page
-            
+
         Returns:
             List of DocumentChunk objects
         """
@@ -175,30 +175,30 @@ class DocumentProcessor:
             "content_type": "web_page",
             "processing_timestamp": "2024"  # Could use datetime.now().isoformat()
         }
-        
+
         return self.process_text(
             text=content,
             source=url,
             additional_metadata=metadata
         )
-    
+
     def get_chunk_stats(self, chunks: List[DocumentChunk]) -> Dict[str, Any]:
         """
         Get statistics about processed chunks.
-        
+
         Args:
             chunks: List of document chunks
-            
+
         Returns:
             Dictionary with chunk statistics
         """
         if not chunks:
             return {"total_chunks": 0, "total_characters": 0, "sources": []}
-        
+
         total_chars = sum(len(chunk.content) for chunk in chunks)
         sources = list(set(chunk.source for chunk in chunks))
         avg_chunk_size = total_chars / len(chunks) if chunks else 0
-        
+
         return {
             "total_chunks": len(chunks),
             "total_characters": total_chars,
