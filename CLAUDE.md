@@ -1,59 +1,75 @@
-### 🔄 Project Awareness & Context
-- **Always read `PLANNING.md`** at the start of a new conversation to understand the project's architecture, goals, style, and constraints.
-- **Check `TASK.md`** before starting a new task. If the task isn’t listed, add it with a brief description and today's date.
-- **Use consistent naming conventions, file structure, and architecture patterns** as described in `PLANNING.md`.
-- **Use venv_linux** (the virtual environment) whenever executing Python commands, including for unit tests.
+### 🔄 项目认知与背景
+- **项目目标**: 构建一个 AI 文档阅读助手，能够通过本地文件、文件夹或指定的网站链接，抓取并学习相关文档内容，并允许用户针对这些内容进行提问。
+- **核心痛点**: 解决人工阅读大量文档时效率低下、容易遗漏关键信息的问题。
+- **关键特性**:
+    - 支持本地文件和文件夹作为数据源。
+    - 能够从一个初始 URL 开始，递归抓取同一域名下的所有页面。
+    - 基于 RAG 架构，提供精准的问答能力。
+- **技术方向**: 使用 Electron、React 和 Tailwind CSS 构建桌面应用，通过子进程与 Python 后端服务进行通信。
 
-### 🧱 Code Structure & Modularity
-- **Never create a file longer than 500 lines of code.** If a file approaches this limit, refactor by splitting it into modules or helper files.
-- **Organize code into clearly separated modules**, grouped by feature or responsibility.
-  For agents this looks like:
-    - `agent.py` - Main agent definition and execution logic 
-    - `tools.py` - Tool functions used by the agent 
-    - `prompts.py` - System prompts
-- **Use clear, consistent imports** (prefer relative imports within packages).
-- **Use clear, consistent imports** (prefer relative imports within packages).
-- **Use python_dotenv and load_env()** for environment variables.
+### 🧱 代码结构与模块化
+- **整体架构**: 采用前后端分离的桌面应用架构。
+    - **前端**: Electron + React + Tailwind CSS，负责用户界面与交互。
+    - **后端**: Python 服务，负责爬虫、数据处理、向量化和 RAG 检索。
+    - **通信**: 前后端通过标准输入输出（stdio）或本地 HTTP 请求进行子进程通信。
+- **后端模块划分**:
+    - `crawler/`: 包含使用 `Crawl4AI` 的网络爬虫模块，并具备简单的反爬措施。
+    - `data_processing/`: 负责文本处理，使用 LangChain 的 `RecursiveCharacterTextSplitter` 进行文本切分。
+    - `vector_store/`: 管理与 Qdrant 向量数据库的交互，包括数据向量化和存储。
+    - `rag/`: 实现基于 LangChain 的 RAG 核心逻辑，包括自定义 Prompt 模板和缓存机制。
+    - `main.py` 或 `api.py`: 作为后端服务的入口，处理前端请求。
+- **前端模块划分**:
+    - `src/components`: 可复用的 React 组件。
+    - `src/pages`: 应用的主要页面，如主界面、设置页等。
+    - `src/services`: 与后端 Python 服务通信的逻辑。
+    - `electron/`: Electron 主进程相关代码。
 
-### 🧪 Testing & Reliability
-- **Always create Pytest unit tests for new features** (functions, classes, routes, etc).
-- **After updating any logic**, check whether existing unit tests need to be updated. If so, do it.
-- **Tests should live in a `/tests` folder** mirroring the main app structure.
-  - Include at least:
-    - 1 test for expected use
-    - 1 edge case
-    - 1 failure case
+### 🧪 测试与可靠性
+- **后端测试**:
+    - 使用 `Pytest` 为后端 Python 服务编写单元测试。
+    - 对爬虫、文本切分、RAG 链等核心模块进行独立测试。
+    - 使用 `mock` 模拟外部依赖（如 LLM API、Qdrant 服务）的行为。
+- **前端测试**:
+    - 使用 `Jest` 和 `React Testing Library` 对 React 组件进行单元测试和集成测试。
+- **测试覆盖**: 确保核心功能至少包含预期成功、边界条件和失败处理的测试用例。
 
-### ✅ Task Completion
-- **Mark completed tasks in `TASK.md`** immediately after finishing them.
-- Add new sub-tasks or TODOs discovered during development to `TASK.md` under a “Discovered During Work” section.
+### 🎨 UI/UX 设计
+- **设计风格**: 遵循 `UI 设计指南.md` 中定义的 Apple Liquid Glass 风格，与 macOS HIG (人机界面指南) 保持一致，确保原生质感。
+- **核心原则**: 强调清晰、深度、简洁和一致性，界面聚焦于内容，提供流畅直观的交互。
+- **组件实现**: 使用 Tailwind CSS 实现指南中定义的半透明毛玻璃效果、柔和渐变、统一样式控件等。
 
-### 📎 Style & Conventions
-- **Use Python** as the primary language.
-- **Follow PEP8**, use type hints, and format with `black`.
-- **Use `pydantic` for data validation**.
-- Use `FastAPI` for APIs and `SQLAlchemy` or `SQLModel` for ORM if applicable.
-- Write **docstrings for every function** using the Google style:
-  ```python
-  def example():
-      """
-      Brief summary.
+### ✅ 任务完成
+- **任务管理**: 在 `TASK.md` 中记录和跟踪开发任务。
+- **里程碑规划**:
+    1.  搭建 Electron + React + Tailwind CSS 的基础项目框架。
+    2.  实现前后端的子进程通信机制。
+    3.  完成后端的文件/文件夹数据读取功能。
+    4.  集成 `Crawl4AI` 实现网页抓取功能。
+    5.  集成 LangChain 实现文本切分、向量化和 Qdrant 存储。
+    6.  构建完整的 RAG 问答流程，并提供 API 接口。
+    7.  在前端界面上实现文件选择、URL 输入和问答交互。
+    8.  实现后端缓存机制以优化响应速度。
 
-      Args:
-          param1 (type): Description.
+### 📎 风格与约定
+- **后端技术栈**:
+    - **语言**: Python 3.9+
+    - **核心库**: `LangChain`, `qdrant-client`, `crawl4ai`, `pydantic`。
+    - **代码风格**: 遵循 PEP8 规范，使用 `black` 进行格式化，并添加类型提示。
+- **前端技术栈**:
+    - **框架**: `React`, `Electron`
+    - **样式**: `Tailwind CSS`
+    - **语言**: `TypeScript`
+- **数据处理**:
+    - **文本切分**: 使用 LangChain 的 `RecursiveCharacterTextSplitter`，并根据文档特性调整 `chunk_size` 和 `chunk_overlap`。
+    - **向量化**: 选用合适的开源或商用 Embedding 模型。
+    - **向量存储**: 使用容器化部署的 `Qdrant`。
 
-      Returns:
-          type: Description.
-      """
-  ```
+### 📚 文档与可解释性
+- **`README.md`**: 详细记录项目的设置和启动步骤，包括前端依赖安装、Python 环境配置以及如何启动 Qdrant 容器。
+- **代码注释**: 为复杂逻辑（如 RAG 链、爬虫策略）添加清晰的注释，解释其工作原理和设计原因。
+- **Prompt 模板**: 将 RAG 使用的 Prompt 模板单独存放和管理，方便调试和优化。
 
-### 📚 Documentation & Explainability
-- **Update `README.md`** when new features are added, dependencies change, or setup steps are modified.
-- **Comment non-obvious code** and ensure everything is understandable to a mid-level developer.
-- When writing complex logic, **add an inline `# Reason:` comment** explaining the why, not just the what.
-
-### 🧠 AI Behavior Rules
-- **Never assume missing context. Ask questions if uncertain.**
-- **Never hallucinate libraries or functions** – only use known, verified Python packages.
-- **Always confirm file paths and module names** exist before referencing them in code or tests.
-- **Never delete or overwrite existing code** unless explicitly instructed to or if part of a task from `TASK.md`.
+### 🧠 AI 行为准则
+- **明确边界**: AI 助手应明确告知用户其知识范围仅限于提供的文档，避免回答范围外的问题。
+- **引用来源**: 在回答问题时，尽可能提供答案所依据的原文片段或来源链接，以提高可信度。
+- **持续学习**: 严格遵循本文档中定义的架构和技术选型，在开发过程中遇到模糊不清的地方时，应主动提问以获取明确信息。

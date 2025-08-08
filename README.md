@@ -1,296 +1,263 @@
-# Context Engineering Template
+# AI Document Assistant
 
-A comprehensive template for getting started with Context Engineering - the discipline of engineering context for AI coding assistants so they have the information necessary to get the job done end to end.
+一个基于 Electron + React + Python 的 AI 文档阅读助手，支持本地文件处理和网站内容抓取，并提供智能问答功能。
 
-> **Context Engineering is 10x better than prompt engineering and 100x better than vibe coding.**
+> 本项目以 [Context Engineering Intro](https://github.com/coleam00/context-engineering-intro?tab=readme-ov-file#template-structure) 为蓝本构建，提供了完整的项目模板结构和最佳实践指南。
 
-## 🚀 Quick Start
+## 🚀 功能特性
 
+- **📁 文件处理**: 支持 PDF、Word、Markdown、文本等多种格式
+- **🌐 网站抓取**: 递归抓取同域名下的网页内容
+- **🤖 智能问答**: 基于 RAG 技术的文档问答系统
+- **💎 原生界面**: 遵循 Apple Liquid Glass 设计，提供原生 macOS 体验
+- **⚡ 高性能**: 使用 Qdrant 向量数据库确保快速检索
+
+## 🏗️ 技术架构
+
+### 前端 (Electron + React)
+- **Electron**: 跨平台桌面应用框架
+- **React + TypeScript**: 现代化 UI 开发
+- **Tailwind CSS**: 实用优先的 CSS 框架
+- **Apple Liquid Glass**: 毛玻璃效果设计
+
+### 后端 (Python)
+- **LangChain**: RAG 流程编排
+- **Crawl4AI**: 智能网页抓取
+- **Qdrant**: 向量数据库
+- **OpenAI Embeddings**: 文本向量化
+
+## 📦 安装要求
+
+### 系统要求
+- macOS 10.15+, Windows 10+, 或 Ubuntu 18.04+
+- Node.js 18+
+- Python 3.9+
+- Docker (用于 Qdrant)
+
+### 环境变量
 ```bash
-# 1. Clone this template
-git clone https://github.com/coleam00/Context-Engineering-Intro.git
-cd Context-Engineering-Intro
-
-# 2. Set up your project rules (optional - template provided)
-# Edit CLAUDE.md to add your project-specific guidelines
-
-# 3. Add examples (highly recommended)
-# Place relevant code examples in the examples/ folder
-
-# 4. Create your initial feature request
-# Edit INITIAL.md with your feature requirements
-
-# 5. Generate a comprehensive PRP (Product Requirements Prompt)
-# In Claude Code, run:
-/generate-prp INITIAL.md
-
-# 6. Execute the PRP to implement your feature
-# In Claude Code, run:
-/execute-prp PRPs/your-feature-name.md
+# OpenAI API Key (必需)
+export OPENAI_API_KEY="your-openai-api-key"
 ```
 
-## 📚 Table of Contents
+## 🛠️ 快速开始
 
-- [What is Context Engineering?](#what-is-context-engineering)
-- [Template Structure](#template-structure)
-- [Step-by-Step Guide](#step-by-step-guide)
-- [Writing Effective INITIAL.md Files](#writing-effective-initialmd-files)
-- [The PRP Workflow](#the-prp-workflow)
-- [Using Examples Effectively](#using-examples-effectively)
-- [Best Practices](#best-practices)
-
-## What is Context Engineering?
-
-Context Engineering represents a paradigm shift from traditional prompt engineering:
-
-### Prompt Engineering vs Context Engineering
-
-**Prompt Engineering:**
-- Focuses on clever wording and specific phrasing
-- Limited to how you phrase a task
-- Like giving someone a sticky note
-
-**Context Engineering:**
-- A complete system for providing comprehensive context
-- Includes documentation, examples, rules, patterns, and validation
-- Like writing a full screenplay with all the details
-
-### Why Context Engineering Matters
-
-1. **Reduces AI Failures**: Most agent failures aren't model failures - they're context failures
-2. **Ensures Consistency**: AI follows your project patterns and conventions
-3. **Enables Complex Features**: AI can handle multi-step implementations with proper context
-4. **Self-Correcting**: Validation loops allow AI to fix its own mistakes
-
-## Template Structure
-
-```
-context-engineering-intro/
-├── .claude/
-│   ├── commands/
-│   │   ├── generate-prp.md    # Generates comprehensive PRPs
-│   │   └── execute-prp.md     # Executes PRPs to implement features
-│   └── settings.local.json    # Claude Code permissions
-├── PRPs/
-│   ├── templates/
-│   │   └── prp_base.md       # Base template for PRPs
-│   └── EXAMPLE_multi_agent_prp.md  # Example of a complete PRP
-├── examples/                  # Your code examples (critical!)
-├── CLAUDE.md                 # Global rules for AI assistant
-├── INITIAL.md               # Template for feature requests
-├── INITIAL_EXAMPLE.md       # Example feature request
-└── README.md                # This file
-```
-
-This template doesn't focus on RAG and tools with context engineering because I have a LOT more in store for that soon. ;)
-
-## Step-by-Step Guide
-
-### 1. Set Up Global Rules (CLAUDE.md)
-
-The `CLAUDE.md` file contains project-wide rules that the AI assistant will follow in every conversation. The template includes:
-
-- **Project awareness**: Reading planning docs, checking tasks
-- **Code structure**: File size limits, module organization
-- **Testing requirements**: Unit test patterns, coverage expectations
-- **Style conventions**: Language preferences, formatting rules
-- **Documentation standards**: Docstring formats, commenting practices
-
-**You can use the provided template as-is or customize it for your project.**
-
-### 2. Create Your Initial Feature Request
-
-Edit `INITIAL.md` to describe what you want to build:
-
-```markdown
-## FEATURE:
-[Describe what you want to build - be specific about functionality and requirements]
-
-## EXAMPLES:
-[List any example files in the examples/ folder and explain how they should be used]
-
-## DOCUMENTATION:
-[Include links to relevant documentation, APIs, or MCP server resources]
-
-## OTHER CONSIDERATIONS:
-[Mention any gotchas, specific requirements, or things AI assistants commonly miss]
-```
-
-**See `INITIAL_EXAMPLE.md` for a complete example.**
-
-### 3. Generate the PRP
-
-PRPs (Product Requirements Prompts) are comprehensive implementation blueprints that include:
-
-- Complete context and documentation
-- Implementation steps with validation
-- Error handling patterns
-- Test requirements
-
-They are similar to PRDs (Product Requirements Documents) but are crafted more specifically to instruct an AI coding assistant.
-
-Run in Claude Code:
+### 1. 克隆仓库
 ```bash
-/generate-prp INITIAL.md
+git clone https://github.com/zou8944/ai-document-assistant
+cd ai-document-assistant
 ```
 
-**Note:** The slash commands are custom commands defined in `.claude/commands/`. You can view their implementation:
-- `.claude/commands/generate-prp.md` - See how it researches and creates PRPs
-- `.claude/commands/execute-prp.md` - See how it implements features from PRPs
-
-The `$ARGUMENTS` variable in these commands receives whatever you pass after the command name (e.g., `INITIAL.md` or `PRPs/your-feature.md`).
-
-This command will:
-1. Read your feature request
-2. Research the codebase for patterns
-3. Search for relevant documentation
-4. Create a comprehensive PRP in `PRPs/your-feature-name.md`
-
-### 4. Execute the PRP
-
-Once generated, execute the PRP to implement your feature:
-
+### 2. 启动 Qdrant 数据库
 ```bash
-/execute-prp PRPs/your-feature-name.md
+docker-compose up -d
 ```
 
-The AI coding assistant will:
-1. Read all context from the PRP
-2. Create a detailed implementation plan
-3. Execute each step with validation
-4. Run tests and fix any issues
-5. Ensure all success criteria are met
+### 3. 设置后端
+```bash
+cd backend
+# 安装 uv (如果尚未安装)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-## Writing Effective INITIAL.md Files
-
-### Key Sections Explained
-
-**FEATURE**: Be specific and comprehensive
-- ❌ "Build a web scraper"
-- ✅ "Build an async web scraper using BeautifulSoup that extracts product data from e-commerce sites, handles rate limiting, and stores results in PostgreSQL"
-
-**EXAMPLES**: Leverage the examples/ folder
-- Place relevant code patterns in `examples/`
-- Reference specific files and patterns to follow
-- Explain what aspects should be mimicked
-
-**DOCUMENTATION**: Include all relevant resources
-- API documentation URLs
-- Library guides
-- MCP server documentation
-- Database schemas
-
-**OTHER CONSIDERATIONS**: Capture important details
-- Authentication requirements
-- Rate limits or quotas
-- Common pitfalls
-- Performance requirements
-
-## The PRP Workflow
-
-### How /generate-prp Works
-
-The command follows this process:
-
-1. **Research Phase**
-   - Analyzes your codebase for patterns
-   - Searches for similar implementations
-   - Identifies conventions to follow
-
-2. **Documentation Gathering**
-   - Fetches relevant API docs
-   - Includes library documentation
-   - Adds gotchas and quirks
-
-3. **Blueprint Creation**
-   - Creates step-by-step implementation plan
-   - Includes validation gates
-   - Adds test requirements
-
-4. **Quality Check**
-   - Scores confidence level (1-10)
-   - Ensures all context is included
-
-### How /execute-prp Works
-
-1. **Load Context**: Reads the entire PRP
-2. **Plan**: Creates detailed task list using TodoWrite
-3. **Execute**: Implements each component
-4. **Validate**: Runs tests and linting
-5. **Iterate**: Fixes any issues found
-6. **Complete**: Ensures all requirements met
-
-See `PRPs/EXAMPLE_multi_agent_prp.md` for a complete example of what gets generated.
-
-## Using Examples Effectively
-
-The `examples/` folder is **critical** for success. AI coding assistants perform much better when they can see patterns to follow.
-
-### What to Include in Examples
-
-1. **Code Structure Patterns**
-   - How you organize modules
-   - Import conventions
-   - Class/function patterns
-
-2. **Testing Patterns**
-   - Test file structure
-   - Mocking approaches
-   - Assertion styles
-
-3. **Integration Patterns**
-   - API client implementations
-   - Database connections
-   - Authentication flows
-
-4. **CLI Patterns**
-   - Argument parsing
-   - Output formatting
-   - Error handling
-
-### Example Structure
-
-```
-examples/
-├── README.md           # Explains what each example demonstrates
-├── cli.py             # CLI implementation pattern
-├── agent/             # Agent architecture patterns
-│   ├── agent.py      # Agent creation pattern
-│   ├── tools.py      # Tool implementation pattern
-│   └── providers.py  # Multi-provider pattern
-└── tests/            # Testing patterns
-    ├── test_agent.py # Unit test patterns
-    └── conftest.py   # Pytest configuration
+# 安装依赖
+uv sync
 ```
 
-## Best Practices
+### 4. 设置前端
+```bash
+cd frontend
+npm install
+```
 
-### 1. Be Explicit in INITIAL.md
-- Don't assume the AI knows your preferences
-- Include specific requirements and constraints
-- Reference examples liberally
+### 5. 开发模式启动
+```bash
+# 在两个终端中分别运行:
 
-### 2. Provide Comprehensive Examples
-- More examples = better implementations
-- Show both what to do AND what not to do
-- Include error handling patterns
+# 终端 1: 启动后端 (可选，前端会自动启动)
+cd backend
+uv run python main.py
 
-### 3. Use Validation Gates
-- PRPs include test commands that must pass
-- AI will iterate until all validations succeed
-- This ensures working code on first try
+# 终端 2: 启动前端
+cd frontend
+npm run dev
+```
 
-### 4. Leverage Documentation
-- Include official API docs
-- Add MCP server resources
-- Reference specific documentation sections
+## 🧪 测试
 
-### 5. Customize CLAUDE.md
-- Add your conventions
-- Include project-specific rules
-- Define coding standards
+### 后端测试
+```bash
+cd backend
+uv run pytest tests/ -v
+```
 
-## Resources
+### 前端测试
+```bash
+cd frontend
+npm test
+```
 
-- [Claude Code Documentation](https://docs.anthropic.com/en/docs/claude-code)
-- [Context Engineering Best Practices](https://www.philschmid.de/context-engineering)
+### 测试覆盖率
+```bash
+cd frontend
+npm run test:coverage
+```
+
+## 📊 验证步骤
+
+### Level 1: 语法和样式检查
+```bash
+# 后端
+cd backend
+uv run black . --check
+uv run mypy .
+uv run ruff check .
+
+# 前端
+cd frontend
+npm run lint
+npm run type-check
+npm run build
+```
+
+### Level 2: 单元测试
+```bash
+# 后端单元测试
+cd backend && uv run pytest tests/ -v
+
+# 前端单元测试
+cd frontend && npm test
+```
+
+### Level 3: 集成测试
+```bash
+# 启动完整系统
+docker-compose up -d
+cd frontend && npm run dev
+
+# 测试完整流程:
+# 1. 上传测试文档
+# 2. 验证处理成功
+# 3. 进行问答测试
+# 4. 验证返回结果包含来源
+```
+
+## 📁 项目结构
+
+```
+ai-document-assistant/
+├── backend/                     # Python 后端
+│   ├── crawler/                # 网页抓取
+│   ├── data_processing/        # 数据处理
+│   ├── vector_store/           # 向量存储
+│   ├── rag/                    # RAG 实现
+│   ├── tests/                  # 后端测试
+│   └── main.py                 # 入口文件
+├── frontend/                    # Electron + React 前端
+│   ├── src/
+│   │   ├── components/         # React 组件
+│   │   ├── services/           # 服务层
+│   │   ├── styles/             # 样式文件
+│   │   └── tests/              # 前端测试
+│   ├── main.ts                 # Electron 主进程
+│   └── package.json
+├── docker-compose.yml          # Qdrant 容器配置
+└── README.md
+```
+
+## 🎨 UI 设计指南
+
+本项目遵循 `UI 设计指南.md` 中定义的 Apple Liquid Glass 风格：
+
+- **毛玻璃效果**: `backdrop-filter: blur(20px)`
+- **半透明背景**: `background-color: rgba(255, 255, 255, 0.8)`
+- **柔和阴影**: `box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1)`
+- **系统字体**: SF Pro Display
+- **原生交互**: 遵循 macOS HIG 指南
+
+## 📋 使用指南
+
+### 1. 处理本地文件
+1. 点击"上传文件"选项卡
+2. 拖拽文件到上传区域或点击"选择文件"
+3. 等待处理完成
+4. 切换到"智能问答"开始提问
+
+### 2. 抓取网站内容
+1. 点击"抓取网站"选项卡
+2. 输入目标网站 URL
+3. 点击"开始抓取网站"
+4. 等待抓取完成
+5. 切换到"智能问答"开始提问
+
+### 3. 智能问答
+1. 在聊天界面输入问题
+2. 按回车键或点击发送按钮
+3. 查看 AI 生成的答案和引用来源
+4. 继续对话深入探讨
+
+## 🔧 开发指南
+
+### 代码规范
+- **后端**: 遵循 PEP8，使用 black 格式化
+- **前端**: 使用 ESLint + Prettier，遵循 React 最佳实践
+- **提交**: 遵循 Conventional Commits 规范
+
+### 添加新功能
+1. 创建对应的测试用例
+2. 实现功能代码
+3. 确保所有测试通过
+4. 更新文档
+
+### 性能优化
+- 使用 Qdrant 的 gRPC 接口提高性能
+- 前端使用 React.memo 和 useMemo 优化渲染
+- 后端采用异步处理避免阻塞
+
+## 🐛 故障排除
+
+### 常见问题
+
+**1. Python 后端无法启动**
+- 检查 Python 环境和依赖安装
+- 验证 OPENAI_API_KEY 环境变量
+- 确认 Qdrant 容器正在运行
+
+**2. Electron 窗口显示异常**
+- 确认 Node.js 版本 18+
+- 重新安装 node_modules
+- 检查系统兼容性
+
+**3. 向量搜索结果不准确**
+- 检查文档是否正确处理
+- 调整 chunk_size 和 chunk_overlap 参数
+- 验证 embedding 模型配置
+
+### 日志查看
+```bash
+# 后端日志
+tail -f backend/backend.log
+
+# 前端开发者工具
+# 在应用中按 F12 打开
+```
+
+## 🤝 贡献指南
+
+1. Fork 项目
+2. 创建功能分支 (`git checkout -b feature/amazing-feature`)
+3. 提交更改 (`git commit -m 'Add some amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 创建 Pull Request
+
+## 📄 许可证
+
+本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+
+## 🙏 致谢
+
+- [LangChain](https://python.langchain.com/) - RAG 框架
+- [Qdrant](https://qdrant.tech/) - 向量数据库
+- [Crawl4AI](https://github.com/unclecode/crawl4ai) - 网页抓取
+- [Electron](https://www.electronjs.org/) - 桌面应用框架
+- [React](https://react.dev/) - UI 框架
+- [Tailwind CSS](https://tailwindcss.com/) - CSS 框架
