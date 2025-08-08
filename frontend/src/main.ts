@@ -72,7 +72,6 @@ class DocumentAssistantApp {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        enableRemoteModule: false,
         preload: join(__dirname, 'preload.js'),
         webSecurity: !isDev,
       },
@@ -157,7 +156,7 @@ class DocumentAssistantApp {
       })
 
       // Handle Python process end
-      this.pythonProcess.on('close', (code) => {
+      this.pythonProcess.on('close', (code: number) => {
         console.log(`Python process exited with code ${code}`)
         this.pythonProcess = null
         

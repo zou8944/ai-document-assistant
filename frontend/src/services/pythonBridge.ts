@@ -3,7 +3,41 @@
  * Following 2024 best practices for async request/response handling with error recovery.
  */
 
-import { EventEmitter } from 'events'
+// Browser-compatible EventEmitter implementation
+class EventEmitter<T extends Record<string, any[]> = Record<string, any[]>> {
+  private listeners: Map<keyof T, Function[]> = new Map()
+
+  on<K extends keyof T>(event: K, listener: (...args: T[K]) => void): this {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, [])
+    }
+    this.listeners.get(event)!.push(listener)
+    return this
+  }
+
+  emit<K extends keyof T>(event: K, ...args: T[K]): boolean {
+    const eventListeners = this.listeners.get(event)
+    if (!eventListeners) return false
+    
+    eventListeners.forEach(listener => {
+      try {
+        listener(...args)
+      } catch (error) {
+        console.error('EventEmitter listener error:', error)
+      }
+    })
+    return true
+  }
+
+  removeAllListeners(event?: keyof T): this {
+    if (event) {
+      this.listeners.delete(event)
+    } else {
+      this.listeners.clear()
+    }
+    return this
+  }
+}
 
 // Type definitions for Python communication
 export interface PythonCommand {
