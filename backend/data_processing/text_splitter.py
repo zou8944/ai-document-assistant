@@ -4,7 +4,7 @@ Following 2024 best practices for document preprocessing and metadata preservati
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 from uuid import uuid4
 
 from langchain_core.documents import Document
@@ -20,7 +20,7 @@ class DocumentChunk(BaseModel):
     content: str
     source: str
     start_index: int
-    metadata: Dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
 
 
 class DocumentProcessor:
@@ -49,7 +49,7 @@ class DocumentProcessor:
         logger.info(f"Initialized DocumentProcessor with chunk_size={chunk_size}, overlap={chunk_overlap}")
 
     def process_text(self, text: str, source: str = "unknown",
-                    additional_metadata: Optional[Dict[str, Any]] = None) -> List[DocumentChunk]:
+                    additional_metadata: Optional[dict[str, Any]] = None) -> list[DocumentChunk]:
         """
         Process raw text into structured chunks with metadata.
 
@@ -59,7 +59,7 @@ class DocumentProcessor:
             additional_metadata: Optional metadata to include with each chunk
 
         Returns:
-            List of DocumentChunk objects with preserved metadata
+            list of DocumentChunk objects with preserved metadata
         """
         if not text.strip():
             logger.warning(f"Empty text provided for source: {source}")
@@ -97,15 +97,15 @@ class DocumentProcessor:
             logger.error(f"Failed to process text from '{source}': {e}")
             return []
 
-    def process_documents(self, documents: List[Document]) -> List[DocumentChunk]:
+    def process_documents(self, documents: list[Document]) -> list[DocumentChunk]:
         """
         Process multiple LangChain Documents into chunks.
 
         Args:
-            documents: List of LangChain Document objects
+            documents: list of LangChain Document objects
 
         Returns:
-            List of DocumentChunk objects
+            list of DocumentChunk objects
         """
         all_chunks = []
 
@@ -132,7 +132,7 @@ class DocumentProcessor:
             return []
 
     def process_file_content(self, file_path: str, content: str,
-                           file_type: str = "unknown") -> List[DocumentChunk]:
+                           file_type: str = "unknown") -> list[DocumentChunk]:
         """
         Process content from a file with appropriate metadata.
 
@@ -142,7 +142,7 @@ class DocumentProcessor:
             file_type: Type of file (pdf, txt, docx, etc.)
 
         Returns:
-            List of DocumentChunk objects
+            list of DocumentChunk objects
         """
         metadata = {
             "file_path": file_path,
@@ -157,7 +157,7 @@ class DocumentProcessor:
         )
 
     def process_web_content(self, url: str, content: str,
-                          page_title: str = "") -> List[DocumentChunk]:
+                          page_title: str = "") -> list[DocumentChunk]:
         """
         Process content from web crawling with appropriate metadata.
 
@@ -167,7 +167,7 @@ class DocumentProcessor:
             page_title: Title of the web page
 
         Returns:
-            List of DocumentChunk objects
+            list of DocumentChunk objects
         """
         metadata = {
             "url": url,
@@ -182,12 +182,12 @@ class DocumentProcessor:
             additional_metadata=metadata
         )
 
-    def get_chunk_stats(self, chunks: List[DocumentChunk]) -> Dict[str, Any]:
+    def get_chunk_stats(self, chunks: list[DocumentChunk]) -> dict[str, Any]:
         """
         Get statistics about processed chunks.
 
         Args:
-            chunks: List of document chunks
+            chunks: list of document chunks
 
         Returns:
             Dictionary with chunk statistics

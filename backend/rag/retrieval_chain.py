@@ -5,7 +5,7 @@ Following 2024 best practices for document question answering with source citati
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from langchain_community.chat_models.openai import ChatOpenAI
 from langchain_community.embeddings.openai import OpenAIEmbeddings
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class QueryResponse(BaseModel):
     """Structured response for RAG queries"""
     answer: str
-    sources: List[Dict[str, Any]]
+    sources: list[dict[str, Any]]
     confidence: float = 0.0
     query: str = ""
 
@@ -36,7 +36,7 @@ class DocumentRetriever:
         self.embeddings = embeddings
         self.top_k = top_k
 
-    async def retrieve_documents(self, query: str) -> List[Dict[str, Any]]:
+    async def retrieve_documents(self, query: str) -> list[dict[str, Any]]:
         """Retrieve relevant documents for a query"""
         try:
             # Generate query embedding
@@ -111,7 +111,7 @@ class RetrievalChain:
             logger.error(f"Failed to initialize RetrievalChain: {e}")
             raise
 
-    def _format_context(self, documents: List[Dict[str, Any]]) -> str:
+    def _format_context(self, documents: list[dict[str, Any]]) -> str:
         """Format retrieved documents as context"""
         if not documents:
             return "未找到相关文档。"
@@ -200,7 +200,7 @@ class RetrievalChain:
                 query=question
             )
 
-    async def batch_query(self, questions: List[str]) -> List[QueryResponse]:
+    async def batch_query(self, questions: list[str]) -> list[QueryResponse]:
         """Process multiple questions in batch"""
         tasks = [self.query(question) for question in questions]
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -221,7 +221,7 @@ class RetrievalChain:
 
         return processed_results
 
-    async def get_collection_stats(self) -> Optional[Dict[str, Any]]:
+    async def get_collection_stats(self) -> Optional[dict[str, Any]]:
         """Get statistics about the current collection"""
         return await self.qdrant_manager.get_collection_info(self.collection_name)
 

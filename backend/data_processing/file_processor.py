@@ -8,7 +8,7 @@ import mimetypes
 import os
 from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 try:
     import pypdf
@@ -40,7 +40,7 @@ class FileProcessingResult(BaseModel):
     file_type: str
     success: bool
     error: Optional[str] = None
-    metadata: Dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
 
 
 class FileProcessor:
@@ -135,7 +135,7 @@ class FileProcessor:
                     try:
                         pdf_reader.decrypt("")  # Try empty password
                     except Exception:
-                        raise ValueError("Cannot decrypt password-protected PDF")
+                        raise ValueError("Cannot decrypt password-protected PDF") from None
 
                 text_content = []
                 for page_num, page in enumerate(pdf_reader.pages):
@@ -288,7 +288,7 @@ class FileProcessor:
                 error=str(e)
             )
 
-    def process_folder(self, folder_path: str, recursive: bool = True) -> Generator[FileProcessingResult, None, None]:
+    def process_folder(self, folder_path_str: str, recursive: bool = True) -> Generator[FileProcessingResult, None, None]:
         """
         Process all supported files in a folder.
 
@@ -299,7 +299,7 @@ class FileProcessor:
         Yields:
             FileProcessingResult for each file processed
         """
-        folder_path = Path(folder_path).resolve()
+        folder_path = Path(folder_path_str).resolve()
 
         if not folder_path.exists():
             yield FileProcessingResult(
@@ -344,7 +344,7 @@ class FileProcessor:
 
         logger.info(f"Folder processing complete: {files_processed}/{files_found} files processed from {folder_path}")
 
-    def get_supported_extensions(self) -> List[str]:
+    def get_supported_extensions(self) -> list[str]:
         """Get list of supported file extensions"""
         return list(self.SUPPORTED_EXTENSIONS.keys())
 

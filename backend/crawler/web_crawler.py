@@ -7,7 +7,7 @@ import asyncio
 import logging
 import re
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Optional
 from urllib.parse import urldefrag, urljoin, urlparse
 
 try:
@@ -26,7 +26,7 @@ class CrawlResult:
     url: str
     title: str
     content: str
-    links: List[str]
+    links: list[str]
     success: bool
     error: Optional[str] = None
 
@@ -40,7 +40,7 @@ class WebCrawler:
     def __init__(self, max_depth: int = 3, delay: float = 1.0, max_pages: int = 50):
         """
         Initialize web crawler with anti-detection configuration.
-        
+
         Args:
             max_depth: Maximum crawling depth (default 3)
             delay: Delay between requests in seconds (minimum 1.0)
@@ -88,7 +88,7 @@ class WebCrawler:
 
         return url
 
-    def _extract_links(self, content: str, base_url: str) -> List[str]:
+    def _extract_links(self, content: str, base_url: str) -> list[str]:
         """Extract links from HTML content"""
         links = []
 
@@ -114,11 +114,11 @@ class WebCrawler:
     async def _crawl_single_page(self, url: str, crawler: AsyncWebCrawler) -> CrawlResult:
         """
         Crawl a single page and extract content.
-        
+
         Args:
             url: URL to crawl
             crawler: AsyncWebCrawler instance
-            
+
         Returns:
             CrawlResult with page content and extracted links
         """
@@ -164,24 +164,24 @@ class WebCrawler:
             )
 
     async def crawl_domain(self, start_url: str,
-                          progress_callback: Optional[Callable[[str, int, int], None]] = None) -> List[CrawlResult]:
+                          progress_callback: Optional[Callable[[str, int, int], None]] = None) -> list[CrawlResult]:
         """
         Crawl all pages within the same domain as start_url.
-        
+
         Args:
             start_url: Starting URL
             progress_callback: Optional callback for progress updates (url, current, total)
-            
+
         Returns:
-            List of CrawlResult objects
+            list of CrawlResult objects
         """
         # PATTERN: Domain restriction
         base_domain = urlparse(start_url).netloc
         logger.info(f"Starting domain crawl for: {base_domain}")
 
-        visited: Set[str] = set()
-        to_crawl: List[tuple] = [(start_url, 0)]  # (url, depth)
-        results: List[CrawlResult] = []
+        visited: set[str] = set()
+        to_crawl: list[tuple] = [(start_url, 0)]  # (url, depth)
+        results: list[CrawlResult] = []
 
         # Initialize crawler with anti-detection settings
         crawler = AsyncWebCrawler(
@@ -236,10 +236,10 @@ class WebCrawler:
     async def crawl_single_url(self, url: str) -> CrawlResult:
         """
         Crawl a single URL without following links.
-        
+
         Args:
             url: URL to crawl
-            
+
         Returns:
             CrawlResult for the single page
         """
@@ -256,13 +256,13 @@ class WebCrawler:
         finally:
             await crawler.close()
 
-    def get_crawl_stats(self, results: List[CrawlResult]) -> Dict[str, Any]:
+    def get_crawl_stats(self, results: list[CrawlResult]) -> dict[str, Any]:
         """
         Get statistics about crawl results.
-        
+
         Args:
-            results: List of crawl results
-            
+            results: list of crawl results
+
         Returns:
             Dictionary with crawl statistics
         """

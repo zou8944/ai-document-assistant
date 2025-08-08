@@ -4,7 +4,7 @@ Following 2024 best practices for LangChain integration.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 from uuid import uuid4
 
 from pydantic import BaseModel
@@ -24,7 +24,7 @@ class DocumentChunk(BaseModel):
     content: str
     source: str
     start_index: int
-    metadata: Dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
 
 
 class QdrantManager:
@@ -79,14 +79,14 @@ class QdrantManager:
             logger.error(f"Failed to ensure collection '{collection_name}': {e}")
             return False
 
-    async def index_documents(self, collection_name: str, chunks: List[DocumentChunk],
-                            embeddings: List[List[float]]) -> Dict[str, Any]:
+    async def index_documents(self, collection_name: str, chunks: list[DocumentChunk],
+                            embeddings: list[list[float]]) -> dict[str, Any]:
         """
         Index document chunks with their embeddings.
 
         Args:
             collection_name: Target collection name
-            chunks: List of document chunks
+            chunks: list of document chunks
             embeddings: Corresponding embeddings for each chunk
 
         Returns:
@@ -133,8 +133,8 @@ class QdrantManager:
                 "indexed_count": 0
             }
 
-    async def search_similar(self, collection_name: str, query_embedding: List[float],
-                           limit: int = 5, score_threshold: float = 0.5) -> List[Dict[str, Any]]:
+    async def search_similar(self, collection_name: str, query_embedding: list[float],
+                           limit: int = 5, score_threshold: float = 0.5) -> list[dict[str, Any]]:
         """
         Search for similar documents using vector similarity.
 
@@ -145,7 +145,7 @@ class QdrantManager:
             score_threshold: Minimum similarity score
 
         Returns:
-            List of similar documents with scores
+            list of similar documents with scores
         """
         try:
             results = self.client.search(
@@ -158,13 +158,14 @@ class QdrantManager:
             # Format results
             formatted_results = []
             for result in results:
+                payload = result.payload or {}
                 formatted_results.append({
                     "id": result.id,
                     "score": result.score,
-                    "content": result.payload.get("content", ""),
-                    "source": result.payload.get("source", ""),
-                    "start_index": result.payload.get("start_index", 0),
-                    "metadata": result.payload.get("metadata", {})
+                    "content": payload.get("content", ""),
+                    "source": payload.get("source", ""),
+                    "start_index": payload.get("start_index", 0),
+                    "metadata": payload.get("metadata", {})
                 })
 
             logger.info(f"Found {len(formatted_results)} similar documents")
@@ -184,7 +185,7 @@ class QdrantManager:
             logger.error(f"Failed to delete collection '{collection_name}': {e}")
             return False
 
-    async def get_collection_info(self, collection_name: str) -> Optional[Dict[str, Any]]:
+    async def get_collection_info(self, collection_name: str) -> Optional[dict[str, Any]]:
         """Get information about a collection"""
         try:
             info = self.client.get_collection(collection_name)
