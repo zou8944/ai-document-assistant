@@ -8,14 +8,23 @@ Following 2024 best practices for subprocess communication and error handling.
 import asyncio
 import json
 import logging
-import os
 import sys
 from pathlib import Path
 from typing import Any
 
+# Import configuration
+from config import get_config, init_config
+
+# Initialize configuration first
+try:
+    config = init_config()
+except Exception as e:
+    print(f"Failed to initialize configuration: {e}", file=sys.stderr)
+    sys.exit(1)
+
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, config.log_level.upper()),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('backend.log'),
@@ -27,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 # Import our modules
 try:
-    from langchain_community.embeddings.openai import OpenAIEmbeddings
+    from langchain_openai import OpenAIEmbeddings
 
     from crawler.web_crawler import create_web_crawler
     from data_processing.file_processor import create_file_processor
@@ -47,14 +56,25 @@ class DocumentAssistantBackend:
 
     def __init__(self):
         """Initialize backend components"""
-        self.file_processor = create_file_processor()
-        self.document_processor = create_document_processor()
-        self.web_crawler = create_web_crawler()
-        self.qdrant_manager = create_qdrant_manager()
+        self.config = get_config()
+
+        # Initialize components with configuration
+        self.file_processor = create_file_processor(self.config)
+        self.document_processor = create_document_processor(self.config)
+        self.web_crawler = create_web_crawler(self.config)
+        self.qdrant_manager = create_qdrant_manager(self.config)
 
         # Initialize embeddings (will be used for all operations)
         try:
-            self.embeddings = OpenAIEmbeddings(model="text-embedding-ada-002")
+            embeddings_kwargs = self.config.get_openai_embeddings_kwargs()
+            self.embeddings = OpenAIEmbeddings(**embeddings_kwargs)
+
+            # Log configuration info
+            config_info = self.config.get_config_info()
+            logger.info(f"Chat model: {config_info['chat_config']['model']} @ {config_info['chat_config']['api_base']}")
+            logger.info(f"Embedding model: {config_info['embedding_config']['model']} @ {config_info['embedding_config']['api_base']}")
+            if config_info['embedding_config']['using_fallback']:
+                logger.info("Embedding model using chat API configuration (fallback)")
         except Exception as e:
             logger.error(f"Failed to initialize embeddings: {e}")
             self.embeddings = None
@@ -347,7 +367,7 @@ class DocumentAssistantBackend:
             logger.info(f"Processing query for collection '{collection_name}': {question}")
 
             # Create retrieval chain
-            retrieval_chain = create_retrieval_chain(collection_name)
+            retrieval_chain = create_retrieval_chain(collection_name, config=self.config)
 
             # Process query
             response = await retrieval_chain.query(question)
@@ -492,9 +512,13 @@ async def main():
 
 
 if __name__ == "__main__":
-    # Set environment variable for OpenAI API if not set
-    if not os.getenv("OPENAI_API_KEY"):
-        logger.warning("OPENAI_API_KEY environment variable not set. Please configure before running.")
+    # Validate configuration
+    try:
+        config.validate()
+    except ValueError as e:
+        logger.error(f"Configuration validation failed: {e}")
+        logger.warning("Please check your environment variables and try again.")
+        sys.exit(1)
 
     try:
         asyncio.run(main())

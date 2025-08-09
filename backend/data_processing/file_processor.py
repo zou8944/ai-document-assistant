@@ -355,6 +355,10 @@ class FileProcessor:
 
 
 # Convenience function for creating processor instance
-def create_file_processor(max_file_size: int = 50 * 1024 * 1024) -> FileProcessor:
+def create_file_processor(config=None) -> FileProcessor:
     """Create and return a FileProcessor instance"""
+    if config:
+        max_file_size = int(config.max_file_size_mb * 1024 * 1024)
+    else:
+        max_file_size = 50 * 1024 * 1024  # Default 50MB
     return FileProcessor(max_file_size=max_file_size)

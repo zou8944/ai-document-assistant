@@ -212,6 +212,9 @@ class QdrantManager:
 
 
 # Convenience function for creating manager instance
-def create_qdrant_manager(host: str = "localhost", port: int = 6334) -> QdrantManager:
+def create_qdrant_manager(config=None) -> QdrantManager:
     """Create and return a QdrantManager instance"""
-    return QdrantManager(host=host, port=port)
+    if config:
+        return QdrantManager(host=config.qdrant_host, port=config.qdrant_port)
+    else:
+        return QdrantManager(host="localhost", port=6334)

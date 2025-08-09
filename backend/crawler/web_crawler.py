@@ -287,6 +287,13 @@ class WebCrawler:
 
 
 # Convenience function for creating crawler instance
-def create_web_crawler(max_depth: int = 3, delay: float = 1.0, max_pages: int = 50) -> WebCrawler:
+def create_web_crawler(config=None) -> WebCrawler:
     """Create and return a WebCrawler instance with specified configuration"""
-    return WebCrawler(max_depth=max_depth, delay=delay, max_pages=max_pages)
+    if config:
+        return WebCrawler(
+            max_depth=config.crawler_max_depth,
+            delay=config.crawler_delay,
+            max_pages=config.crawler_max_pages
+        )
+    else:
+        return WebCrawler(max_depth=3, delay=1.0, max_pages=50)

@@ -120,16 +120,20 @@ class DocumentAssistantApp {
 
   private setupPythonProcess() {
     try {
-      const backendPath = isDev 
-        ? join(process.cwd(), '..', 'backend', 'main.py')
-        : join(process.resourcesPath, 'backend', 'main.py')
+      // Get the project root directory
+      const projectRoot = isDev 
+        ? join(process.cwd(), '..')  // When running from frontend, go up one level
+        : process.resourcesPath
+      
+      const backendPath = join(projectRoot, 'backend', 'main.py')
+      const backendDir = join(projectRoot, 'backend')
 
-      // PATTERN: Use python-shell with stdio mode
+      // PATTERN: Use python-shell with stdio mode and uv for dependency management
       this.pythonProcess = new PythonShell(backendPath, {
         mode: 'json', // Automatic JSON parsing
-        pythonPath: 'python3',
-        pythonOptions: ['-u'], // Unbuffered output
-        scriptPath: dirname(backendPath),
+        pythonPath: 'uv',
+        pythonOptions: ['run', 'python'], // Use uv run python instead of direct python
+        scriptPath: backendDir, // Set working directory to backend folder
       })
 
       // Handle Python messages

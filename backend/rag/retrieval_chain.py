@@ -7,13 +7,13 @@ import asyncio
 import logging
 from typing import Any, Optional
 
-from langchain_community.chat_models.openai import ChatOpenAI
-from langchain_community.embeddings.openai import OpenAIEmbeddings
 from langchain_core.output_parsers import StrOutputParser
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from pydantic import BaseModel
 
-from ..vector_store.qdrant_client import QdrantManager
-from .prompt_templates import format_sources, get_rag_prompt
+from config import get_config
+from rag.prompt_templates import format_sources, get_rag_prompt
+from vector_store.qdrant_client import QdrantManager
 
 logger = logging.getLogger(__name__)
 
@@ -81,18 +81,20 @@ class RetrievalChain:
             # Qdrant manager
             self.qdrant_manager = QdrantManager(host=qdrant_host, port=qdrant_port)
 
+            # Get configuration
+            config = get_config()
+            
             # Embeddings (using OpenAI as example, can be swapped)
-            self.embeddings = OpenAIEmbeddings(
-                model="text-embedding-ada-002",
-                openai_api_key=openai_api_key
-            )
+            embeddings_kwargs = config.get_openai_embeddings_kwargs()
+            if openai_api_key:
+                embeddings_kwargs["api_key"] = openai_api_key
+            self.embeddings = OpenAIEmbeddings(**embeddings_kwargs)
 
             # LLM for answer generation
-            self.llm = ChatOpenAI(
-                model="gpt-3.5-turbo",
-                temperature=0.1,  # Low temperature for factual answers
-                openai_api_key=openai_api_key
-            )
+            chat_kwargs = config.get_openai_chat_kwargs()
+            if openai_api_key:
+                chat_kwargs["api_key"] = openai_api_key
+            self.llm = ChatOpenAI(**chat_kwargs)
 
             # Document retriever
             self.retriever = DocumentRetriever(
@@ -235,12 +237,19 @@ class RetrievalChain:
 
 
 # Convenience function for creating retrieval chain
-def create_retrieval_chain(collection_name: str, qdrant_host: str = "localhost",
-                          qdrant_port: int = 6334, openai_api_key: Optional[str] = None) -> RetrievalChain:
+def create_retrieval_chain(collection_name: str, config=None, openai_api_key: Optional[str] = None) -> RetrievalChain:
     """Create and return a RetrievalChain instance"""
-    return RetrievalChain(
-        collection_name=collection_name,
-        qdrant_host=qdrant_host,
-        qdrant_port=qdrant_port,
-        openai_api_key=openai_api_key
-    )
+    if config:
+        return RetrievalChain(
+            collection_name=collection_name,
+            qdrant_host=config.qdrant_host,
+            qdrant_port=config.qdrant_port,
+            openai_api_key=openai_api_key or config.openai_api_key
+        )
+    else:
+        return RetrievalChain(
+            collection_name=collection_name,
+            qdrant_host="localhost",
+            qdrant_port=6334,
+            openai_api_key=openai_api_key
+        )

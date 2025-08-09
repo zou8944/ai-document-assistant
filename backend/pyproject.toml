@@ -23,38 +23,32 @@ classifiers = [
 
 dependencies = [
     # Core AI/ML libraries
-    "langchain==0.1.20",
-    "langchain-community==0.0.38",
-    "langchain-core==0.1.52",
-    "langchain-text-splitters==0.0.1",
-    
+    "langchain>=0.3.0",
+    "langchain-core>=0.3.0",
+    "langchain-text-splitters>=0.3.0",
     # Vector store
-    "qdrant-client==1.9.1",
-    
+    "qdrant-client==1.15.1",
     # Web crawling
-    "crawl4ai==0.3.74",
-    
+    "crawl4ai==0.7.2",
     # Data validation and models
-    "pydantic==2.7.1",
-    
+    "pydantic>=2.7.4",
     # Document processing
-    "pypdf==4.2.0",
-    "python-docx==1.1.0",
+    "pypdf==5.9.0",
+    "python-docx==1.2.0",
     "python-magic==0.4.27",
     "chardet==5.2.0",
-    
     # Embeddings (OpenAI compatible)
-    "openai>=1.45.0",
-    
+    "openai>=1.99.4",
+    "langchain-openai>=0.3.0",
     # HTTP server (optional)
-    "fastapi==0.111.0",
-    "uvicorn==0.29.0",
-    
+    "fastapi==0.116.1",
+    "uvicorn==0.35.0",
     # Async support
     "aiofiles>=24.0",
-    
     # Logging and utilities
     "loguru==0.7.2",
+    "httpx>=0.28.1",
+    "dotenv>=0.9.9",
 ]
 
 [project.optional-dependencies]
