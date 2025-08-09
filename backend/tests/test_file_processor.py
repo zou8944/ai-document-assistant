@@ -2,6 +2,7 @@
 Tests for file_processor module.
 """
 
+from config import Config
 from data_processing.file_processor import FileProcessor, create_file_processor
 
 
@@ -15,9 +16,9 @@ class TestFileProcessor:
 
     def test_create_file_processor_custom_size(self):
         """Test file processor creation with custom max size"""
-        custom_size = 10 * 1024 * 1024  # 10MB
-        processor = create_file_processor(max_file_size=custom_size)
-        assert processor.max_file_size == custom_size
+        config = Config(max_file_size_mb=10.0)  # 10MB
+        processor = create_file_processor(config)
+        assert processor.max_file_size == 10 * 1024 * 1024
 
     def test_process_text_file(self, sample_text_file):
         """Test processing a text file"""
@@ -28,7 +29,9 @@ class TestFileProcessor:
         assert result.file_type == "text"
         assert len(result.content) > 0
         assert "sample text file" in result.content
-        assert result.file_path == sample_text_file
+        # Use Path.resolve() for consistent path comparison
+        from pathlib import Path
+        assert Path(result.file_path).resolve() == Path(sample_text_file).resolve()
         assert result.metadata["file_extension"] == ".txt"
 
     def test_process_markdown_file(self, sample_markdown_file):

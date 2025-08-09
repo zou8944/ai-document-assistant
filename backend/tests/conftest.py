@@ -93,11 +93,22 @@ def setup_test_env():
     if "OPENAI_API_KEY" in os.environ and os.environ["OPENAI_API_KEY"] == "test-key":
         del os.environ["OPENAI_API_KEY"]
 
-# Async test support
+# Config fixtures
 @pytest.fixture
-def event_loop():
-    """Create an instance of the default event loop for the test session."""
-    import asyncio
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+def test_config():
+    """Test configuration instance"""
+    from config import Config
+    return Config(
+        openai_api_key="test-api-key",
+        openai_api_base="https://test-api.com/v1",
+        openai_chat_model="test-chat-model",
+        embedding_model="test-embedding-model",
+        max_file_size_mb=25.0,
+        chunk_size=500,
+        chunk_overlap=100,
+        qdrant_host="test-qdrant",
+        qdrant_port=6333
+    )
+
+# Async test support - removed custom event_loop fixture to avoid deprecation warning
+# pytest-asyncio will handle event loop creation automatically

@@ -2,6 +2,7 @@
 Tests for text_splitter module.
 """
 
+from config import Config
 from data_processing.text_splitter import DocumentChunk, DocumentProcessor, create_document_processor
 
 
@@ -11,14 +12,16 @@ class TestDocumentProcessor:
         """Test document processor creation"""
         processor = create_document_processor()
         assert isinstance(processor, DocumentProcessor)
-        assert processor.text_splitter.chunk_size == 1000
-        assert processor.text_splitter.chunk_overlap == 200
+        # Check the actual attributes that exist on RecursiveCharacterTextSplitter
+        assert processor.text_splitter._chunk_size == 1000
+        assert processor.text_splitter._chunk_overlap == 200
 
     def test_create_document_processor_custom_params(self):
         """Test document processor creation with custom parameters"""
-        processor = create_document_processor(chunk_size=500, chunk_overlap=100)
-        assert processor.text_splitter.chunk_size == 500
-        assert processor.text_splitter.chunk_overlap == 100
+        config = Config(chunk_size=500, chunk_overlap=100)
+        processor = create_document_processor(config)
+        assert processor.text_splitter._chunk_size == 500
+        assert processor.text_splitter._chunk_overlap == 100
 
     def test_process_text_basic(self):
         """Test basic text processing"""

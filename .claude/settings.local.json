@@ -23,7 +23,9 @@
       "Bash(uv sync:*)",
       "Bash(uv run:*)",
       "Bash(PYTHONPATH=/Users/zouguodong/Code/Personal/ai-document-assistant/backend uv run python /Users/zouguodong/Code/Personal/ai-document-assistant/backend/main.py)",
-      "Bash(uv add:*)"
+      "Bash(uv add:*)",
+      "Bash(PYTHONPATH=. uv run pytest tests/ -v)",
+      "Bash(PYTHONPATH=. uv run pytest tests/test_file_processor.py::TestFileProcessor::test_create_file_processor_custom_size -v)"
     ],
     "deny": []
   }
