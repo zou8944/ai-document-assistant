@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 try:
     from langchain_openai import OpenAIEmbeddings
 
-    from crawler.web_crawler import create_web_crawler
+    from crawler import create_web_crawler_legacy as create_web_crawler
     from data_processing.file_processor import create_file_processor
     from data_processing.text_splitter import create_document_processor
     from rag.retrieval_chain import create_retrieval_chain
@@ -261,7 +261,7 @@ class DocumentAssistantBackend:
                                   f"Crawling: {current_url}")
 
             # Crawl the website
-            crawl_results = await self.web_crawler.crawl_domain(url, progress_callback)
+            crawl_results = self.web_crawler.crawl_domain(url, progress_callback)
 
             successful_results = [r for r in crawl_results if r.success]
 
