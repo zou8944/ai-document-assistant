@@ -205,13 +205,14 @@ export class PythonBridge extends EventEmitter<PythonBridgeEvents> {
   }
 
   private checkConnection() {
-    // Assume connected initially; will be updated by events
+    // Start by assuming we're connected
+    // Connection status will be updated by error/disconnection events
     this.isConnected = true
     this.emit('connected')
   }
 
   private rejectAllPending(error: Error) {
-    for (const [commandId, pending] of this.pendingCommands.entries()) {
+    for (const [, pending] of this.pendingCommands.entries()) {
       clearTimeout(pending.timeout)
       pending.reject(error)
     }
@@ -227,15 +228,13 @@ export class PythonBridge extends EventEmitter<PythonBridgeEvents> {
     }
 
     return new Promise<T>((resolve, reject) => {
-      const commandId = command.command + '_' + Date.now()
-      
       // Set up timeout
       const timeout = setTimeout(() => {
-        this.pendingCommands.delete(commandId)
+        this.pendingCommands.delete(command.command)
         reject(new Error(`Command '${command.command}' timed out after ${timeoutMs}ms`))
       }, timeoutMs)
 
-      // Store pending command
+      // Store pending command with consistent key
       this.pendingCommands.set(command.command, {
         resolve: resolve as (value: any) => void,
         reject,

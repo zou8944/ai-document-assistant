@@ -125,15 +125,37 @@ class DocumentAssistantApp {
         ? join(process.cwd(), '..')  // When running from frontend, go up one level
         : process.resourcesPath
       
-      const backendPath = join(projectRoot, 'backend', 'main.py')
       const backendDir = join(projectRoot, 'backend')
+      const backendMain = "main.py"
+
+      console.log('Starting Python process...')
+      console.log('Project root:', projectRoot)
+      console.log('Backend path:', backendMain)
+      console.log('Backend dir:', backendDir)
+      console.log('Current working directory:', process.cwd())
 
       // PATTERN: Use python-shell with stdio mode and uv for dependency management
-      this.pythonProcess = new PythonShell(backendPath, {
+      this.pythonProcess = new PythonShell(backendMain, {
         mode: 'json', // Automatic JSON parsing
         pythonPath: 'uv',
         pythonOptions: ['run', 'python'], // Use uv run python instead of direct python
         scriptPath: backendDir, // Set working directory to backend folder
+        env: {
+          ...process.env,
+          // 确保 UV 使用正确的项目目录
+          UV_PROJECT_DIR: backendDir
+        },
+        cwd: backendDir,
+      })
+
+       // Handle Python stdout (non-JSON output like print statements)
+      this.pythonProcess.on('stdout', (data) => {
+        console.log('Python stdout:', data.toString())
+      })
+
+      // Handle Python stderr (error output and debugging info)
+      this.pythonProcess.on('stderr', (data) => {
+        console.log('Python stderr:', data.toString())
       })
 
       // Handle Python messages
@@ -157,6 +179,11 @@ class DocumentAssistantApp {
             message: `Backend error: ${error.message}`,
           })
         }
+      })
+
+      // Handle Python process spawn
+      this.pythonProcess.on('spawn', () => {
+        console.log('Python process spawned successfully')
       })
 
       // Handle Python process end
@@ -186,35 +213,17 @@ class DocumentAssistantApp {
   private setupIpcHandlers() {
     // Handle Python commands from renderer
     ipcMain.handle('send-python-command', async (event, command: PythonCommand) => {
-      return new Promise<boolean>((resolve, reject) => {
-        if (!this.pythonProcess) {
-          reject(new Error('Python backend not available'))
-          return
-        }
+      if (!this.pythonProcess) {
+        throw new Error('Python backend not available')
+      }
 
-        try {
-          // GOTCHA: Set up response handler before sending
-          const timeout = setTimeout(() => {
-            reject(new Error('Python command timeout'))
-          }, 30000) // 30 second timeout
-
-          const messageHandler = (response: PythonResponse) => {
-            if (response.command === command.command) {
-              clearTimeout(timeout)
-              this.pythonProcess?.off('message', messageHandler)
-              resolve(true)
-            }
-          }
-
-          this.pythonProcess.on('message', messageHandler)
-
-          // Send JSON command
-          this.pythonProcess.send(command)
-          
-        } catch (error) {
-          reject(error)
-        }
-      })
+      try {
+        // Send JSON command to Python process
+        this.pythonProcess.send(command)
+        return true // Indicate command was sent successfully
+      } catch (error) {
+        throw new Error(`Failed to send command to Python: ${error}`)
+      }
     })
 
     // File dialog handlers
