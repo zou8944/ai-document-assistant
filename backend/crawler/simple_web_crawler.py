@@ -53,7 +53,9 @@ class SimpleWebCrawler:
         self.session = requests.Session()
         self.session.headers.update(self.headers)
 
-        logger.info(f"Initialized SimpleWebCrawler with max_depth={max_depth}, delay={delay}s, max_pages={max_pages}")
+        logger.info(
+            f"Initialized SimpleWebCrawler with max_depth={max_depth}, delay={delay}s, max_pages={max_pages}"
+        )
 
     def _is_same_domain(self, url1: str, url2: str) -> bool:
         """Check if URLs are from the same domain"""
@@ -69,6 +71,14 @@ class SimpleWebCrawler:
         url, _ = urldefrag(url)
         return url.rstrip("/")
 
+    def _is_valid_url(self, url: str) -> bool:
+        """Check if URL is valid"""
+        try:
+            parsed = urlparse(url)
+            return bool(parsed.netloc and parsed.scheme in ("http", "https"))
+        except Exception:
+            return False
+
     def _extract_content(self, html: str, url: str) -> tuple[str, str, list[str]]:
         """Extract title, content and links from HTML"""
         soup = BeautifulSoup(html, "lxml")
@@ -77,28 +87,56 @@ class SimpleWebCrawler:
         title_tag = soup.find("title")
         title = title_tag.get_text(strip=True) if title_tag else ""
 
-        # Remove unwanted elements
-        for tag in soup(["script", "style", "nav", "header", "footer", "aside"]):
+        # Remove meta elements
+        for tag in soup(["script", "style", "header", "footer"]):
             tag.decompose()
 
         # Find main content area
-        main_content = soup.find("main") or soup.find("article") or soup.find("div", class_="content") or soup
+        main_content = (
+            soup.find("main") or soup.find("article") or soup.find("div", class_="content") or soup
+        )
 
         # Convert to markdown
         markdown_content = markdownify(str(main_content), heading_style="ATX")
 
-        # Extract links
+        # Extract links with improved relative path handling
         links = []
-        a_tags = soup.find_all("a", href=True)
+        a_tags = soup.find_all("a")
+
         for link in a_tags:
             if hasattr(link, "get"):
-                href = link.get("href")  # type: ignore
-                if href and isinstance(href, str) and not href.startswith("#"):
+                href = link.get("href")
+                if not href or not isinstance(href, str):
+                    continue
+
+                href = href.strip()
+                if not href:
+                    continue
+
+                # Skip anchor links, javascript, mailto, etc.
+                if any(
+                    href.startswith(prefix)
+                    for prefix in ["#", "javascript:", "mailto:", "tel:", "ftp:"]
+                ):
+                    continue
+
+                try:
+                    # Convert relative URLs to absolute URLs
                     absolute_url = urljoin(url, href)
-                    if self._is_same_domain(url, absolute_url):
+
+                    # Validate URL and check if it's from the same domain
+                    if self._is_valid_url(absolute_url) and self._is_same_domain(url, absolute_url):
                         clean_url = self._clean_url(absolute_url)
-                        if clean_url not in links:
+                        if (
+                            clean_url
+                            and clean_url not in links
+                            and clean_url != self._clean_url(url)
+                        ):
                             links.append(clean_url)
+
+                except Exception as e:
+                    logger.debug(f"Failed to process link {href}: {e}")
+                    continue
 
         return title, markdown_content, links
 
@@ -110,11 +148,15 @@ class SimpleWebCrawler:
 
             title, content, links = self._extract_content(response.text, url)
 
-            return SimpleCrawlResult(url=url, title=title, content=content, links=links, success=True)
+            return SimpleCrawlResult(
+                url=url, title=title, content=content, links=links, success=True
+            )
 
         except Exception as e:
             logger.warning(f"Failed to fetch {url}: {e}")
-            return SimpleCrawlResult(url=url, title="", content="", links=[], success=False, error=str(e))
+            return SimpleCrawlResult(
+                url=url, title="", content="", links=[], success=False, error=str(e)
+            )
 
     def crawl_single_url(self, url: str) -> SimpleCrawlResult:
         """Crawl a single URL"""
@@ -123,15 +165,24 @@ class SimpleWebCrawler:
     def crawl_domain(
         self, start_url: str, progress_callback: Optional[Callable[[str, int, int], None]] = None
     ) -> list[SimpleCrawlResult]:
-        """Crawl multiple pages within the same domain"""
+        """Crawl multiple pages within the same domain with improved queue management"""
         results = []
         crawled_urls = set()
         to_crawl = [(start_url, 0)]  # (url, depth)
+        failed_urls = set()  # Track failed URLs to avoid retrying
+
+        # Normalize start URL
+        start_url = self._clean_url(start_url)
 
         while to_crawl and len(results) < self.max_pages:
             url, depth = to_crawl.pop(0)
 
-            if url in crawled_urls or depth > self.max_depth:
+            # Skip if already processed or too deep
+            if url in crawled_urls or depth > self.max_depth or url in failed_urls:
+                continue
+
+            # Skip if not from the same domain
+            if not self._is_same_domain(start_url, url):
                 continue
 
             crawled_urls.add(url)
@@ -144,16 +195,37 @@ class SimpleWebCrawler:
             result = self._fetch_page(url)
             results.append(result)
 
-            # Add new links to crawl queue
-            if result.success and depth < self.max_depth:
-                for link in result.links[:10]:  # Limit links per page
-                    if link not in crawled_urls and self._is_same_domain(start_url, link):
+            # Handle failed requests
+            if not result.success:
+                failed_urls.add(url)
+                logger.debug(f"Failed to crawl {url}: {result.error}")
+                time.sleep(self.delay)
+                continue
+
+            # Add new links to crawl queue if not at max depth
+            if depth < self.max_depth:
+                new_links_added = 0
+                for link in result.links:
+                    # Skip if already processed or queued
+                    if (
+                        link not in crawled_urls
+                        and link not in failed_urls
+                        and not any(existing_url == link for existing_url, _ in to_crawl)
+                        and self._is_same_domain(start_url, link)
+                    ):
                         to_crawl.append((link, depth + 1))
+                        new_links_added += 1
+
+                        # Limit new links per page to avoid queue explosion
+                        if new_links_added >= 10:
+                            break
 
             # Rate limiting
             time.sleep(self.delay)
 
-        logger.info(f"Crawled {len(results)} pages successfully")
+        logger.info(
+            f"Crawled {len(results)} pages successfully ({len([r for r in results if r.success])} successful)"
+        )
         return results
 
     def get_crawl_stats(self, results: list[SimpleCrawlResult]) -> dict[str, Any]:

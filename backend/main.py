@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 try:
     from langchain_openai import OpenAIEmbeddings
 
-    from crawler import create_web_crawler_legacy as create_web_crawler
+    from crawler import create_simple_web_crawler
     from data_processing.file_processor import create_file_processor
     from data_processing.text_splitter import create_document_processor
     from rag.retrieval_chain import create_retrieval_chain
@@ -61,7 +61,7 @@ class DocumentAssistantBackend:
         # Initialize components with configuration
         self.file_processor = create_file_processor(self.config)
         self.document_processor = create_document_processor(self.config)
-        self.web_crawler = create_web_crawler(self.config)
+        self.web_crawler = create_simple_web_crawler(self.config)
         self.qdrant_manager = create_qdrant_manager(self.config)
 
         # Initialize embeddings (will be used for all operations)
