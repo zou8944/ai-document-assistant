@@ -4,6 +4,7 @@ Following 2024 best practices for document preprocessing and metadata preservati
 """
 
 import logging
+from datetime import datetime
 from typing import Any, Optional
 from uuid import uuid4
 
@@ -147,7 +148,7 @@ class DocumentProcessor:
         metadata = {
             "file_path": file_path,
             "file_type": file_type,
-            "processing_timestamp": "2024"  # Could use datetime.now().isoformat()
+            "processing_timestamp": datetime.now().isoformat()
         }
 
         return self.process_text(

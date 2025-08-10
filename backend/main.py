@@ -81,7 +81,8 @@ class DocumentAssistantBackend:
 
         # Store active collections
         self.active_collections: dict[str, str] = {}  # collection_name -> source_type
-
+        # 批量嵌入最大条数（API 限制，默认 64，可由 config 覆盖）
+        self.max_embedding_batch_size = int(getattr(self.config, "embedding_batch_size", 64))
         logger.info("DocumentAssistantBackend initialized successfully")
     def _send_response(self, response: dict[str, Any]) -> None:
         """
@@ -116,6 +117,32 @@ class DocumentAssistantBackend:
         }
         self._send_response(progress_response)
 
+    async def _embed_texts_in_batches(self, texts: list[str], command: str) -> list[list[float]]:
+        """
+        按批次生成 embeddings，避免超过服务端限制 (如 64)。
+        失败即抛出异常，外层捕获。
+        """
+        if not self.embeddings:
+            raise Exception("Embeddings not available. Please check OpenAI API configuration.")
+
+        if not texts:
+            return []
+        max_batch = self.max_embedding_batch_size
+        total = len(texts)
+        embeddings: list[list[float]] = []
+        for start in range(0, total, max_batch):
+            end = min(start + max_batch, total)
+            batch = texts[start:end]
+            try:
+                batch_embeddings = await self.embeddings.aembed_documents(batch)
+            except Exception as e:
+                logger.error(f"Embedding batch failed [{start}:{end}]: {e}")
+                raise
+            embeddings.extend(batch_embeddings)
+            # 进度：当前已完成 end 条 / total 条
+            self._send_progress(command, end, total, f"Embedding batches {end}/{total}")
+        return embeddings
+
     async def process_files(self, file_paths: list[str], collection_name: str = "documents") -> dict[str, Any]:
         """
         Process local files and index them in vector store.
@@ -128,9 +155,6 @@ class DocumentAssistantBackend:
             Processing result dictionary
         """
         try:
-            if not self.embeddings:
-                raise Exception("Embeddings not available. Please check OpenAI API configuration.")
-
             logger.info(f"Processing {len(file_paths)} file paths for collection '{collection_name}'")
 
             # Ensure collection exists
@@ -191,11 +215,9 @@ class DocumentAssistantBackend:
 
             # Generate embeddings
             self._send_progress("process_files", processed_files, processed_files,
-                              "Generating embeddings...")
-
+                              "Generating embeddings (batched)...")
             texts = [chunk.content for chunk in all_chunks]
-            embeddings = await self.embeddings.aembed_documents(texts)
-
+            embeddings = await self._embed_texts_in_batches(texts, "process_files")
             # Index in vector store
             self._send_progress("process_files", processed_files, processed_files,
                               "Indexing documents...")
@@ -247,9 +269,6 @@ class DocumentAssistantBackend:
             Crawling result dictionary
         """
         try:
-            if not self.embeddings:
-                raise Exception("Embeddings not available. Please check OpenAI API configuration.")
-
             logger.info(f"Starting website crawl for: {url}")
 
             # Ensure collection exists
@@ -296,11 +315,9 @@ class DocumentAssistantBackend:
 
             # Generate embeddings
             self._send_progress("crawl_url", len(successful_results), len(successful_results),
-                              "Generating embeddings...")
-
+                              "Generating embeddings (batched)...")
             texts = [chunk.content for chunk in all_chunks]
-            embeddings = await self.embeddings.aembed_documents(texts)
-
+            embeddings = await self._embed_texts_in_batches(texts, "crawl_url")
             # Index in vector store
             self._send_progress("crawl_url", len(successful_results), len(successful_results),
                               "Indexing documents...")

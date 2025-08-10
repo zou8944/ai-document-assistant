@@ -83,7 +83,7 @@ class RetrievalChain:
 
             # Get configuration
             config = get_config()
-            
+
             # Embeddings (using OpenAI as example, can be swapped)
             embeddings_kwargs = config.get_openai_embeddings_kwargs()
             if openai_api_key:
