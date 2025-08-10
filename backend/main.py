@@ -79,7 +79,10 @@ class DocumentAssistantBackend:
             logger.error(f"Failed to initialize embeddings: {e}")
             self.embeddings = None
 
-        # Store active collections
+        # 动态探测 embedding 维度
+        self.embedding_dimension = self._detect_embedding_dimension()
+        logger.info(f"Detected embedding dimension: {self.embedding_dimension}")
+
         self.active_collections: dict[str, str] = {}  # collection_name -> source_type
         # 批量嵌入最大条数（API 限制，默认 64，可由 config 覆盖）
         self.max_embedding_batch_size = int(getattr(self.config, "embedding_batch_size", 64))
@@ -143,6 +146,49 @@ class DocumentAssistantBackend:
             self._send_progress(command, end, total, f"Embedding batches {end}/{total}")
         return embeddings
 
+    def _detect_embedding_dimension(self) -> int:
+        """
+        探测当前 embedding 模型实际输出的向量维度。
+        若失败返回常见默认值 1536（并记录警告）。
+        """
+        if not self.embeddings:
+            return 1536
+        try:
+            # 使用最短文本避免超额 token
+            vec = self.embeddings.embed_query("ping")
+            dim = len(vec)
+            if dim <= 0:
+                raise ValueError("empty embedding vector")
+            return dim
+        except Exception as e:
+            logger.warning(f"Failed to detect embedding dimension, fallback to 1536: {e}")
+            return 1536
+
+    async def _ensure_collection_with_dimension(self, collection_name: str) -> dict[str, Any] | None:
+        """
+        确保集合维度与当前 embedding 维度一致。
+        如果已存在且维度不匹配，返回错误结果（调用方直接 return）。
+        """
+        try:
+            info = await self.qdrant_manager.get_collection_info(collection_name)
+            if info and info.get("vector_size") and info["vector_size"] != self.embedding_dimension:
+                return {
+                    "status": "error",
+                    "message": (f"集合 '{collection_name}' 已存在, 向量维度为 {info['vector_size']} "
+                                f"但当前模型输出维度为 {self.embedding_dimension}，请删除该集合或使用新的 collection_name。"),
+                }
+            # 创建 / 确保集合（若不存在则创建）
+            await self.qdrant_manager.ensure_collection(
+                collection_name,
+                vector_size=self.embedding_dimension
+            )
+            return None
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"创建/检查集合失败: {e}"
+            }
+
     async def process_files(self, file_paths: list[str], collection_name: str = "documents") -> dict[str, Any]:
         """
         Process local files and index them in vector store.
@@ -157,8 +203,10 @@ class DocumentAssistantBackend:
         try:
             logger.info(f"Processing {len(file_paths)} file paths for collection '{collection_name}'")
 
-            # Ensure collection exists
-            await self.qdrant_manager.ensure_collection(collection_name, vector_size=1536)
+            # Ensure collection exists (使用动态维度 + 预检查)
+            err = await self._ensure_collection_with_dimension(collection_name)
+            if err:
+                return {**err, "processed_files": 0, "total_chunks": 0}
 
             all_chunks = []
             processed_files = 0
@@ -271,8 +319,10 @@ class DocumentAssistantBackend:
         try:
             logger.info(f"Starting website crawl for: {url}")
 
-            # Ensure collection exists
-            await self.qdrant_manager.ensure_collection(collection_name, vector_size=1536)
+            # Ensure collection exists (使用动态维度 + 预检查)
+            err = await self._ensure_collection_with_dimension(collection_name)
+            if err:
+                return {**err, "crawled_pages": 0, "total_chunks": 0}
 
             # Progress callback for crawling
             def progress_callback(current_url: str, current: int, total: int):
