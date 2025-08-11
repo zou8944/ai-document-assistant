@@ -36,12 +36,14 @@ logger = logging.getLogger(__name__)
 
 # Import our modules
 try:
-    from langchain_openai import OpenAIEmbeddings
+    from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
     from crawler import create_simple_web_crawler
     from data_processing.file_processor import create_file_processor
     from data_processing.text_splitter import create_document_processor
-    from rag.retrieval_chain import create_retrieval_chain
+    from rag.document_summarizer import DocumentSummarizer
+    from rag.enhanced_retrieval_chain import create_enhanced_retrieval_chain
+    from rag.summary_manager import SummaryManager
     from vector_store.qdrant_client import create_qdrant_manager
 except ImportError as e:
     logger.error(f"Failed to import required modules: {e}")
@@ -78,6 +80,29 @@ class DocumentAssistantBackend:
         except Exception as e:
             logger.error(f"Failed to initialize embeddings: {e}")
             self.embeddings = None
+
+        # Initialize LLM for summaries
+        try:
+            chat_kwargs = self.config.get_openai_chat_kwargs()
+            self.llm = ChatOpenAI(**chat_kwargs)
+            logger.info("Chat LLM initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize Chat LLM: {e}")
+            self.llm = None
+
+        # Initialize document summarizer and summary manager
+        if self.llm and self.embeddings:
+            try:
+                self.document_summarizer = DocumentSummarizer(self.llm)
+                self.summary_manager = SummaryManager(self.qdrant_manager, self.embeddings)
+                logger.info("Document summarizer and summary manager initialized")
+            except Exception as e:
+                logger.error(f"Failed to initialize summary components: {e}")
+                self.document_summarizer = None
+                self.summary_manager = None
+        else:
+            self.document_summarizer = None
+            self.summary_manager = None
 
         # 动态探测 embedding 维度
         self.embedding_dimension = self._detect_embedding_dimension()
@@ -189,6 +214,89 @@ class DocumentAssistantBackend:
                 "message": f"创建/检查集合失败: {e}"
             }
 
+    async def _generate_and_store_summaries(self,
+                                          chunks: list,
+                                          collection_name: str,
+                                          command: str) -> dict[str, Any]:
+        """
+        为文档chunks生成摘要并存储
+
+        Args:
+            chunks: 文档chunks列表
+            collection_name: 集合名称
+            command: 当前命令（用于进度反馈）
+
+        Returns:
+            摘要生成和存储结果
+        """
+        if not self.document_summarizer or not self.summary_manager:
+            logger.warning("摘要功能未初始化，跳过摘要生成")
+            return {"status": "skipped", "message": "摘要功能未可用"}
+
+        try:
+            # 按文档分组chunks
+            doc_groups = {}
+            for chunk in chunks:
+                source = chunk.source
+                if source not in doc_groups:
+                    doc_groups[source] = {
+                        "content": "",
+                        "source": source,
+                        "metadata": chunk.metadata
+                    }
+                doc_groups[source]["content"] += chunk.content + "\n\n"
+
+            logger.info(f"准备为 {len(doc_groups)} 个文档生成摘要")
+
+            # 准备文档列表用于摘要生成
+            documents_for_summary = [
+                {
+                    "content": doc_data["content"].strip(),
+                    "source": doc_data["source"],
+                    "doc_type": None  # 让summarizer自动检测
+                }
+                for doc_data in doc_groups.values()
+                if len(doc_data["content"].strip()) > 100  # 过滤太短的文档
+            ]
+
+            if not documents_for_summary:
+                logger.warning("没有足够长的文档内容可生成摘要")
+                return {"status": "skipped", "message": "文档内容太短，跳过摘要生成"}
+
+            # 发送进度
+            self._send_progress(command, 0, len(documents_for_summary), "生成文档摘要中...")
+
+            # 批量生成摘要
+            summaries = await self.document_summarizer.generate_batch_summaries(
+                documents_for_summary,
+                max_concurrent=2  # 控制并发数，避免API限流
+            )
+
+            # 存储摘要
+            store_result = await self.summary_manager.store_document_summaries(
+                collection_name, summaries
+            )
+
+            successful_summaries = sum(1 for s in summaries if not s.error)
+
+            self._send_progress(command, successful_summaries, len(documents_for_summary),
+                              f"摘要生成完成: {successful_summaries}/{len(summaries)}")
+
+            return {
+                "status": "success",
+                "generated_count": len(summaries),
+                "successful_count": successful_summaries,
+                "stored_count": store_result.get("stored_count", 0),
+                "collection_name": store_result.get("collection_name", "")
+            }
+
+        except Exception as e:
+            logger.error(f"摘要生成和存储失败: {e}")
+            return {
+                "status": "error",
+                "message": f"摘要处理失败: {e}"
+            }
+
     async def process_files(self, file_paths: list[str], collection_name: str = "documents") -> dict[str, Any]:
         """
         Process local files and index them in vector store.
@@ -279,7 +387,14 @@ class DocumentAssistantBackend:
             if index_result["status"] == "success":
                 self.active_collections[collection_name] = "files"
 
-                return {
+                # 生成和存储文档摘要
+                self._send_progress("process_files", processed_files, processed_files,
+                                  "生成文档摘要...")
+                summary_result = await self._generate_and_store_summaries(
+                    all_chunks, collection_name, "process_files"
+                )
+
+                result = {
                     "status": "success",
                     "message": "Successfully processed and indexed documents",
                     "collection_name": collection_name,
@@ -288,6 +403,21 @@ class DocumentAssistantBackend:
                     "total_chunks": len(all_chunks),
                     "indexed_count": index_result["indexed_count"]
                 }
+
+                # 添加摘要结果到响应
+                if summary_result["status"] == "success":
+                    result["summary_info"] = {
+                        "generated_count": summary_result["generated_count"],
+                        "successful_count": summary_result["successful_count"],
+                        "stored_count": summary_result["stored_count"]
+                    }
+                    result["message"] += f" ({summary_result['successful_count']} 文档摘要已生成)"
+                else:
+                    result["summary_info"] = {"status": summary_result["status"], "message": summary_result.get("message")}
+                    if summary_result["status"] != "skipped":
+                        result["message"] += " (摘要生成失败)"
+
+                return result
             else:
                 return {
                     "status": "error",
@@ -381,10 +511,17 @@ class DocumentAssistantBackend:
             if index_result["status"] == "success":
                 self.active_collections[collection_name] = "website"
 
+                # 生成和存储文档摘要
+                self._send_progress("crawl_url", len(successful_results), len(successful_results),
+                                  "生成网页摘要...")
+                summary_result = await self._generate_and_store_summaries(
+                    all_chunks, collection_name, "crawl_url"
+                )
+
                 # Get crawl stats
                 stats = self.web_crawler.get_crawl_stats(crawl_results)
 
-                return {
+                result = {
                     "status": "success",
                     "message": "Successfully crawled and indexed website",
                     "collection_name": collection_name,
@@ -394,6 +531,21 @@ class DocumentAssistantBackend:
                     "indexed_count": index_result["indexed_count"],
                     "stats": stats
                 }
+
+                # 添加摘要结果到响应
+                if summary_result["status"] == "success":
+                    result["summary_info"] = {
+                        "generated_count": summary_result["generated_count"],
+                        "successful_count": summary_result["successful_count"],
+                        "stored_count": summary_result["stored_count"]
+                    }
+                    result["message"] += f" ({summary_result['successful_count']} 页面摘要已生成)"
+                else:
+                    result["summary_info"] = {"status": summary_result["status"], "message": summary_result.get("message")}
+                    if summary_result["status"] != "skipped":
+                        result["message"] += " (摘要生成失败)"
+
+                return result
             else:
                 return {
                     "status": "error",
@@ -413,7 +565,7 @@ class DocumentAssistantBackend:
 
     async def query_documents(self, question: str, collection_name: str = "documents") -> dict[str, Any]:
         """
-        Query documents using RAG.
+        使用增强的RAG查询文档，支持智能意图分析和路由
 
         Args:
             question: User question
@@ -431,18 +583,35 @@ class DocumentAssistantBackend:
                     "sources": []
                 }
 
-            logger.info(f"Processing query for collection '{collection_name}': {question}")
+            logger.info(f"Processing enhanced query for collection '{collection_name}': {question}")
 
-            # Create retrieval chain
-            retrieval_chain = create_retrieval_chain(collection_name, config=self.config)
+            # 使用增强的检索链
+            retrieval_chain = create_enhanced_retrieval_chain(
+                collection_name=collection_name,
+                config=self.config,
+                enable_summary_overview=bool(self.summary_manager)  # 基于摘要管理器是否可用
+            )
 
-            # Process query
+            # 处理查询
             response = await retrieval_chain.query(question)
 
-            # Close chain resources
+            # 获取意图分析信息（可选，用于调试）
+            try:
+                intent_info = await retrieval_chain.get_intent_analysis(question)
+                intent_analysis = {
+                    "detected_intent": intent_info["intent"].value,
+                    "confidence": intent_info["confidence"],
+                    "analysis_method": intent_info["analysis_method"],
+                    "description": intent_info["description"]
+                }
+            except Exception as e:
+                logger.warning(f"获取意图分析失败: {e}")
+                intent_analysis = None
+
+            # 关闭资源
             retrieval_chain.close()
 
-            return {
+            result = {
                 "status": "success",
                 "answer": response.answer,
                 "sources": response.sources,
@@ -451,8 +620,14 @@ class DocumentAssistantBackend:
                 "collection_name": collection_name
             }
 
+            # 添加意图分析信息（如果可用）
+            if intent_analysis:
+                result["intent_analysis"] = intent_analysis
+
+            return result
+
         except Exception as e:
-            logger.error(f"Query processing failed: {e}")
+            logger.error(f"Enhanced query processing failed: {e}")
             return {
                 "status": "error",
                 "message": str(e),
