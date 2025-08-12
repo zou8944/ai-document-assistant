@@ -5,13 +5,20 @@
 
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron'
 
+// Type definitions for API server
+interface APIServerInfo {
+  port: number
+  pid: number
+  baseURL: string
+}
+
 // Define the API interface
 interface ElectronAPI {
-  // Python communication
-  sendPythonCommand: (command: any) => Promise<boolean>
-  onPythonResponse: (callback: (response: any) => void) => void
-  onPythonError: (callback: (error: any) => void) => void
-  onPythonDisconnected: (callback: (data: any) => void) => void
+  // API server communication
+  getAPIServerInfo: () => Promise<APIServerInfo | null>
+  restartAPIServer: () => Promise<APIServerInfo | null>
+  onAPIServerReady: (callback: (info: APIServerInfo) => void) => void
+  onAPIServerDisconnected: (callback: (data: any) => void) => void
   
   // File system
   showOpenDialog: (options?: any) => Promise<any>
@@ -35,23 +42,18 @@ interface ElectronAPI {
 
 // Exposed protected methods in the render process
 const electronAPI: ElectronAPI = {
-  // Python backend communication
-  sendPythonCommand: (command: any) => ipcRenderer.invoke('send-python-command', command),
+  // API server communication
+  getAPIServerInfo: () => ipcRenderer.invoke('get-api-server-info'),
+  restartAPIServer: () => ipcRenderer.invoke('restart-api-server'),
   
-  onPythonResponse: (callback: (response: any) => void) => {
-    ipcRenderer.on('python-response', (event: IpcRendererEvent, response: any) => {
-      callback(response)
+  onAPIServerReady: (callback: (info: APIServerInfo) => void) => {
+    ipcRenderer.on('api-server-ready', (event: IpcRendererEvent, info: APIServerInfo) => {
+      callback(info)
     })
   },
   
-  onPythonError: (callback: (error: any) => void) => {
-    ipcRenderer.on('python-error', (event: IpcRendererEvent, error: any) => {
-      callback(error)
-    })
-  },
-  
-  onPythonDisconnected: (callback: (data: any) => void) => {
-    ipcRenderer.on('python-disconnected', (event: IpcRendererEvent, data: any) => {
+  onAPIServerDisconnected: (callback: (data: any) => void) => {
+    ipcRenderer.on('api-server-disconnected', (event: IpcRendererEvent, data: any) => {
       callback(data)
     })
   },

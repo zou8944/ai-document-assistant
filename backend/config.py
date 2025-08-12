@@ -18,7 +18,7 @@ class Config:
     openai_api_key: Optional[str] = None
     openai_api_base: Optional[str] = None
     openai_chat_model: str = "gpt-3.5-turbo"
-    
+
     # Embedding Model Configuration (fallback to chat config if not set)
     embedding_api_key: Optional[str] = None
     embedding_api_base: Optional[str] = None
@@ -52,7 +52,7 @@ class Config:
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             openai_api_base=os.getenv("OPENAI_API_BASE"),
             openai_chat_model=os.getenv("OPENAI_CHAT_MODEL", "gpt-3.5-turbo"),
-            
+
             # Embedding Model Configuration
             embedding_api_key=os.getenv("EMBEDDING_API_KEY"),
             embedding_api_base=os.getenv("EMBEDDING_API_BASE"),
@@ -83,7 +83,7 @@ class Config:
         # At least one API key must be set (for chat or embedding)
         if not self.openai_api_key and not self.embedding_api_key:
             raise ValueError("Either OPENAI_API_KEY or EMBEDDING_API_KEY must be set")
-        
+
         # If embedding config is partial, ensure fallback is available
         if (self.embedding_api_key or self.embedding_api_base) and not self.openai_api_key and not self.embedding_api_key:
             raise ValueError("When using custom embedding config, ensure API keys are properly set")
@@ -135,7 +135,7 @@ class Config:
             kwargs["base_url"] = self.openai_api_base
 
         return kwargs
-    
+
     def get_config_info(self) -> dict:
         """Get current configuration information for debugging"""
         return {

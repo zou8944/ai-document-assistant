@@ -5,26 +5,24 @@
 
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import { join, dirname } from 'path'
-import { fileURLToPath } from 'url'
 import isDev from 'electron-is-dev'
 
-// Python subprocess management
-import { PythonShell } from 'python-shell'
+// API server subprocess management
+import { spawn, ChildProcess } from 'child_process'
+import { createWriteStream } from 'fs'
+import { join as pathJoin } from 'path'
 
-// Type definitions for IPC
-interface PythonCommand {
-  command: string
-  [key: string]: any
-}
-
-interface PythonResponse {
-  status: 'success' | 'error' | 'progress'
-  [key: string]: any
+// Type definitions for API server management
+interface APIServerInfo {
+  port: number
+  pid: number
+  baseURL: string
 }
 
 class DocumentAssistantApp {
   private mainWindow: BrowserWindow | null = null
-  private pythonProcess: PythonShell | null = null
+  private apiServerProcess: ChildProcess | null = null
+  private apiServerInfo: APIServerInfo | null = null
 
   constructor() {
     this.setupApp()
@@ -32,9 +30,9 @@ class DocumentAssistantApp {
 
   private setupApp() {
     // This method will be called when Electron has finished initialization
-    app.whenReady().then(() => {
+    app.whenReady().then(async () => {
       this.createWindow()
-      this.setupPythonProcess()
+      await this.startAPIServer()
       this.setupIpcHandlers()
 
       app.on('activate', () => {
@@ -46,15 +44,15 @@ class DocumentAssistantApp {
     })
 
     // Quit when all windows are closed, except on macOS
-    app.on('window-all-closed', () => {
+    app.on('window-all-closed', async () => {
       if (process.platform !== 'darwin') {
-        this.cleanup()
+        await this.cleanup()
         app.quit()
       }
     })
 
-    app.on('before-quit', () => {
-      this.cleanup()
+    app.on('before-quit', async () => {
+      await this.cleanup()
     })
   }
 
@@ -118,7 +116,7 @@ class DocumentAssistantApp {
     })
   }
 
-  private setupPythonProcess() {
+  private async startAPIServer(): Promise<void> {
     try {
       // Get the project root directory
       const projectRoot = isDev 
@@ -126,104 +124,120 @@ class DocumentAssistantApp {
         : process.resourcesPath
       
       const backendDir = join(projectRoot, 'backend')
-      const backendMain = "main.py"
+      const apiServerScript = 'api_server.py'
 
-      console.log('Starting Python process...')
+      console.log('Starting API server...')
       console.log('Project root:', projectRoot)
-      console.log('Backend path:', backendMain)
       console.log('Backend dir:', backendDir)
-      console.log('Current working directory:', process.cwd())
+      console.log('API server script:', apiServerScript)
 
-      // PATTERN: Use python-shell with stdio mode and uv for dependency management
-      this.pythonProcess = new PythonShell(backendMain, {
-        mode: 'json', // Automatic JSON parsing
-        pythonPath: 'uv',
-        pythonOptions: ['run', 'python'], // Use uv run python instead of direct python
-        scriptPath: backendDir, // Set working directory to backend folder
+      // Find available port
+      const port = await this.findAvailablePort(8000)
+      
+      // Start API server using uv
+      this.apiServerProcess = spawn('uv', [
+        'run', 'python', apiServerScript,
+        '--host', '127.0.0.1',
+        '--port', port.toString(),
+        '--log-level', isDev ? 'debug' : 'info'
+      ], {
+        cwd: backendDir,
         env: {
           ...process.env,
-          // 确保 UV 使用正确的项目目录
           UV_PROJECT_DIR: backendDir
         },
-        cwd: backendDir,
+        stdio: ['pipe', 'pipe', 'pipe']
       })
 
-       // Handle Python stdout (non-JSON output like print statements)
-      this.pythonProcess.on('stdout', (data) => {
-        console.log('Python stdout:', data.toString())
+      // Create log files for API server output
+      const logDir = pathJoin(backendDir, 'logs')
+      const fs = await import('fs/promises')
+      try {
+        await fs.mkdir(logDir, { recursive: true })
+      } catch {
+        // Directory might already exist
+      }
+      
+      const stdoutLog = createWriteStream(pathJoin(logDir, 'api_server_stdout.log'))
+      const stderrLog = createWriteStream(pathJoin(logDir, 'api_server_stderr.log'))
+      
+      // Pipe output to log files and console
+      this.apiServerProcess.stdout?.pipe(stdoutLog)
+      this.apiServerProcess.stderr?.pipe(stderrLog)
+      
+      this.apiServerProcess.stdout?.on('data', (data) => {
+        console.log('API Server stdout:', data.toString())
       })
 
-      // Handle Python stderr (error output and debugging info)
-      this.pythonProcess.on('stderr', (data) => {
-        console.log('Python stderr:', data.toString())
+      this.apiServerProcess.stderr?.on('data', (data) => {
+        console.log('API Server stderr:', data.toString())
       })
 
-      // Handle Python messages
-      this.pythonProcess.on('message', (response: PythonResponse) => {
-        console.log('Python response:', response)
+      this.apiServerProcess.on('error', (error) => {
+        console.error('API server process error:', error)
         
-        // Forward response to renderer process
-        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-          this.mainWindow.webContents.send('python-response', response)
-        }
+        // Show error dialog
+        dialog.showErrorBox(
+          'Backend Error',
+          `Failed to start API server: ${error.message}`
+        )
       })
 
-      // Handle Python errors
-      this.pythonProcess.on('error', (error) => {
-        console.error('Python process error:', error)
-        
-        // Send error to renderer
-        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-          this.mainWindow.webContents.send('python-error', {
-            status: 'error',
-            message: `Backend error: ${error.message}`,
-          })
-        }
-      })
-
-      // Handle Python process spawn
-      this.pythonProcess.on('spawn', () => {
-        console.log('Python process spawned successfully')
-      })
-
-      // Handle Python process end
-      this.pythonProcess.on('close', (code: number) => {
-        console.log(`Python process exited with code ${code}`)
-        this.pythonProcess = null
+      this.apiServerProcess.on('close', (code: number) => {
+        console.log(`API server process exited with code ${code}`)
+        this.apiServerProcess = null
+        this.apiServerInfo = null
         
         // Notify renderer of process end
         if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-          this.mainWindow.webContents.send('python-disconnected', { code })
+          this.mainWindow.webContents.send('api-server-disconnected', { code })
         }
       })
 
-      console.log('Python backend process started successfully')
+      // Store server info
+      this.apiServerInfo = {
+        port,
+        pid: this.apiServerProcess.pid || 0,
+        baseURL: `http://127.0.0.1:${port}`
+      }
+
+      // Wait for server to be ready
+      await this.waitForServerReady(this.apiServerInfo.baseURL)
+      
+      console.log(`API server started successfully on port ${port}`)
+      
+      // Send server info to renderer process
+      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+        this.mainWindow.webContents.send('api-server-ready', this.apiServerInfo)
+      }
       
     } catch (error) {
-      console.error('Failed to start Python backend:', error)
+      console.error('Failed to start API server:', error)
       
       // Show error dialog
       dialog.showErrorBox(
         'Backend Error',
-        `Failed to start Python backend: ${error}`
+        `Failed to start API server: ${error}`
       )
     }
   }
 
   private setupIpcHandlers() {
-    // Handle Python commands from renderer
-    ipcMain.handle('send-python-command', async (event, command: PythonCommand) => {
-      if (!this.pythonProcess) {
-        throw new Error('Python backend not available')
+    // Handle API server info requests
+    ipcMain.handle('get-api-server-info', async () => {
+      return this.apiServerInfo
+    })
+    
+    // Handle API server restart
+    ipcMain.handle('restart-api-server', async () => {
+      if (this.apiServerProcess) {
+        this.apiServerProcess.kill()
+        this.apiServerProcess = null
+        this.apiServerInfo = null
       }
-
-      try {
-        // Send JSON command to Python process
-        this.pythonProcess.send(command)
-        return true // Indicate command was sent successfully
-      } catch (error) {
-        throw new Error(`Failed to send command to Python: ${error}`)
-      }
+      
+      await this.startAPIServer()
+      return this.apiServerInfo
     })
 
     // File dialog handlers
@@ -286,17 +300,69 @@ class DocumentAssistantApp {
     })
   }
 
-  private cleanup() {
+  private async findAvailablePort(startPort: number = 8000): Promise<number> {
+    const net = await import('net')
+    
+    const isPortAvailable = (port: number): Promise<boolean> => {
+      return new Promise((resolve) => {
+        const server = net.createServer()
+        server.listen(port, '127.0.0.1', () => {
+          server.close(() => resolve(true))
+        })
+        server.on('error', () => resolve(false))
+      })
+    }
+    
+    for (let port = startPort; port < startPort + 100; port++) {
+      if (await isPortAvailable(port)) {
+        return port
+      }
+    }
+    
+    throw new Error('No available port found')
+  }
+  
+  private async waitForServerReady(baseURL: string, maxAttempts: number = 30): Promise<void> {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const response = await fetch(`${baseURL}/api/health`)
+        if (response.ok) {
+          console.log(`API server ready after ${attempt} attempts`)
+          return
+        }
+      } catch (error) {
+        // Server not ready yet
+      }
+      
+      console.log(`Waiting for API server... (${attempt}/${maxAttempts})`)
+      await new Promise(resolve => setTimeout(resolve, 1000))
+    }
+    
+    throw new Error('API server failed to start within timeout')
+  }
+
+  private async cleanup(): Promise<void> {
     console.log('Cleaning up resources...')
     
-    // Close Python process
-    if (this.pythonProcess) {
+    // Close API server process
+    if (this.apiServerProcess) {
       try {
-        this.pythonProcess.kill()
-        this.pythonProcess = null
-        console.log('Python backend process terminated')
+        // Try graceful shutdown first
+        this.apiServerProcess.kill('SIGTERM')
+        
+        // Wait a bit for graceful shutdown
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        
+        // Force kill if still running
+        if (!this.apiServerProcess.killed) {
+          this.apiServerProcess.kill('SIGKILL')
+        }
+        
+        this.apiServerProcess = null
+        this.apiServerInfo = null
+        console.log('API server process terminated')
       } catch (error) {
-        console.error('Error terminating Python process:', error)
+        console.error('Error terminating API server process:', error)
       }
     }
   }
