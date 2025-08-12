@@ -24,12 +24,14 @@ import {
 
 // Services
 import { 
-  usePythonBridge, 
+  useAPIClient,
+  useProcessManager,
+  useHealthMonitor,
   type ProcessFilesResponse, 
-  type CrawlUrlResponse,
+  type CrawlWebsiteResponse as CrawlUrlResponse,
   type QueryResponse,
-  type ProgressResponse
-} from './services/pythonBridge'
+  type HealthStatus
+} from './services'
 
 type TabType = 'upload' | 'crawl' | 'chat'
 
@@ -61,59 +63,63 @@ export const App: React.FC = () => {
     }
   })
 
-  const pythonBridge = usePythonBridge()
+  const apiClient = useAPIClient()
+  const processManager = useProcessManager()
+  const healthMonitor = useHealthMonitor()
 
-  // Setup Python bridge event listeners
+  // Setup process manager and health monitor event listeners
   useEffect(() => {
-    const handleProgress = (progress: ProgressResponse) => {
+    const handleServerReady = () => {
       setState(prev => ({
         ...prev,
         processing: {
-          status: 'progress',
-          message: progress.message,
-          progress: {
-            current: progress.progress,
-            total: progress.total,
-            label: progress.command === 'process_files' ? '处理文件' : 
-                   progress.command === 'crawl_url' ? '抓取网页' : '处理中'
-          },
+          status: 'success',
+          message: '后端服务已连接',
           details: []
         }
       }))
+      
+      // Auto-dismiss success message
+      setTimeout(() => {
+        updateProcessingStatus('idle', '')
+      }, 3000)
     }
 
-    const handleError = (error: Error) => {
-      setState(prev => ({
-        ...prev,
-        processing: {
-          status: 'error',
-          message: `连接错误: ${error.message}`,
-          details: ['请检查Python后端是否正常运行'],
-        }
-      }))
-    }
-
-    const handleDisconnected = ({ code }: { code: number }) => {
+    const handleServerDisconnected = ({ code }: { code: number }) => {
       setState(prev => ({
         ...prev,
         processing: {
           status: 'error',
           message: `后端连接断开 (代码: ${code})`,
-          details: ['请重启应用程序'],
+          details: ['正在尝试重新连接...'],
         }
       }))
     }
 
-    pythonBridge.on('progress', handleProgress)
-    pythonBridge.on('error', handleError)
-    pythonBridge.on('disconnected', handleDisconnected)
+    const handleHealthStatusChange = (status: HealthStatus) => {
+      if (!status.isHealthy && status.error) {
+        setState(prev => ({
+          ...prev,
+          processing: {
+            status: 'error',
+            message: `连接错误: ${status.error}`,
+            details: ['健康检查失败，正在尝试恢复连接'],
+          }
+        }))
+      }
+    }
+
+    processManager.on('server-ready', handleServerReady)
+    processManager.on('server-disconnected', handleServerDisconnected)
+    
+    const unsubscribeHealth = healthMonitor.onStatusChange(handleHealthStatusChange)
 
     return () => {
-      pythonBridge.off('progress', handleProgress)
-      pythonBridge.off('error', handleError)
-      pythonBridge.off('disconnected', handleDisconnected)
+      processManager.off('server-ready', handleServerReady)
+      processManager.off('server-disconnected', handleServerDisconnected)
+      unsubscribeHealth()
     }
-  }, [pythonBridge])
+  }, [processManager, healthMonitor])
 
   const updateProcessingStatus = (
     status: StatusType, 
@@ -135,12 +141,12 @@ export const App: React.FC = () => {
         '存储到向量数据库'
       ])
 
-      const response: ProcessFilesResponse = await pythonBridge.processFiles(
-        filePaths, 
-        state.currentCollection
-      )
+      const response: ProcessFilesResponse = await apiClient.processFiles({
+        file_paths: filePaths, 
+        collection_name: state.currentCollection
+      })
 
-      if (response.status === 'success') {
+      if (response.success) {
         updateProcessingStatus('success', '文件处理完成！', [
           `已处理 ${response.processed_files} 个文件`,
           `生成 ${response.total_chunks} 个文档块`,
@@ -176,12 +182,12 @@ export const App: React.FC = () => {
         '处理和索引内容'
       ])
 
-      const response: CrawlUrlResponse = await pythonBridge.crawlUrl(
+      const response: CrawlUrlResponse = await apiClient.crawlWebsite({
         url,
-        'website'
-      )
+        collection_name: 'website'
+      })
 
-      if (response.status === 'success') {
+      if (response.success) {
         updateProcessingStatus('success', '网站抓取完成！', [
           `成功抓取 ${response.crawled_pages} 个页面`,
           `生成 ${response.total_chunks} 个文档块`,
@@ -210,7 +216,10 @@ export const App: React.FC = () => {
   }
 
   const handleSendMessage = async (message: string): Promise<QueryResponse> => {
-    return pythonBridge.query(message, state.currentCollection)
+    return apiClient.query({
+      question: message, 
+      collection_name: state.currentCollection
+    })
   }
 
   const handleDismissStatus = () => {

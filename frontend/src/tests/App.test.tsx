@@ -7,22 +7,36 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import App from '../App'
 
-// Mock the python bridge service
-const mockPythonBridge = {
-  on: vi.fn(),
-  off: vi.fn(), 
+// Mock the services
+const mockAPIClient = {
   processFiles: vi.fn(),
-  crawlUrl: vi.fn(),
+  crawlWebsite: vi.fn(),
   query: vi.fn(),
   listCollections: vi.fn(),
-  getConnectionStatus: vi.fn(() => true),
+  healthCheck: vi.fn()
+}
+
+const mockProcessManager = {
+  on: vi.fn(),
+  off: vi.fn(),
+  getServerInfo: vi.fn(),
+  isServerConnected: vi.fn(() => true),
+  restartServer: vi.fn(),
   dispose: vi.fn()
 }
 
-vi.mock('../services/pythonBridge', () => ({
-  usePythonBridge: () => mockPythonBridge,
-  getPythonBridge: () => mockPythonBridge,
-  disposePythonBridge: vi.fn()
+const mockHealthMonitor = {
+  onStatusChange: vi.fn(() => () => {}),
+  getStatus: vi.fn(() => ({ isHealthy: true, lastChecked: new Date() })),
+  start: vi.fn(),
+  stop: vi.fn(),
+  dispose: vi.fn()
+}
+
+vi.mock('../services', () => ({
+  useAPIClient: () => mockAPIClient,
+  useProcessManager: () => mockProcessManager,
+  useHealthMonitor: () => mockHealthMonitor
 }))
 
 // Mock Electron API
@@ -31,10 +45,10 @@ Object.defineProperty(window, 'electronAPI', {
   value: {
     showOpenDialog: vi.fn(),
     showOpenFolderDialog: vi.fn(),
-    sendPythonCommand: vi.fn(),
-    onPythonResponse: vi.fn(),
-    onPythonError: vi.fn(),
-    onPythonDisconnected: vi.fn(),
+    getAPIServerInfo: vi.fn(),
+    restartAPIServer: vi.fn(),
+    onAPIServerReady: vi.fn(),
+    onAPIServerDisconnected: vi.fn(),
     removeAllListeners: vi.fn()
   }
 })
@@ -93,8 +107,8 @@ describe('App', () => {
   })
 
   it('enables chat tab after successful file processing', async () => {
-    mockPythonBridge.processFiles.mockResolvedValue({
-      status: 'success',
+    mockAPIClient.processFiles.mockResolvedValue({
+      success: true,
       processed_files: 1,
       total_chunks: 5,
       indexed_count: 5
@@ -113,36 +127,32 @@ describe('App', () => {
   it('shows processing status during operations', async () => {
     render(<App />)
     
-    // Simulate progress event
-    const progressHandler = mockPythonBridge.on.mock.calls.find(
-      call => call[0] === 'progress'
+    // Simulate server ready event
+    const serverReadyHandler = mockProcessManager.on.mock.calls.find(
+      call => call[0] === 'server-ready'
     )?.[1]
     
-    if (progressHandler) {
-      progressHandler({
-        status: 'progress',
-        command: 'process_files',
-        progress: 2,
-        total: 5,
-        message: '正在处理文件...'
-      })
+    if (serverReadyHandler) {
+      serverReadyHandler()
     }
 
     await waitFor(() => {
-      expect(screen.getByText('正在处理文件...')).toBeInTheDocument()
+      expect(screen.getByText('后端服务已连接')).toBeInTheDocument()
     })
   })
 
   it('handles connection errors', async () => {
     render(<App />)
     
-    // Simulate error event  
-    const errorHandler = mockPythonBridge.on.mock.calls.find(
-      call => call[0] === 'error'
-    )?.[1]
+    // Simulate health status change
+    const healthStatusHandler = mockHealthMonitor.onStatusChange.mock.calls[0]?.[0]
     
-    if (errorHandler) {
-      errorHandler(new Error('Connection failed'))
+    if (healthStatusHandler) {
+      healthStatusHandler({
+        isHealthy: false,
+        lastChecked: new Date(),
+        error: 'Connection failed'
+      })
     }
 
     await waitFor(() => {
@@ -159,11 +169,11 @@ describe('App', () => {
     // expect(screen.getByText('当前集合')).toBeInTheDocument()
   })
 
-  it('cleans up python bridge on unmount', () => {
+  it('cleans up services on unmount', () => {
     const { unmount } = render(<App />)
     
     unmount()
     
-    expect(mockPythonBridge.off).toHaveBeenCalled()
+    expect(mockProcessManager.off).toHaveBeenCalled()
   })
 })

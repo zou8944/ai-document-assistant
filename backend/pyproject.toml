@@ -77,15 +77,15 @@ test = [
 ]
 
 [project.scripts]
-ai-document-assistant = "main:main"
+ai-document-assistant = "api_server:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["crawler", "data_processing", "rag", "vector_store"]
-include = ["main.py"]
+packages = ["crawler", "data_processing", "rag", "vector_store", "api", "models", "services"]
+include = ["api_server.py"]
 
 [tool.uv]
 dev-dependencies = [
