@@ -1,0 +1,16 @@
+2025-08-12 23:11:11,330 - __main__ - INFO - Starting AI Document Assistant API server
+2025-08-12 23:11:11,330 - __main__ - INFO - Host: 127.0.0.1, Port: 8000
+2025-08-12 23:11:11,330 - __main__ - INFO - Workers: 1, Log level: debug
+2025-08-12 23:11:13,596 - api.main - INFO - Initializing services...
+2025-08-12 23:11:13,597 - data_processing.file_processor - INFO - Initialized FileProcessor with max_file_size=50.0MB
+2025-08-12 23:11:13,597 - data_processing.text_splitter - INFO - Initialized DocumentProcessor with chunk_size=1000, overlap=200
+2025-08-12 23:11:13,597 - crawler.simple_web_crawler - INFO - Initialized SimpleWebCrawler with max_depth=3, delay=1.0s, max_pages=50
+2025-08-12 23:11:14,105 - vector_store.chroma_client - INFO - Connected to ChromaDB at ./chroma_db
+2025-08-12 23:11:15,058 - httpx - INFO - HTTP Request: POST https://api.siliconflow.cn/v1/embeddings "HTTP/1.1 200 OK"
+2025-08-12 23:11:15,065 - services.document_service - INFO - Detected embedding dimension: 1024
+2025-08-12 23:11:15,065 - services.document_service - INFO - DocumentService initialized successfully
+2025-08-12 23:11:15,068 - vector_store.chroma_client - INFO - Connected to ChromaDB at ./chroma_db
+2025-08-12 23:11:15,212 - services.query_service - INFO - QueryService initialized successfully
+2025-08-12 23:11:15,213 - vector_store.chroma_client - INFO - Connected to ChromaDB at ./chroma_db
+2025-08-12 23:11:15,213 - services.collection_service - INFO - CollectionService initialized successfully
+2025-08-12 23:11:15,213 - api.main - INFO - Services initialized successfully

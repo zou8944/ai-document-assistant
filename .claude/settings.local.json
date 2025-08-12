@@ -27,7 +27,9 @@
       "Bash(PYTHONPATH=. uv run pytest tests/ -v)",
       "Bash(PYTHONPATH=. uv run pytest tests/test_file_processor.py::TestFileProcessor::test_create_file_processor_custom_size -v)",
       "Bash(npm run build:*)",
-      "Bash(npm test)"
+      "Bash(npm test)",
+      "Bash(npm install:*)",
+      "Bash(npm run dev:*)"
     ],
     "deny": []
   }
