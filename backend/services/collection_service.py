@@ -16,10 +16,10 @@ class CollectionService:
     def __init__(self, config=None):
         """Initialize collection service"""
         from config import get_config
-        from vector_store.qdrant_client import create_qdrant_manager
+        from vector_store.chroma_client import create_chroma_manager
 
         self.config = config or get_config()
-        self.qdrant_manager = create_qdrant_manager(self.config)
+        self.chroma_manager = create_chroma_manager(self.config)
 
         # Track active collections and their source types
         self.active_collections: dict[str, str] = {}
@@ -31,11 +31,12 @@ class CollectionService:
         try:
             collections_info = []
 
-            # Get all collections from Qdrant
-            all_collections = await self.qdrant_manager.list_collections()
+            # Get all collections from ChromaDB
+            all_collections = self.chroma_manager.client.list_collections()
 
-            for collection_name in all_collections:
-                info = await self.qdrant_manager.get_collection_info(collection_name)
+            for collection in all_collections:
+                collection_name = collection.name
+                info = await self.chroma_manager.get_collection_info(collection_name)
                 if info:
                     # Determine source type (default to 'unknown' if not tracked)
                     source_type = self.active_collections.get(collection_name, 'unknown')
@@ -57,7 +58,7 @@ class CollectionService:
     async def get_collection_info(self, collection_name: str) -> Optional[CollectionInfo]:
         """Get information about a specific collection"""
         try:
-            info = await self.qdrant_manager.get_collection_info(collection_name)
+            info = await self.chroma_manager.get_collection_info(collection_name)
             if not info:
                 return None
 
@@ -77,7 +78,7 @@ class CollectionService:
     async def delete_collection(self, collection_name: str) -> bool:
         """Delete a collection"""
         try:
-            success = await self.qdrant_manager.delete_collection(collection_name)
+            success = await self.chroma_manager.delete_collection(collection_name)
             if success:
                 # Remove from active collections tracking
                 self.active_collections.pop(collection_name, None)
@@ -96,8 +97,8 @@ class CollectionService:
     def close(self):
         """Close connections and cleanup resources"""
         try:
-            if hasattr(self, 'qdrant_manager'):
-                self.qdrant_manager.close()
+            if hasattr(self, 'chroma_manager'):
+                self.chroma_manager.close()
             logger.info("CollectionService resources closed")
         except Exception as e:
             logger.error(f"Error closing CollectionService: {e}")

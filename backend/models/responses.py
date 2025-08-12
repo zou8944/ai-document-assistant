@@ -72,4 +72,4 @@ class HealthResponse(BaseModel):
     status: str = Field(..., description="Service status")
     version: str = Field(..., description="API version")
     embeddings_available: bool = Field(..., description="Whether embeddings service is available")
-    qdrant_available: bool = Field(..., description="Whether Qdrant service is available")
+    chroma_available: bool = Field(..., description="Whether Chroma service is available")

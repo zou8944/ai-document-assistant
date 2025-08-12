@@ -82,7 +82,7 @@ export interface HealthResponse {
   status: string
   version: string
   embeddings_available: boolean
-  qdrant_available: boolean
+  chroma_available: boolean
 }
 
 // Streaming chunk types

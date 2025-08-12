@@ -14,7 +14,7 @@ from config import get_config
 from models.responses import SourceInfo
 from models.streaming import ContentChunk, DoneChunk, ErrorChunk, ProgressChunk, SourcesChunk
 from rag.prompt_templates import format_sources, get_rag_prompt
-from vector_store.qdrant_client import QdrantManager
+from vector_store.chroma_client import ChromaManager
 
 logger = logging.getLogger(__name__)
 
@@ -30,11 +30,11 @@ class QueryResult:
 
 
 class DocumentRetriever:
-    """Custom retriever that wraps Qdrant operations"""
+    """Custom retriever that wraps ChromaDB operations"""
 
-    def __init__(self, qdrant_manager: QdrantManager, collection_name: str,
+    def __init__(self, chroma_manager: ChromaManager, collection_name: str,
                  embeddings, top_k: int = 5):
-        self.qdrant_manager = qdrant_manager
+        self.chroma_manager = chroma_manager
         self.collection_name = collection_name
         self.embeddings = embeddings
         self.top_k = top_k
@@ -46,7 +46,7 @@ class DocumentRetriever:
             query_embedding = await self.embeddings.aembed_query(query)
 
             # Search similar documents
-            results = await self.qdrant_manager.search_similar(
+            results = await self.chroma_manager.search_similar(
                 collection_name=self.collection_name,
                 query_embedding=query_embedding,
                 limit=self.top_k,
@@ -70,9 +70,9 @@ class QueryService:
         self.config = config or get_config()
 
         try:
-            # Initialize Qdrant manager (shared across retrievers)
-            from vector_store.qdrant_client import create_qdrant_manager
-            self.qdrant_manager = create_qdrant_manager(self.config)
+            # Initialize ChromaDB manager (shared across retrievers)
+            from vector_store.chroma_client import create_chroma_manager
+            self.chroma_manager = create_chroma_manager(self.config)
 
             # Initialize embeddings
             embeddings_kwargs = self.config.get_openai_embeddings_kwargs()
@@ -101,7 +101,7 @@ class QueryService:
         """Get or create a retriever for the specified collection"""
         if collection_name not in self._retrievers:
             self._retrievers[collection_name] = DocumentRetriever(
-                qdrant_manager=self.qdrant_manager,
+                chroma_manager=self.chroma_manager,
                 collection_name=collection_name,
                 embeddings=self.embeddings,
                 top_k=5
@@ -141,7 +141,7 @@ class QueryService:
     async def check_collection_exists(self, collection_name: str) -> bool:
         """Check if a collection exists in the vector store"""
         try:
-            info = await self.qdrant_manager.get_collection_info(collection_name)
+            info = await self.chroma_manager.get_collection_info(collection_name)
             return info is not None
         except Exception:
             return False
@@ -309,13 +309,13 @@ class QueryService:
 
     async def get_collection_info(self, collection_name: str) -> Optional[dict[str, Any]]:
         """Get information about a collection"""
-        return await self.qdrant_manager.get_collection_info(collection_name)
+        return await self.chroma_manager.get_collection_info(collection_name)
 
     def close(self):
         """Close connections and cleanup resources"""
         try:
-            if hasattr(self, 'qdrant_manager'):
-                self.qdrant_manager.close()
+            if hasattr(self, 'chroma_manager'):
+                self.chroma_manager.close()
             logger.info("QueryService resources closed")
         except Exception as e:
             logger.error(f"Error closing QueryService: {e}")

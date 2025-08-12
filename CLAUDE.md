@@ -15,7 +15,7 @@
 - **后端模块划分**:
     - `crawler/`: 包含使用 `Crawl4AI` 的网络爬虫模块，并具备简单的反爬措施。
     - `data_processing/`: 负责文本处理，使用 LangChain 的 `RecursiveCharacterTextSplitter` 进行文本切分。
-    - `vector_store/`: 管理与 Qdrant 向量数据库的交互，包括数据向量化和存储。
+    - `vector_store/`: 管理与 Chroma 向量数据库的交互，包括数据向量化和存储。
     - `rag/`: 实现基于 LangChain 的 RAG 核心逻辑，包括自定义 Prompt 模板和缓存机制。
     - `main.py` 或 `api.py`: 作为后端服务的入口，处理前端请求。
 - **前端模块划分**:
@@ -28,7 +28,7 @@
 - **后端测试**:
     - 使用 `Pytest` 为后端 Python 服务编写单元测试。
     - 对爬虫、文本切分、RAG 链等核心模块进行独立测试。
-    - 使用 `mock` 模拟外部依赖（如 LLM API、Qdrant 服务）的行为。
+    - 使用 `mock` 模拟外部依赖（如 LLM API、Chroma 服务）的行为。
 - **前端测试**:
     - 使用 `Jest` 和 `React Testing Library` 对 React 组件进行单元测试和集成测试。
 - **测试覆盖**: 确保核心功能至少包含预期成功、边界条件和失败处理的测试用例。
@@ -45,7 +45,7 @@
     2.  实现前后端的子进程通信机制。
     3.  完成后端的文件/文件夹数据读取功能。
     4.  集成 `Crawl4AI` 实现网页抓取功能。
-    5.  集成 LangChain 实现文本切分、向量化和 Qdrant 存储。
+    5.  集成 LangChain 实现文本切分、向量化和 Chroma 存储。
     6.  构建完整的 RAG 问答流程，并提供 API 接口。
     7.  在前端界面上实现文件选择、URL 输入和问答交互。
     8.  实现后端缓存机制以优化响应速度。
@@ -53,7 +53,7 @@
 ### 📎 风格与约定
 - **后端技术栈**:
     - **语言**: Python 3.9+
-    - **核心库**: `LangChain`, `qdrant-client`, `crawl4ai`, `pydantic`。
+    - **核心库**: `LangChain`, `chroma-client`, `crawl4ai`, `pydantic`。
     - **代码风格**: 遵循 PEP8 规范，使用 `black` 进行格式化，并添加类型提示。
 - **前端技术栈**:
     - **框架**: `React`, `Electron`
@@ -62,10 +62,10 @@
 - **数据处理**:
     - **文本切分**: 使用 LangChain 的 `RecursiveCharacterTextSplitter`，并根据文档特性调整 `chunk_size` 和 `chunk_overlap`。
     - **向量化**: 选用合适的开源或商用 Embedding 模型。
-    - **向量存储**: 使用容器化部署的 `Qdrant`。
+    - **向量存储**: 使用容器化部署的 `Chroma`。
 
 ### 📚 文档与可解释性
-- **`README.md`**: 详细记录项目的设置和启动步骤，包括前端依赖安装、Python 环境配置以及如何启动 Qdrant 容器。
+- **`README.md`**: 详细记录项目的设置和启动步骤，包括前端依赖安装、Python 环境配置以及如何启动 Chroma 容器。
 - **代码注释**: 为复杂逻辑（如 RAG 链、爬虫策略）添加清晰的注释，解释其工作原理和设计原因。
 - **Prompt 模板**: 将 RAG 使用的 Prompt 模板单独存放和管理，方便调试和优化。
 

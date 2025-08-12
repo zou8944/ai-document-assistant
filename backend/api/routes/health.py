@@ -22,18 +22,18 @@ async def health_check(request: Request):
     except Exception:
         embeddings_available = False
 
-    # Check if Qdrant is available
-    qdrant_available = True
+    # Check if Chroma is available
+    chroma_available = True
     try:
         query_service = request.app.state.query_service
         # Try a simple operation
-        await query_service.qdrant_manager.list_collections()
+        await query_service.chroma_manager.list_collections()
     except Exception:
-        qdrant_available = False
+        chroma_available = False
 
     return HealthResponse(
         status="healthy",
         version="1.0.0",
         embeddings_available=embeddings_available,
-        qdrant_available=qdrant_available
+        chroma_available=chroma_available
     )

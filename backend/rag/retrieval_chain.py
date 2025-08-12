@@ -1,5 +1,5 @@
 """
-RAG retrieval chain implementation using LangChain with Qdrant vector store.
+RAG retrieval chain implementation using LangChain with ChromaDB vector store.
 Following 2024 best practices for document question answering with source citations.
 """
 
@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from config import get_config
 from rag.prompt_templates import format_sources, get_rag_prompt
-from vector_store.qdrant_client import QdrantManager
+from vector_store.chroma_client import ChromaManager
 
 logger = logging.getLogger(__name__)
 
@@ -27,11 +27,11 @@ class QueryResponse(BaseModel):
 
 
 class DocumentRetriever:
-    """Custom retriever that wraps Qdrant operations"""
+    """Custom retriever that wraps ChromaDB operations"""
 
-    def __init__(self, qdrant_manager: QdrantManager, collection_name: str,
+    def __init__(self, chroma_manager: ChromaManager, collection_name: str,
                  embeddings, top_k: int = 5):
-        self.qdrant_manager = qdrant_manager
+        self.chroma_manager = chroma_manager
         self.collection_name = collection_name
         self.embeddings = embeddings
         self.top_k = top_k
@@ -43,7 +43,7 @@ class DocumentRetriever:
             query_embedding = await self.embeddings.aembed_query(query)
 
             # Search similar documents
-            results = await self.qdrant_manager.search_similar(
+            results = await self.chroma_manager.search_similar(
                 collection_name=self.collection_name,
                 query_embedding=query_embedding,
                 limit=self.top_k,
@@ -63,23 +63,22 @@ class RetrievalChain:
     Provides question answering with context from vector-stored documents.
     """
 
-    def __init__(self, collection_name: str, qdrant_host: str = "localhost",
-                 qdrant_port: int = 6334, openai_api_key: Optional[str] = None):
+    def __init__(self, collection_name: str, chroma_persist_directory: str = "./chroma_db",
+                 openai_api_key: Optional[str] = None):
         """
         Initialize RAG retrieval chain.
 
         Args:
-            collection_name: Qdrant collection name
-            qdrant_host: Qdrant server host
-            qdrant_port: Qdrant server port
+            collection_name: ChromaDB collection name
+            chroma_persist_directory: ChromaDB persistence directory
             openai_api_key: OpenAI API key (if None, will try environment variable)
         """
         self.collection_name = collection_name
 
         # Initialize components
         try:
-            # Qdrant manager
-            self.qdrant_manager = QdrantManager(host=qdrant_host, port=qdrant_port)
+            # ChromaDB manager
+            self.chroma_manager = ChromaManager(persist_directory=chroma_persist_directory)
 
             # Get configuration
             config = get_config()
@@ -98,7 +97,7 @@ class RetrievalChain:
 
             # Document retriever
             self.retriever = DocumentRetriever(
-                qdrant_manager=self.qdrant_manager,
+                chroma_manager=self.chroma_manager,
                 collection_name=collection_name,
                 embeddings=self.embeddings,
                 top_k=5
@@ -225,12 +224,12 @@ class RetrievalChain:
 
     async def get_collection_stats(self) -> Optional[dict[str, Any]]:
         """Get statistics about the current collection"""
-        return await self.qdrant_manager.get_collection_info(self.collection_name)
+        return await self.chroma_manager.get_collection_info(self.collection_name)
 
     def close(self):
         """Close connections and cleanup resources"""
         try:
-            self.qdrant_manager.close()
+            self.chroma_manager.close()
             logger.info("Closed RetrievalChain resources")
         except Exception as e:
             logger.error(f"Error closing RetrievalChain: {e}")
@@ -242,14 +241,12 @@ def create_retrieval_chain(collection_name: str, config=None, openai_api_key: Op
     if config:
         return RetrievalChain(
             collection_name=collection_name,
-            qdrant_host=config.qdrant_host,
-            qdrant_port=config.qdrant_port,
+            chroma_persist_directory=config.chroma_persist_directory,
             openai_api_key=openai_api_key or config.openai_api_key
         )
     else:
         return RetrievalChain(
             collection_name=collection_name,
-            qdrant_host="localhost",
-            qdrant_port=6334,
+            chroma_persist_directory="./chroma_db",
             openai_api_key=openai_api_key
         )

@@ -8,7 +8,7 @@ license = {text = "MIT"}
 authors = [
     {name = "AI Document Assistant Team"}
 ]
-keywords = ["ai", "document", "assistant", "rag", "langchain", "qdrant"]
+keywords = ["ai", "document", "assistant", "rag", "langchain", "chromadb"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -27,7 +27,7 @@ dependencies = [
     "langchain-core>=0.3.0",
     "langchain-text-splitters>=0.3.0",
     # Vector store
-    "qdrant-client==1.15.1",
+    "chromadb>=0.4.24",
     # Web crawling
     "scrapy>=2.11.0",
     "beautifulsoup4>=4.12.0",
@@ -167,7 +167,7 @@ ignore_errors = true
 [[tool.mypy.overrides]]
 module = [
     "crawl4ai.*",
-    "qdrant_client.*",
+    "chromadb.*",
     "langchain.*",
     "langchain_community.*",
     "langchain_core.*",

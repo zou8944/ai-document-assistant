@@ -7,9 +7,8 @@ import logging
 from typing import Any, Optional
 
 from pydantic import BaseModel
-from qdrant_client.http.models import PointStruct
 
-from ..vector_store.qdrant_client import QdrantManager
+from ..vector_store.chroma_client import ChromaManager
 from .document_summarizer import DocumentSummary
 
 logger = logging.getLogger(__name__)
@@ -29,15 +28,15 @@ class SummaryPoint(BaseModel):
 class SummaryManager:
     """摘要存储和检索管理器"""
 
-    def __init__(self, qdrant_manager: QdrantManager, embeddings):
+    def __init__(self, chroma_manager: ChromaManager, embeddings):
         """
         初始化摘要管理器
-        
+
         Args:
-            qdrant_manager: Qdrant数据库管理器实例
+            chroma_manager: ChromaDB数据库管理器实例
             embeddings: 嵌入模型实例（用于向量化）
         """
-        self.qdrant_manager = qdrant_manager
+        self.chroma_manager = chroma_manager
         self.embeddings = embeddings
 
     def _get_summary_collection_name(self, base_collection: str) -> str:
@@ -49,11 +48,11 @@ class SummaryManager:
                                      summaries: list[DocumentSummary]) -> dict[str, Any]:
         """
         存储文档摘要到专门的摘要集合
-        
+
         Args:
             collection_name: 基础集合名称
             summaries: 文档摘要列表
-            
+
         Returns:
             存储结果字典
         """
@@ -73,7 +72,7 @@ class SummaryManager:
 
             # 确保摘要集合存在（获取embedding维度）
             embedding_dim = getattr(self.embeddings, 'dimension', 1536)  # 默认OpenAI维度
-            await self.qdrant_manager.ensure_collection(summary_collection, embedding_dim)
+            await self.chroma_manager.ensure_collection(summary_collection, embedding_dim)
 
             # 批量生成摘要的向量表示
             summary_texts = [s.summary for s in valid_summaries]
@@ -94,27 +93,28 @@ class SummaryManager:
                     "stored_count": 0
                 }
 
-            # 准备摘要点数据
-            points = []
+            # 准备摘要数据
+            ids = []
+            documents = []
+            metadatas = []
+            embeddings_list = []
+
             for summary_data, embedding in zip(valid_summaries, summary_embeddings):
-                point = PointStruct(
-                    id=summary_data.id,
-                    vector=embedding,
-                    payload={
-                        "summary": summary_data.summary,
-                        "source": summary_data.source,
-                        "doc_type": summary_data.doc_type,
-                        "original_length": summary_data.original_length,
-                        "generated_at": summary_data.generated_at,
-                        "summary_type": "document",  # 标识这是文档级摘要
-                        "has_error": summary_data.error,
-                        "error_message": summary_data.error_message
-                    }
-                )
-                points.append(point)
+                ids.append(summary_data.id)
+                documents.append(summary_data.summary)
+                metadatas.append({
+                    "source": summary_data.source,
+                    "doc_type": summary_data.doc_type,
+                    "original_length": summary_data.original_length,
+                    "generated_at": summary_data.generated_at,
+                    "summary_type": "document",  # 标识这是文档级摘要
+                    "has_error": summary_data.error,
+                    "error_message": summary_data.error_message
+                })
+                embeddings_list.append(embedding)
 
             # 批量插入摘要
-            result = await self.index_points(summary_collection, points)
+            result = await self.index_documents(summary_collection, ids, documents, metadatas, embeddings_list)
 
             if result["status"] == "success":
                 logger.info(f"成功存储 {result['indexed_count']} 个文档摘要到 {summary_collection}")
@@ -134,34 +134,43 @@ class SummaryManager:
                 "stored_count": 0
             }
 
-    async def index_points(self, collection_name: str, points: list[PointStruct]) -> dict[str, Any]:
+    async def index_documents(self, collection_name: str, ids: list[str],
+                             documents: list[str], metadatas: list[dict],
+                             embeddings_list: list[list[float]]) -> dict[str, Any]:
         """
-        索引向量点到集合
+        索引文档到集合
         
         Args:
             collection_name: 集合名称  
-            points: 向量点列表
+            ids: 文档ID列表
+            documents: 文档内容列表
+            metadatas: 元数据列表
+            embeddings_list: 向量列表
             
         Returns:
             索引结果字典
         """
         try:
-            # 使用Qdrant客户端的upsert操作
-            operation_info = self.qdrant_manager.client.upsert(
-                collection_name=collection_name,
-                points=points
+            collection = self.chroma_manager.client.get_collection(name=collection_name)
+
+            # 使用ChromaDB的upsert操作
+            collection.upsert(
+                ids=ids,
+                documents=documents,
+                metadatas=metadatas,
+                embeddings=embeddings_list
             )
 
-            logger.info(f"成功索引 {len(points)} 个点到集合 '{collection_name}'")
+            logger.info(f"成功索引 {len(ids)} 个文档到集合 '{collection_name}'")
 
             return {
                 "status": "success",
-                "indexed_count": len(points),
-                "operation_info": operation_info
+                "indexed_count": len(ids),
+                "collection_name": collection_name
             }
 
         except Exception as e:
-            logger.error(f"索引点失败: {e}")
+            logger.error(f"索引文档失败: {e}")
             return {
                 "status": "error",
                 "message": str(e),
@@ -195,7 +204,7 @@ class SummaryManager:
                 query_embedding = self.embeddings.embed_query(query)
 
             # 检索相似摘要
-            results = await self.qdrant_manager.search_similar(
+            results = await self.chroma_manager.search_similar(
                 collection_name=summary_collection,
                 query_embedding=query_embedding,
                 limit=limit,
@@ -240,7 +249,7 @@ class SummaryManager:
         summary_collection = self._get_summary_collection_name(collection_name)
 
         try:
-            info = await self.qdrant_manager.get_collection_info(summary_collection)
+            info = await self.chroma_manager.get_collection_info(summary_collection)
             if info:
                 return {
                     "collection_name": summary_collection,
@@ -267,7 +276,7 @@ class SummaryManager:
         summary_collection = self._get_summary_collection_name(collection_name)
 
         try:
-            success = await self.qdrant_manager.delete_collection(summary_collection)
+            success = await self.chroma_manager.delete_collection(summary_collection)
             if success:
                 logger.info(f"成功删除摘要集合: {summary_collection}")
             return success
@@ -337,24 +346,19 @@ class SummaryManager:
             else:
                 embedding = self.embeddings.embed_documents([new_summary.summary])[0]
 
-            # 创建更新点
-            point = PointStruct(
-                id=summary_id,
-                vector=embedding,
-                payload={
-                    "summary": new_summary.summary,
-                    "source": new_summary.source,
-                    "doc_type": new_summary.doc_type,
-                    "original_length": new_summary.original_length,
-                    "generated_at": new_summary.generated_at,
-                    "summary_type": "document",
-                    "has_error": new_summary.error,
-                    "error_message": new_summary.error_message
-                }
-            )
+            # 准备更新数据
+            metadata = {
+                "source": new_summary.source,
+                "doc_type": new_summary.doc_type,
+                "original_length": new_summary.original_length,
+                "generated_at": new_summary.generated_at,
+                "summary_type": "document",
+                "has_error": new_summary.error,
+                "error_message": new_summary.error_message
+            }
 
             # 执行更新
-            result = await self.index_points(summary_collection, [point])
+            result = await self.index_documents(summary_collection, [summary_id], [new_summary.summary], [metadata], [embedding])
             return result["status"] == "success"
 
         except Exception as e:

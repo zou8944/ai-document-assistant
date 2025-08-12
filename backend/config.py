@@ -24,9 +24,8 @@ class Config:
     embedding_api_base: Optional[str] = None
     embedding_model: str = "text-embedding-ada-002"
 
-    # Qdrant Configuration
-    qdrant_host: str = "localhost"
-    qdrant_port: int = 6334
+    # ChromaDB Configuration
+    chroma_persist_directory: str = "./chroma_db"
 
     # File Processing Configuration
     max_file_size_mb: float = 50.0
@@ -58,9 +57,8 @@ class Config:
             embedding_api_base=os.getenv("EMBEDDING_API_BASE"),
             embedding_model=os.getenv("EMBEDDING_MODEL", "text-embedding-ada-002"),
 
-            # Qdrant Configuration
-            qdrant_host=os.getenv("QDRANT_HOST", "localhost"),
-            qdrant_port=int(os.getenv("QDRANT_PORT", "6334")),
+            # ChromaDB Configuration
+            chroma_persist_directory=os.getenv("CHROMA_PERSIST_DIRECTORY", "./chroma_db"),
 
             # File Processing Configuration
             max_file_size_mb=float(os.getenv("MAX_FILE_SIZE_MB", "50.0")),
@@ -88,8 +86,8 @@ class Config:
         if (self.embedding_api_key or self.embedding_api_base) and not self.openai_api_key and not self.embedding_api_key:
             raise ValueError("When using custom embedding config, ensure API keys are properly set")
 
-        if self.qdrant_port <= 0:
-            raise ValueError("QDRANT_PORT must be a positive integer")
+        if not self.chroma_persist_directory:
+            raise ValueError("CHROMA_PERSIST_DIRECTORY must be set")
 
         if self.max_file_size_mb <= 0:
             raise ValueError("MAX_FILE_SIZE_MB must be positive")
@@ -150,9 +148,8 @@ class Config:
                 "has_api_key": bool(self.embedding_api_key or self.openai_api_key),
                 "using_fallback": not bool(self.embedding_api_key or self.embedding_api_base)
             },
-            "qdrant": {
-                "host": self.qdrant_host,
-                "port": self.qdrant_port
+            "chromadb": {
+                "persist_directory": self.chroma_persist_directory
             }
         }
 

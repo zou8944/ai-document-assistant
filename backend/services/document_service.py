@@ -12,7 +12,7 @@ from config import get_config
 from crawler import create_simple_web_crawler
 from data_processing.file_processor import create_file_processor
 from data_processing.text_splitter import create_document_processor
-from vector_store.qdrant_client import create_qdrant_manager
+from vector_store.chroma_client import create_chroma_manager
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class DocumentService:
         self.file_processor = create_file_processor(self.config)
         self.document_processor = create_document_processor(self.config)
         self.web_crawler = create_simple_web_crawler(self.config)
-        self.qdrant_manager = create_qdrant_manager(self.config)
+        self.chroma_manager = create_chroma_manager(self.config)
 
         # Initialize embeddings
         try:
@@ -132,14 +132,14 @@ class DocumentService:
         Returns error message if there's a dimension mismatch.
         """
         try:
-            info = await self.qdrant_manager.get_collection_info(collection_name)
+            info = await self.chroma_manager.get_collection_info(collection_name)
             if info and info.get("vector_size") and info["vector_size"] != self.embedding_dimension:
                 return (f"Collection '{collection_name}' exists with vector size {info['vector_size']} "
                        f"but current model outputs {self.embedding_dimension} dimensions. "
                        f"Please delete the collection or use a different name.")
 
             # Create or ensure collection exists
-            await self.qdrant_manager.ensure_collection(
+            await self.chroma_manager.ensure_collection(
                 collection_name,
                 vector_size=self.embedding_dimension
             )
@@ -242,7 +242,7 @@ class DocumentService:
             if progress_callback:
                 progress_callback("Indexing documents...", processed_files, total_files)
 
-            index_result = await self.qdrant_manager.index_documents(
+            index_result = await self.chroma_manager.index_documents(
                 collection_name=collection_name,
                 chunks=all_chunks,
                 embeddings=embeddings
@@ -352,7 +352,7 @@ class DocumentService:
                 progress_callback("Indexing documents...",
                                 len(successful_results), len(successful_results))
 
-            index_result = await self.qdrant_manager.index_documents(
+            index_result = await self.chroma_manager.index_documents(
                 collection_name=collection_name,
                 chunks=all_chunks,
                 embeddings=embeddings
@@ -389,8 +389,8 @@ class DocumentService:
     def close(self):
         """Close connections and cleanup resources"""
         try:
-            if hasattr(self, 'qdrant_manager'):
-                self.qdrant_manager.close()
+            if hasattr(self, 'chroma_manager'):
+                self.chroma_manager.close()
             logger.info("DocumentService resources closed")
         except Exception as e:
             logger.error(f"Error closing DocumentService: {e}")

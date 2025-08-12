@@ -10,7 +10,7 @@
 - **🌐 网站抓取**: 递归抓取同域名下的网页内容
 - **🤖 智能问答**: 基于 RAG 技术的文档问答系统
 - **💎 原生界面**: 遵循 Apple Liquid Glass 设计，提供原生 macOS 体验
-- **⚡ 高性能**: 使用 Qdrant 向量数据库确保快速检索
+- **⚡ 高性能**: 使用 Chroma 向量数据库确保快速检索
 
 ## 🏗️ 技术架构
 
@@ -23,7 +23,7 @@
 ### 后端 (Python)
 - **LangChain**: RAG 流程编排
 - **Crawl4AI**: 智能网页抓取
-- **Qdrant**: 向量数据库
+- **Chroma**: 向量数据库
 - **OpenAI Embeddings**: 文本向量化
 
 ## 📦 安装要求
@@ -32,7 +32,7 @@
 - macOS 10.15+, Windows 10+, 或 Ubuntu 18.04+
 - Node.js 18+
 - Python 3.9+
-- Docker (用于 Qdrant)
+- Docker (用于 Chroma)
 
 ### 环境变量
 ```bash
@@ -48,7 +48,7 @@ git clone https://github.com/zou8944/ai-document-assistant
 cd ai-document-assistant
 ```
 
-### 2. 启动 Qdrant 数据库
+### 2. 启动 Chroma 数据库
 ```bash
 docker-compose up -d
 ```
@@ -160,7 +160,7 @@ ai-document-assistant/
 │   │   └── tests/              # 前端测试
 │   ├── main.ts                 # Electron 主进程
 │   └── package.json
-├── docker-compose.yml          # Qdrant 容器配置
+├── docker-compose.yml          # Chroma 容器配置
 └── README.md
 ```
 
@@ -209,7 +209,7 @@ ai-document-assistant/
 4. 更新文档
 
 ### 性能优化
-- 使用 Qdrant 的 gRPC 接口提高性能
+- 使用 Chroma 的 gRPC 接口提高性能
 - 前端使用 React.memo 和 useMemo 优化渲染
 - 后端采用异步处理避免阻塞
 
@@ -220,7 +220,7 @@ ai-document-assistant/
 **1. Python 后端无法启动**
 - 检查 Python 环境和依赖安装
 - 验证 OPENAI_API_KEY 环境变量
-- 确认 Qdrant 容器正在运行
+- 确认 Chroma 容器正在运行
 
 **2. Electron 窗口显示异常**
 - 确认 Node.js 版本 18+
@@ -256,7 +256,7 @@ tail -f backend/backend.log
 ## 🙏 致谢
 
 - [LangChain](https://python.langchain.com/) - RAG 框架
-- [Qdrant](https://qdrant.tech/) - 向量数据库
+- [Chroma](https://docs.trychroma.com/docs/overview/introduction) - 向量数据库
 - [Crawl4AI](https://github.com/unclecode/crawl4ai) - 网页抓取
 - [Electron](https://www.electronjs.org/) - 桌面应用框架
 - [React](https://react.dev/) - UI 框架

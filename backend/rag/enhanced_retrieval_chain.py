@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 from langchain_core.output_parsers import StrOutputParser
 
-from vector_store.qdrant_client import QdrantManager
+from vector_store.chroma_client import ChromaManager
 
 from .cache_manager import SmartCacheManager
 from .intent_analyzer import IntentAnalyzer, QueryIntent
@@ -24,9 +24,9 @@ logger = logging.getLogger(__name__)
 class EnhancedDocumentRetriever(DocumentRetriever):
     """增强的文档检索器，支持动态配置和检索策略"""
 
-    def __init__(self, qdrant_manager: QdrantManager, collection_name: str,
+    def __init__(self, chroma_manager: ChromaManager, collection_name: str,
                  embeddings, top_k: int = 5, score_threshold: float = 0.3):
-        super().__init__(qdrant_manager, collection_name, embeddings, top_k)
+        super().__init__(chroma_manager, collection_name, embeddings, top_k)
         self.score_threshold = score_threshold
 
     async def retrieve_documents(self, query: str, score_threshold: Optional[float] = None) -> list[dict[str, Any]]:
@@ -48,7 +48,7 @@ class EnhancedDocumentRetriever(DocumentRetriever):
             query_embedding = await self.embeddings.aembed_query(query)
 
             # 搜索相似文档
-            results = await self.qdrant_manager.search_similar(
+            results = await self.chroma_manager.search_similar(
                 collection_name=self.collection_name,
                 query_embedding=query_embedding,
                 limit=self.top_k,
@@ -74,22 +74,21 @@ class EnhancedRetrievalChain(RetrievalChain):
     5. 结果增强和优化
     """
 
-    def __init__(self, collection_name: str, qdrant_host: str = "localhost",
-                 qdrant_port: int = 6334, openai_api_key: Optional[str] = None,
+    def __init__(self, collection_name: str, chroma_persist_directory: str = "./chroma_db",
+                 openai_api_key: Optional[str] = None,
                  enable_summary_overview: bool = True, enable_cache: bool = True):
         """
         初始化增强检索链
         
         Args:
-            collection_name: Qdrant集合名称
-            qdrant_host: Qdrant服务器主机
-            qdrant_port: Qdrant服务器端口
+            collection_name: ChromaDB集合名称
+            chroma_persist_directory: ChromaDB持久化目录
             openai_api_key: OpenAI API密钥
             enable_summary_overview: 是否启用摘要概述功能
             enable_cache: 是否启用智能缓存
         """
         # 调用父类初始化
-        super().__init__(collection_name, qdrant_host, qdrant_port, openai_api_key)
+        super().__init__(collection_name, chroma_persist_directory, openai_api_key)
 
         self.enable_summary_overview = enable_summary_overview
         self.enable_cache = enable_cache
@@ -111,7 +110,7 @@ class EnhancedRetrievalChain(RetrievalChain):
 
             # 替换为增强的文档检索器
             self.retriever = EnhancedDocumentRetriever(
-                qdrant_manager=self.qdrant_manager,
+                chroma_manager=self.chroma_manager,
                 collection_name=collection_name,
                 embeddings=self.embeddings,
                 top_k=5  # 默认值，会根据策略动态调整
@@ -119,7 +118,7 @@ class EnhancedRetrievalChain(RetrievalChain):
 
             # 初始化摘要相关组件
             if self.enable_summary_overview:
-                self.summary_manager = SummaryManager(self.qdrant_manager, self.embeddings)
+                self.summary_manager = SummaryManager(self.chroma_manager, self.embeddings)
                 self.overview_generator = SummaryBasedOverviewGenerator(
                     self.summary_manager, self.llm
                 )
@@ -620,8 +619,7 @@ def create_enhanced_retrieval_chain(collection_name: str,
     if config:
         return EnhancedRetrievalChain(
             collection_name=collection_name,
-            qdrant_host=config.qdrant_host,
-            qdrant_port=config.qdrant_port,
+            chroma_persist_directory=config.chroma_persist_directory,
             openai_api_key=openai_api_key or config.openai_api_key,
             enable_summary_overview=enable_summary_overview,
             enable_cache=enable_cache
@@ -629,8 +627,7 @@ def create_enhanced_retrieval_chain(collection_name: str,
     else:
         return EnhancedRetrievalChain(
             collection_name=collection_name,
-            qdrant_host="localhost",
-            qdrant_port=6334,
+            chroma_persist_directory="./chroma_db",
             openai_api_key=openai_api_key,
             enable_summary_overview=enable_summary_overview,
             enable_cache=enable_cache
