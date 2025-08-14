@@ -31,6 +31,7 @@
       "Bash(npm install:*)",
       "Bash(npm run dev:*)"
     ],
-    "deny": []
+    "deny": [],
+    "defaultMode": "acceptEdits"
   }
 }
