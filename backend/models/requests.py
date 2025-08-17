@@ -43,3 +43,13 @@ class UpdateCollectionRequest(BaseModel):
     """Request model for updating a collection"""
     name: Optional[str] = Field(None, description="Display name", min_length=1, max_length=200)
     description: Optional[str] = Field(None, description="Description")
+
+
+class UpdateSettingsRequest(BaseModel):
+    """Request model for updating settings"""
+    llm: Optional[dict] = Field(None, description="LLM settings")
+    embedding: Optional[dict] = Field(None, description="Embedding settings")
+    data_location: Optional[str] = Field(None, description="Data location path")
+    paths: Optional[dict] = Field(None, description="Path settings")
+    crawler: Optional[dict] = Field(None, description="Crawler settings")
+    text: Optional[dict] = Field(None, description="Text processing settings")

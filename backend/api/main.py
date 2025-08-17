@@ -9,12 +9,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.middleware import UnifiedResponseMiddleware, setup_exception_handlers
-from api.routes import collections, documents, health
+from api.routes import collections, documents, health, settings
 from config import get_config
 from database.connection import create_tables
 from services.collection_service import CollectionService
 from services.document_service import DocumentService
 from services.query_service import QueryService
+from services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +23,13 @@ logger = logging.getLogger(__name__)
 document_service: DocumentService
 query_service: QueryService
 collection_service: CollectionService
+settings_service: SettingsService
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
-    global document_service, query_service, collection_service
+    global document_service, query_service, collection_service, settings_service
 
     try:
         # Initialize configuration
@@ -42,6 +44,7 @@ async def lifespan(app: FastAPI):
         document_service = DocumentService(config)
         query_service = QueryService(config)
         collection_service = CollectionService(config)
+        settings_service = SettingsService(config)
 
         logger.info("Services initialized successfully")
 
@@ -49,6 +52,7 @@ async def lifespan(app: FastAPI):
         app.state.document_service = document_service
         app.state.query_service = query_service
         app.state.collection_service = collection_service
+        app.state.settings_service = settings_service
 
         yield
 
@@ -65,6 +69,8 @@ async def lifespan(app: FastAPI):
             query_service.close()
         if collection_service:
             collection_service.close()
+        if settings_service:
+            settings_service.close()
 
         logger.info("Services shutdown complete")
 
@@ -99,6 +105,7 @@ app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 app.include_router(collections.router, prefix="/api/v1", tags=["collections"])
 app.include_router(documents.router, prefix="/api/v1", tags=["documents"])
+app.include_router(settings.router, prefix="/api/v1", tags=["settings"])
 
 
 if __name__ == "__main__":

@@ -93,6 +93,16 @@ class ListDocumentsResponse(BaseModel):
     total: int = Field(..., description="Total number of documents")
 
 
+class SettingsResponse(BaseModel):
+    """Response model for settings"""
+    llm: dict = Field(..., description="LLM settings")
+    embedding: dict = Field(..., description="Embedding settings")
+    data_location: str = Field(..., description="Data location path")
+    paths: dict = Field(..., description="Path settings")
+    crawler: dict = Field(..., description="Crawler settings")
+    text: dict = Field(..., description="Text processing settings")
+
+
 class ListCollectionsResponse(BaseModel):
     """Response model for listing collections"""
     collections: list[CollectionInfo] = Field(default=[], description="List of available collections")
