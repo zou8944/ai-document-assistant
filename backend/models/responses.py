@@ -72,6 +72,27 @@ class ListCollectionsResponseV1(BaseModel):
     total: int = Field(..., description="Total number of collections")
 
 
+class DocumentResponse(BaseModel):
+    """Response model for document operations"""
+    id: str = Field(..., description="Document ID")
+    name: str = Field(..., description="File name or page title")
+    uri: str = Field(..., description="Document URI")
+    size_bytes: int = Field(..., description="File size in bytes")
+    mime_type: Optional[str] = Field(None, description="MIME type")
+    chunk_count: int = Field(..., description="Number of chunks")
+    status: str = Field(..., description="Processing status")
+    created_at: str = Field(..., description="Creation timestamp")
+    updated_at: str = Field(..., description="Last update timestamp")
+
+
+class ListDocumentsResponse(BaseModel):
+    """Response model for listing documents"""
+    documents: list[DocumentResponse] = Field(..., description="List of documents")
+    page: int = Field(..., description="Current page number")
+    page_size: int = Field(..., description="Page size")
+    total: int = Field(..., description="Total number of documents")
+
+
 class ListCollectionsResponse(BaseModel):
     """Response model for listing collections"""
     collections: list[CollectionInfo] = Field(default=[], description="List of available collections")

@@ -3,15 +3,23 @@ Document processing service for handling files and web content.
 """
 
 import logging
+import os
 from pathlib import Path
 from typing import Any, Callable, Optional
+from urllib.parse import urlparse
 
+from fastapi import HTTPException
+from fastapi.responses import FileResponse
 from langchain_openai import OpenAIEmbeddings
 
 from config import get_config
 from crawler import create_simple_web_crawler
 from data_processing.file_processor import create_file_processor
 from data_processing.text_splitter import create_document_processor
+from database.connection import get_db_session_context
+from models.database.document import Document
+from models.responses import DocumentResponse, ListDocumentsResponse
+from repository.document import DocumentChunkRepository, DocumentRepository
 from vector_store.chroma_client import create_chroma_manager
 
 logger = logging.getLogger(__name__)
@@ -80,6 +88,154 @@ class DocumentService:
         self.max_embedding_batch_size = getattr(self.config, "embedding_batch_size", 64)
 
         logger.info("DocumentService initialized successfully")
+
+    def _to_response(self, document: Document) -> DocumentResponse:
+        """Convert Document model to response model"""
+        return DocumentResponse(
+            id=document.id,
+            name=document.name,
+            uri=document.uri,
+            size_bytes=document.size_bytes,
+            mime_type=document.mime_type,
+            chunk_count=document.chunk_count,
+            status=document.status,
+            created_at=document.created_at.isoformat(),
+            updated_at=document.updated_at.isoformat()
+        )
+
+    async def list_documents(
+        self,
+        collection_id: str,
+        page: int = 1,
+        page_size: int = 50,
+        search: Optional[str] = None,
+        status: Optional[str] = None
+    ) -> ListDocumentsResponse:
+        """List documents in a collection with pagination and filters"""
+        try:
+            with get_db_session_context() as session:
+                repo = DocumentRepository(session)
+
+                # Calculate offset
+                offset = (page - 1) * page_size
+
+                # Get documents
+                documents = repo.get_by_collection(
+                    collection_id=collection_id,
+                    status=status,
+                    search=search,
+                    offset=offset,
+                    limit=page_size
+                )
+
+                # Get total count
+                total = repo.count_by_collection(collection_id=collection_id, status=status)
+
+                return ListDocumentsResponse(
+                    documents=[self._to_response(doc) for doc in documents],
+                    page=page,
+                    page_size=page_size,
+                    total=total
+                )
+
+        except Exception as e:
+            logger.error(f"Failed to list documents: {e}")
+            return ListDocumentsResponse(
+                documents=[],
+                page=page,
+                page_size=page_size,
+                total=0
+            )
+
+    async def get_document(self, collection_id: str, document_id: str) -> Optional[DocumentResponse]:
+        """Get a specific document"""
+        try:
+            with get_db_session_context() as session:
+                repo = DocumentRepository(session)
+                document = repo.get_by_id(document_id)
+
+                if not document or document.collection_id != collection_id:
+                    return None
+
+                return self._to_response(document)
+
+        except Exception as e:
+            logger.error(f"Failed to get document '{document_id}': {e}")
+            return None
+
+    async def delete_document(self, collection_id: str, document_id: str) -> bool:
+        """Delete a document and its associated chunks/vectors"""
+        try:
+            with get_db_session_context() as session:
+                doc_repo = DocumentRepository(session)
+                chunk_repo = DocumentChunkRepository(session)
+
+                document = doc_repo.get_by_id(document_id)
+                if not document or document.collection_id != collection_id:
+                    return False
+
+                # Get all chunks to get vector IDs
+                chunks = chunk_repo.get_by_document(document_id)
+                vector_ids = [chunk.vector_id for chunk in chunks]
+
+                # Delete vectors from ChromaDB
+                if vector_ids:
+                    try:
+                        await self.chroma_manager.delete_collection(collection_id)
+                        logger.info(f"Deleted {len(vector_ids)} vectors from ChromaDB")
+                    except Exception as e:
+                        logger.warning(f"Failed to delete vectors from ChromaDB: {e}")
+
+                # Delete document from database (cascade will handle chunks)
+                success = doc_repo.delete(document_id)
+
+                if success:
+                    logger.info(f"Deleted document '{document_id}' and {len(vector_ids)} chunks")
+
+                return success
+
+        except Exception as e:
+            logger.error(f"Failed to delete document '{document_id}': {e}")
+            return False
+
+    async def download_document(self, collection_id: str, document_id: str) -> Optional[FileResponse]:
+        """Download a document file (only for file:// URIs)"""
+        try:
+            with get_db_session_context() as session:
+                repo = DocumentRepository(session)
+                document = repo.get_by_id(document_id)
+
+                if not document or document.collection_id != collection_id:
+                    return None
+
+                # Check if it's a file URI
+                parsed_uri = urlparse(document.uri)
+                if parsed_uri.scheme != 'file':
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Document is not a local file and cannot be downloaded"
+                    )
+
+                # Get file path
+                file_path = parsed_uri.path
+                if not os.path.exists(file_path):
+                    raise HTTPException(
+                        status_code=404,
+                        detail="File not found on disk"
+                    )
+
+                # Return file response
+                return FileResponse(
+                    path=file_path,
+                    filename=document.name,
+                    media_type=document.mime_type or 'application/octet-stream'
+                )
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to download document '{document_id}': {e}")
+            raise HTTPException(status_code=500, detail="Internal server error") from e
 
     def _detect_embedding_dimension(self) -> int:
         """Detect the actual embedding dimension from the model"""
