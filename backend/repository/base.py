@@ -24,7 +24,7 @@ class BaseRepository(Generic[T]):
         self.model = model
         self.session = session
 
-    def create(self, **kwargs) -> T:
+    def create_by_field(self, **kwargs) -> T:
         """
         Create a new entity.
 
@@ -35,6 +35,22 @@ class BaseRepository(Generic[T]):
             Created entity
         """
         entity = self.model(**kwargs)
+        self.session.add(entity)
+        self.session.commit()
+        self.session.refresh(entity)
+        return entity
+
+
+    def create_by_model(self, entity: T) -> T:
+        """
+        Create a new entity by model instance.
+
+        Args:
+            entity: Entity instance
+
+        Returns:
+            Created entity
+        """
         self.session.add(entity)
         self.session.commit()
         self.session.refresh(entity)

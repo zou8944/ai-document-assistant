@@ -55,6 +55,23 @@ class CollectionInfo(BaseModel):
     source_type: str = Field(..., description="Type of source (files, website, etc.)")
 
 
+class CollectionResponse(BaseModel):
+    """Response model for collection operations"""
+    id: str = Field(..., description="Collection ID")
+    name: str = Field(..., description="Display name")
+    description: str = Field(..., description="Description")
+    document_count: int = Field(..., description="Number of documents")
+    vector_count: int = Field(..., description="Number of vectors")
+    created_at: str = Field(..., description="Creation timestamp")
+    updated_at: str = Field(..., description="Last update timestamp")
+
+
+class ListCollectionsResponseV1(BaseModel):
+    """Response model for listing collections (v1 API)"""
+    collections: list[CollectionResponse] = Field(..., description="List of collections")
+    total: int = Field(..., description="Total number of collections")
+
+
 class ListCollectionsResponse(BaseModel):
     """Response model for listing collections"""
     collections: list[CollectionInfo] = Field(default=[], description="List of available collections")

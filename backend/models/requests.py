@@ -30,3 +30,16 @@ class QueryRequest(BaseModel):
 class DeleteCollectionRequest(BaseModel):
     """Request model for deleting a collection"""
     collection_name: str = Field(..., description="Name of the collection to delete")
+
+
+class CreateCollectionRequest(BaseModel):
+    """Request model for creating a collection"""
+    id: str = Field(..., description="Collection ID (slug)", min_length=1, max_length=100)
+    name: str = Field(..., description="Display name", min_length=1, max_length=200)
+    description: str = Field(default="", description="Description")
+
+
+class UpdateCollectionRequest(BaseModel):
+    """Request model for updating a collection"""
+    name: Optional[str] = Field(None, description="Display name", min_length=1, max_length=200)
+    description: Optional[str] = Field(None, description="Description")

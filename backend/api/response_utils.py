@@ -137,3 +137,19 @@ def raise_service_unavailable(message: str = "Service unavailable"):
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail=message
     )
+
+
+def raise_bad_request(message: str = "Bad request"):
+    """Raise HTTP 400 exception"""
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=message
+    )
+
+
+def raise_conflict(message: str = "Conflict"):
+    """Raise HTTP 409 exception"""
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=message
+    )

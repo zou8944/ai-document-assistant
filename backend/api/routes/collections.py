@@ -3,22 +3,60 @@ Collection management routes.
 """
 
 import logging
+from typing import Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, status
 
 from api.response_utils import (
+    raise_bad_request,
+    raise_conflict,
     raise_internal_error,
     raise_not_found,
     success_response,
 )
-from models.requests import DeleteCollectionRequest
+from models.requests import (
+    CreateCollectionRequest,
+    DeleteCollectionRequest,
+    UpdateCollectionRequest,
+)
+from models.responses import ListCollectionsResponseV1
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.post("/collections", status_code=status.HTTP_201_CREATED)
+async def create_collection(
+    request_data: CreateCollectionRequest,
+    request: Request
+):
+    """
+    Create a new collection
+
+    Args:
+        request_data: Collection creation data
+    """
+    try:
+        collection_service = request.app.state.collection_service
+
+        collection = await collection_service.create_collection(
+            collection_id=request_data.id,
+            name=request_data.name,
+            description=request_data.description
+        )
+
+        if not collection:
+            raise_conflict(f"Collection with id '{request_data.id}' already exists")
+
+        return success_response(data=collection)
+
+    except Exception as e:
+        logger.error(f"Failed to create collection: {e}")
+        raise_internal_error(f"Failed to create collection: {str(e)}")
+
+
 @router.get("/collections")
-async def list_collections(request: Request, search: str = None):
+async def list_collections(request: Request, search: Optional[str] = None):
     """
     List all available collections
 
@@ -28,34 +66,93 @@ async def list_collections(request: Request, search: str = None):
     try:
         collection_service = request.app.state.collection_service
 
-        collections = await collection_service.list_collections()
+        collections = await collection_service.list_collections(search=search)
 
-        # Apply search filter if provided
-        if search:
-            search_lower = search.lower()
-            collections = [
-                c for c in collections
-                if search_lower in c.name.lower() or search_lower in (c.description or "").lower()
-            ]
+        response_data = ListCollectionsResponseV1(
+            collections=collections,
+            total=len(collections)
+        )
 
-        response_data = {
-            "collections": collections,
-            "total": len(collections)
-        }
-
-        return success_response(data=response_data)
+        return success_response(data=response_data.dict())
 
     except Exception as e:
         logger.error(f"Failed to list collections: {e}")
         raise_internal_error(f"Failed to list collections: {str(e)}")
 
 
+@router.get("/collections/{collection_id}")
+async def get_collection(collection_id: str, request: Request):
+    """Get information about a specific collection"""
+    try:
+        collection_service = request.app.state.collection_service
+
+        collection = await collection_service.get_collection(collection_id)
+
+        if not collection:
+            raise_not_found(f"Collection '{collection_id}' not found")
+
+        return success_response(data=collection)
+
+    except Exception as e:
+        logger.error(f"Failed to get collection: {e}")
+        raise_internal_error(f"Failed to get collection: {str(e)}")
+
+
+@router.patch("/collections/{collection_id}")
+async def update_collection(
+    collection_id: str,
+    request_data: UpdateCollectionRequest,
+    request: Request
+):
+    """Update a collection"""
+    try:
+        collection_service = request.app.state.collection_service
+
+        # Validate at least one field is provided
+        if request_data.name is None and request_data.description is None:
+            raise_bad_request("At least one field (name or description) must be provided")
+
+        collection = await collection_service.update_collection(
+            collection_id=collection_id,
+            name=request_data.name,
+            description=request_data.description
+        )
+
+        if not collection:
+            raise_not_found(f"Collection '{collection_id}' not found")
+
+        return success_response(data=collection)
+
+    except Exception as e:
+        logger.error(f"Failed to update collection: {e}")
+        raise_internal_error(f"Failed to update collection: {str(e)}")
+
+
+@router.delete("/collections/{collection_id}")
+async def delete_collection(collection_id: str, request: Request):
+    """Delete a collection"""
+    try:
+        collection_service = request.app.state.collection_service
+
+        success = await collection_service.delete_collection(collection_id)
+
+        if not success:
+            raise_not_found(f"Collection '{collection_id}' not found")
+
+        return success_response(data={})
+
+    except Exception as e:
+        logger.error(f"Failed to delete collection: {e}")
+        raise_internal_error(f"Failed to delete collection: {str(e)}")
+
+
+# Legacy endpoints for backward compatibility
 @router.delete("/collections")
-async def delete_collection(
+async def delete_collection_legacy(
     request_data: DeleteCollectionRequest,
     request: Request
 ):
-    """Delete a collection"""
+    """Delete a collection (legacy endpoint)"""
     try:
         collection_service = request.app.state.collection_service
 
@@ -76,21 +173,3 @@ async def delete_collection(
     except Exception as e:
         logger.error(f"Failed to delete collection: {e}")
         raise_internal_error(f"Failed to delete collection: {str(e)}")
-
-
-@router.get("/collections/{collection_name}")
-async def get_collection_info(collection_name: str, request: Request):
-    """Get information about a specific collection"""
-    try:
-        collection_service = request.app.state.collection_service
-
-        info = await collection_service.get_collection_info(collection_name)
-
-        if not info:
-            raise_not_found(f"Collection '{collection_name}' not found")
-
-        return success_response(data=info)
-
-    except Exception as e:
-        logger.error(f"Failed to get collection info: {e}")
-        raise_internal_error(f"Failed to get collection info: {str(e)}")
