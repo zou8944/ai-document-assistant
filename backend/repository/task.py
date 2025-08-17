@@ -149,6 +149,68 @@ class TaskRepository(BaseRepository[Task]):
             ).order_by(Task.created_at.desc())
         ))
 
+    def list_tasks_with_filters(
+        self,
+        status: Optional[str] = None,
+        task_type: Optional[str] = None,
+        collection_id: Optional[str] = None,
+        offset: int = 0,
+        limit: int = 50
+    ) -> list[Task]:
+        """
+        List tasks with optional filtering and pagination.
+
+        Args:
+            status: Optional status filter
+            task_type: Optional type filter
+            collection_id: Optional collection filter
+            offset: Offset for pagination
+            limit: Limit for pagination
+
+        Returns:
+            list of filtered tasks
+        """
+        query = select(Task)
+
+        if status:
+            query = query.where(Task.status == status)
+        if task_type:
+            query = query.where(Task.type == task_type)
+        if collection_id:
+            query = query.where(Task.collection_id == collection_id)
+
+        query = query.order_by(Task.created_at.desc()).offset(offset).limit(limit)
+
+        return list(self.session.scalars(query))
+
+    def count_tasks_with_filters(
+        self,
+        status: Optional[str] = None,
+        task_type: Optional[str] = None,
+        collection_id: Optional[str] = None
+    ) -> int:
+        """
+        Count tasks with optional filtering.
+
+        Args:
+            status: Optional status filter
+            task_type: Optional type filter
+            collection_id: Optional collection filter
+
+        Returns:
+            Task count
+        """
+        query = select(func.count(Task.id))
+
+        if status:
+            query = query.where(Task.status == status)
+        if task_type:
+            query = query.where(Task.type == task_type)
+        if collection_id:
+            query = query.where(Task.collection_id == collection_id)
+
+        return self.session.scalar(query) or 0
+
 
 class TaskLogRepository(BaseRepository[TaskLog]):
     """Repository for TaskLog operations."""

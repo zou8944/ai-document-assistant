@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.middleware import UnifiedResponseMiddleware, setup_exception_handlers
-from api.routes import collections, documents, health, ingest, settings
+from api.routes import collections, documents, health, ingest, settings, tasks
 from config import get_config
 from database.connection import create_tables
 from services.collection_service import CollectionService
@@ -118,6 +118,7 @@ app.include_router(collections.router, prefix="/api/v1", tags=["collections"])
 app.include_router(documents.router, prefix="/api/v1", tags=["documents"])
 app.include_router(ingest.router, prefix="/api/v1", tags=["ingest"])
 app.include_router(settings.router, prefix="/api/v1", tags=["settings"])
+app.include_router(tasks.router, prefix="/api/v1", tags=["tasks"])
 
 
 if __name__ == "__main__":
