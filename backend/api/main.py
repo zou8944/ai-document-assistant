@@ -9,12 +9,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.middleware import UnifiedResponseMiddleware, setup_exception_handlers
-from api.routes import chats, collections, documents, health, ingest, settings, tasks
+from api.routes import chats, collections, documents, enhanced_chat, health, ingest, settings, tasks
 from config import get_config
 from database.connection import create_tables
 from services.chat_service import ChatService
 from services.collection_service import CollectionService
 from services.document_service import DocumentService
+from services.enhanced_chat_service import EnhancedChatService
 from services.query_service import QueryService
 from services.settings_service import SettingsService
 from services.task_service import TaskService
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 # Global services (will be initialized in lifespan)
 chat_service: ChatService
+enhanced_chat_service: EnhancedChatService
 document_service: DocumentService
 query_service: QueryService
 collection_service: CollectionService
@@ -33,7 +35,7 @@ task_service: TaskService
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
-    global chat_service, document_service, query_service, collection_service, settings_service, task_service
+    global chat_service, enhanced_chat_service, document_service, query_service, collection_service, settings_service, task_service
 
     try:
         # Initialize configuration
@@ -52,6 +54,15 @@ async def lifespan(app: FastAPI):
         settings_service = SettingsService(config)
         task_service = TaskService(config)
 
+        # Initialize enhanced chat service with advanced retrieval capabilities
+        logger.info("Initializing enhanced chat service...")
+        enhanced_chat_service = EnhancedChatService(
+            base_service=chat_service,
+            enable_intent_analysis=True,
+            enable_cache=True,
+            enable_summary_overview=True
+        )
+
         logger.info("Services initialized successfully")
 
         # Start task workers
@@ -60,6 +71,7 @@ async def lifespan(app: FastAPI):
 
         # Store services in app state for access in routes
         app.state.chat_service = chat_service
+        app.state.enhanced_chat_service = enhanced_chat_service
         app.state.document_service = document_service
         app.state.query_service = query_service
         app.state.collection_service = collection_service
@@ -78,6 +90,8 @@ async def lifespan(app: FastAPI):
         if task_service:
             await task_service.stop_workers()
             task_service.close()
+        if enhanced_chat_service:
+            enhanced_chat_service.close()
         if chat_service:
             chat_service.close()
         if document_service:
@@ -126,6 +140,7 @@ app.include_router(ingest.router, prefix="/api/v1", tags=["ingest"])
 app.include_router(settings.router, prefix="/api/v1", tags=["settings"])
 app.include_router(tasks.router, prefix="/api/v1", tags=["tasks"])
 app.include_router(chats.router, prefix="/api/v1", tags=["chats"])
+app.include_router(enhanced_chat.router, prefix="/api/v1", tags=["enhanced-chat"])
 
 
 if __name__ == "__main__":

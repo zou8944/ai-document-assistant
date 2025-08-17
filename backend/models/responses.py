@@ -180,3 +180,54 @@ class ChatCompletionResponse(BaseModel):
     sources: list[SourceReference] = Field(default=[], description="Source references")
     metadata: dict = Field(default={}, description="Additional metadata")
     model_info: dict = Field(default={}, description="Model information used")
+
+
+class EnhancedChatResponse(BaseModel):
+    """Response model for enhanced chat with advanced retrieval features"""
+    message_id: str = Field(..., description="Generated message ID")
+    chat_id: str = Field(..., description="Chat ID")
+    content: str = Field(..., description="Generated response content")
+    sources: list[SourceReference] = Field(default=[], description="Source references")
+    metadata: dict = Field(default={}, description="Additional metadata")
+
+    # Enhanced features
+    confidence: float = Field(..., description="Response confidence score")
+    intent_analysis: Optional[dict] = Field(None, description="Query intent analysis results")
+    retrieval_strategy: str = Field(..., description="Retrieval strategy used")
+    cache_hit: bool = Field(default=False, description="Whether response was served from cache")
+
+    # Performance metrics
+    retrieval_time_ms: Optional[float] = Field(None, description="Time spent on retrieval (ms)")
+    generation_time_ms: Optional[float] = Field(None, description="Time spent on generation (ms)")
+    total_time_ms: Optional[float] = Field(None, description="Total processing time (ms)")
+
+    # Retrieval details
+    collections_searched: list[str] = Field(default=[], description="Collections that were searched")
+    documents_retrieved: int = Field(default=0, description="Number of documents retrieved")
+    sources_count: int = Field(default=0, description="Number of source references")
+
+
+class IntentAnalysisResponse(BaseModel):
+    """Response model for query intent analysis"""
+    intent: str = Field(..., description="Detected intent type")
+    confidence: str = Field(..., description="Confidence level (high/medium/low)")
+    confidence_score: float = Field(..., description="Numerical confidence score")
+    keyword_scores: dict = Field(..., description="Keyword matching scores by intent")
+    description: str = Field(..., description="Human-readable intent description")
+    analysis_method: str = Field(..., description="Method used for analysis")
+
+
+class CacheStatsResponse(BaseModel):
+    """Response model for cache statistics"""
+    chains_count: int = Field(..., description="Number of retrieval chains")
+    total_cache_hits: int = Field(..., description="Total cache hits across all chains")
+    total_cache_misses: int = Field(..., description="Total cache misses across all chains")
+    hit_rate: float = Field(..., description="Overall cache hit rate")
+    per_collection: dict = Field(..., description="Per-collection cache statistics")
+
+
+class RetrievalStrategiesResponse(BaseModel):
+    """Response model for available retrieval strategies"""
+    strategies: dict = Field(..., description="Available strategies with descriptions")
+    default: str = Field(..., description="Default strategy")
+    recommended: str = Field(..., description="Recommended strategy")
