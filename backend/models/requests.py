@@ -65,3 +65,21 @@ class IngestUrlsRequest(BaseModel):
     urls: list[str] = Field(..., description="List of URLs to crawl")
     max_depth: int = Field(default=2, description="Maximum crawling depth")
     override: bool = Field(default=True, description="Whether to override existing URLs")
+
+
+class CreateChatRequest(BaseModel):
+    """Request model for creating a chat"""
+    name: str = Field(..., description="Chat name", min_length=1, max_length=200)
+    collection_ids: list[str] = Field(..., description="Knowledge base collection IDs")
+
+
+class UpdateChatRequest(BaseModel):
+    """Request model for updating a chat"""
+    name: Optional[str] = Field(None, description="Chat name", min_length=1, max_length=200)
+    collection_ids: Optional[list[str]] = Field(None, description="Knowledge base collection IDs")
+
+
+class ChatMessageRequest(BaseModel):
+    """Request model for sending a chat message"""
+    message: str = Field(..., description="User message", min_length=1)
+    stream: bool = Field(default=False, description="Whether to use streaming response")

@@ -140,3 +140,43 @@ class HealthResponse(BaseModel):
     version: str = Field(..., description="API version")
     embeddings_available: bool = Field(..., description="Whether embeddings service is available")
     chroma_available: bool = Field(..., description="Whether Chroma service is available")
+
+
+class ChatResponse(BaseModel):
+    """Response model for chat information"""
+    chat_id: str = Field(..., description="Chat ID")
+    name: str = Field(..., description="Chat name")
+    collection_ids: list[str] = Field(..., description="Knowledge base collection IDs")
+    message_count: int = Field(..., description="Number of messages in chat")
+    created_at: str = Field(..., description="Creation timestamp")
+    last_message_at: Optional[str] = Field(None, description="Last message timestamp")
+
+
+class ChatMessageResponse(BaseModel):
+    """Response model for chat messages"""
+    message_id: str = Field(..., description="Message ID")
+    chat_id: str = Field(..., description="Chat ID")
+    role: str = Field(..., description="Message role (user/assistant)")
+    content: str = Field(..., description="Message content")
+    sources: list[dict] = Field(default=[], description="Source references")
+    metadata: dict = Field(default={}, description="Additional metadata")
+    created_at: str = Field(..., description="Creation timestamp")
+
+
+class SourceReference(BaseModel):
+    """Response model for source references"""
+    document_name: str = Field(..., description="Source document name")
+    document_id: str = Field(..., description="Document ID")
+    chunk_index: int = Field(..., description="Chunk index within document")
+    content_preview: str = Field(..., description="Preview of relevant content")
+    relevance_score: float = Field(..., description="Relevance score")
+
+
+class ChatCompletionResponse(BaseModel):
+    """Response model for chat completion"""
+    message_id: str = Field(..., description="Generated message ID")
+    chat_id: str = Field(..., description="Chat ID")
+    content: str = Field(..., description="Generated response content")
+    sources: list[SourceReference] = Field(default=[], description="Source references")
+    metadata: dict = Field(default={}, description="Additional metadata")
+    model_info: dict = Field(default={}, description="Model information used")
