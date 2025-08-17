@@ -7,10 +7,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
-from api.routes import collections, crawler, files, health, query
+from api.middleware import UnifiedResponseMiddleware, setup_exception_handlers
+from api.routes import collections, health
 from config import get_config
+from database.connection import create_tables
 from services.collection_service import CollectionService
 from services.document_service import DocumentService
 from services.query_service import QueryService
@@ -31,6 +32,10 @@ async def lifespan(app: FastAPI):
     try:
         # Initialize configuration
         config = get_config()
+
+        # Initialize database
+        logger.info("Initializing database...")
+        create_tables()
 
         # Initialize services
         logger.info("Initializing services...")
@@ -81,23 +86,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add unified response middleware
+app.add_middleware(UnifiedResponseMiddleware)
 
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    """Global exception handler"""
-    logger.error(f"Unhandled exception: {exc}")
-    return JSONResponse(
-        status_code=500,
-        content={"detail": f"Internal server error: {str(exc)}"}
-    )
+# Setup exception handlers
+setup_exception_handlers(app)
 
 
 
+# Include routers with versioned API prefix
 app.include_router(health.router, prefix="/api", tags=["health"])
-app.include_router(files.router, prefix="/api", tags=["files"])
-app.include_router(crawler.router, prefix="/api", tags=["crawler"])
-app.include_router(query.router, prefix="/api", tags=["query"])
-app.include_router(collections.router, prefix="/api", tags=["collections"])
+app.include_router(health.router, prefix="/api/v1", tags=["health"])
+app.include_router(collections.router, prefix="/api/v1", tags=["collections"])
 
 
 if __name__ == "__main__":

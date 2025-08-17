@@ -4,31 +4,53 @@ Collection management routes.
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 
+from api.response_utils import (
+    raise_internal_error,
+    raise_not_found,
+    success_response,
+)
 from models.requests import DeleteCollectionRequest
-from models.responses import DeleteCollectionResponse, ListCollectionsResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/collections", response_model=ListCollectionsResponse)
-async def list_collections(request: Request):
-    """List all available collections"""
+@router.get("/collections")
+async def list_collections(request: Request, search: str = None):
+    """
+    List all available collections
+
+    Args:
+        search: Optional search keyword to filter collections
+    """
     try:
         collection_service = request.app.state.collection_service
 
         collections = await collection_service.list_collections()
 
-        return ListCollectionsResponse(collections=collections)
+        # Apply search filter if provided
+        if search:
+            search_lower = search.lower()
+            collections = [
+                c for c in collections
+                if search_lower in c.name.lower() or search_lower in (c.description or "").lower()
+            ]
+
+        response_data = {
+            "collections": collections,
+            "total": len(collections)
+        }
+
+        return success_response(data=response_data)
 
     except Exception as e:
         logger.error(f"Failed to list collections: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise_internal_error(f"Failed to list collections: {str(e)}")
 
 
-@router.delete("/collections", response_model=DeleteCollectionResponse)
+@router.delete("/collections")
 async def delete_collection(
     request_data: DeleteCollectionRequest,
     request: Request
@@ -40,21 +62,20 @@ async def delete_collection(
         success = await collection_service.delete_collection(request_data.collection_name)
 
         if success:
-            return DeleteCollectionResponse(
-                success=True,
-                collection_name=request_data.collection_name,
+            response_data = {
+                "collection_name": request_data.collection_name,
+                "deleted": True
+            }
+            return success_response(
+                data=response_data,
                 message=f"Collection '{request_data.collection_name}' deleted successfully"
             )
         else:
-            return DeleteCollectionResponse(
-                success=False,
-                collection_name=request_data.collection_name,
-                message=f"Failed to delete collection '{request_data.collection_name}'"
-            )
+            raise_not_found(f"Collection '{request_data.collection_name}' not found")
 
     except Exception as e:
         logger.error(f"Failed to delete collection: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise_internal_error(f"Failed to delete collection: {str(e)}")
 
 
 @router.get("/collections/{collection_name}")
@@ -66,12 +87,10 @@ async def get_collection_info(collection_name: str, request: Request):
         info = await collection_service.get_collection_info(collection_name)
 
         if not info:
-            raise HTTPException(status_code=404, detail=f"Collection '{collection_name}' not found")
+            raise_not_found(f"Collection '{collection_name}' not found")
 
-        return info
+        return success_response(data=info)
 
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Failed to get collection info: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise_internal_error(f"Failed to get collection info: {str(e)}")

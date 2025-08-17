@@ -4,14 +4,27 @@ Health check routes.
 
 from fastapi import APIRouter, Request
 
-from models.responses import HealthResponse
+from api.response_utils import success_response
 
 router = APIRouter()
 
 
-@router.get("/health", response_model=HealthResponse)
+class HealthData:
+    """Health check response data"""
+    def __init__(self, status: str, version: str, embeddings_available: bool, chroma_available: bool):
+        self.status = status
+        self.version = version
+        self.embeddings_available = embeddings_available
+        self.chroma_available = chroma_available
+
+
+@router.get("/health")
 async def health_check(request: Request):
-    """Health check endpoint"""
+    """
+    Health check endpoint
+
+    Returns system health status including service availability.
+    """
 
     # Check if embeddings are available
     embeddings_available = True
@@ -31,9 +44,11 @@ async def health_check(request: Request):
     except Exception:
         chroma_available = False
 
-    return HealthResponse(
-        status="healthy",
-        version="1.0.0",
-        embeddings_available=embeddings_available,
-        chroma_available=chroma_available
-    )
+    health_data = {
+        "status": "ok",
+        "version": "0.1.0",
+        "embeddings_available": embeddings_available,
+        "chroma_available": chroma_available
+    }
+
+    return success_response(data=health_data)
