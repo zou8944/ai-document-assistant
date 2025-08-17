@@ -103,6 +103,25 @@ class SettingsResponse(BaseModel):
     text: dict = Field(..., description="Text processing settings")
 
 
+class TaskResponse(BaseModel):
+    """Response model for task operations"""
+    task_id: str = Field(..., description="Task ID")
+    type: str = Field(..., description="Task type")
+    status: str = Field(..., description="Task status")
+    progress: dict = Field(..., description="Progress information")
+    stats: dict = Field(..., description="Task statistics")
+    collection_id: Optional[str] = Field(None, description="Associated collection ID")
+    created_at: str = Field(..., description="Creation timestamp")
+    updated_at: str = Field(..., description="Last update timestamp")
+    error: Optional[str] = Field(None, description="Error message if failed")
+
+
+class IngestResponse(BaseModel):
+    """Response model for ingestion operations"""
+    task_id: str = Field(..., description="Task ID for tracking progress")
+    status: str = Field(..., description="Initial task status")
+
+
 class ListCollectionsResponse(BaseModel):
     """Response model for listing collections"""
     collections: list[CollectionInfo] = Field(default=[], description="List of available collections")

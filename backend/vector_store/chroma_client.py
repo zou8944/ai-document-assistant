@@ -197,6 +197,28 @@ class ChromaManager:
             logger.error(f"Search failed: {e}")
             return []
 
+    async def get_collection(self, collection_name: str) -> Optional[chromadb.Collection]:
+        """
+        Get ChromaDB collection instance.
+
+        Args:
+            collection_name: Name of the collection
+
+        Returns:
+            ChromaDB collection instance or None if not found
+        """
+        try:
+            collection = self.client.get_collection(name=collection_name)
+            logger.debug(f"Retrieved collection '{collection_name}'")
+            return collection
+        except ValueError:
+            # Collection doesn't exist
+            logger.warning(f"Collection '{collection_name}' not found")
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get collection '{collection_name}': {e}")
+            return None
+
     async def delete_collection(self, collection_name: str) -> bool:
         """Delete a collection and all its data"""
         try:

@@ -9,13 +9,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.middleware import UnifiedResponseMiddleware, setup_exception_handlers
-from api.routes import collections, documents, health, settings
+from api.routes import collections, documents, health, ingest, settings
 from config import get_config
 from database.connection import create_tables
 from services.collection_service import CollectionService
 from services.document_service import DocumentService
 from services.query_service import QueryService
 from services.settings_service import SettingsService
+from services.task_service import TaskService
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +25,13 @@ document_service: DocumentService
 query_service: QueryService
 collection_service: CollectionService
 settings_service: SettingsService
+task_service: TaskService
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
-    global document_service, query_service, collection_service, settings_service
+    global document_service, query_service, collection_service, settings_service, task_service
 
     try:
         # Initialize configuration
@@ -45,14 +47,20 @@ async def lifespan(app: FastAPI):
         query_service = QueryService(config)
         collection_service = CollectionService(config)
         settings_service = SettingsService(config)
+        task_service = TaskService(config)
 
         logger.info("Services initialized successfully")
+
+        # Start task workers
+        logger.info("Starting task workers...")
+        await task_service.start_workers(num_workers=2)
 
         # Store services in app state for access in routes
         app.state.document_service = document_service
         app.state.query_service = query_service
         app.state.collection_service = collection_service
         app.state.settings_service = settings_service
+        app.state.task_service = task_service
 
         yield
 
@@ -63,6 +71,9 @@ async def lifespan(app: FastAPI):
         # Cleanup services
         logger.info("Shutting down services...")
 
+        if task_service:
+            await task_service.stop_workers()
+            task_service.close()
         if document_service:
             document_service.close()
         if query_service:
@@ -105,6 +116,7 @@ app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 app.include_router(collections.router, prefix="/api/v1", tags=["collections"])
 app.include_router(documents.router, prefix="/api/v1", tags=["documents"])
+app.include_router(ingest.router, prefix="/api/v1", tags=["ingest"])
 app.include_router(settings.router, prefix="/api/v1", tags=["settings"])
 
 

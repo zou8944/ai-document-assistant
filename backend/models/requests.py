@@ -53,3 +53,15 @@ class UpdateSettingsRequest(BaseModel):
     paths: Optional[dict] = Field(None, description="Path settings")
     crawler: Optional[dict] = Field(None, description="Crawler settings")
     text: Optional[dict] = Field(None, description="Text processing settings")
+
+
+class IngestFilesRequest(BaseModel):
+    """Request model for file ingestion"""
+    files: list[str] = Field(..., description="List of file or folder paths to process")
+
+
+class IngestUrlsRequest(BaseModel):
+    """Request model for URL ingestion"""
+    urls: list[str] = Field(..., description="List of URLs to crawl")
+    max_depth: int = Field(default=2, description="Maximum crawling depth")
+    override: bool = Field(default=True, description="Whether to override existing URLs")
