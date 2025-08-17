@@ -63,6 +63,11 @@
     - **文本切分**: 使用 LangChain 的 `RecursiveCharacterTextSplitter`，并根据文档特性调整 `chunk_size` 和 `chunk_overlap`。
     - **向量化**: 选用合适的开源或商用 Embedding 模型。
     - **向量存储**: 使用容器化部署的 `Chroma`。
+- **后端约定**:
+    - 列表类型使用 list 而不是 typing.List
+    - 字典类型使用 dict 而不是 typing.Dict
+    - 无论在代码中还是注释中，空行都不允许包含空白字符，否则会报 "Blank line contains whitespace"
+    - 不要使用相对路径导入，使用绝对路径
 
 ### 📚 文档与可解释性
 - **`README.md`**: 详细记录项目的设置和启动步骤，包括前端依赖安装、Python 环境配置以及如何启动 Chroma 容器。

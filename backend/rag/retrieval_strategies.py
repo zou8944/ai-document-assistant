@@ -85,7 +85,7 @@ class RetrievalStrategyManager:
     def __init__(self, custom_configs: Optional[dict[QueryIntent, RetrievalConfig]] = None):
         """
         初始化策略管理器
-        
+
         Args:
             custom_configs: 自定义配置，会覆盖默认配置
         """
@@ -97,10 +97,10 @@ class RetrievalStrategyManager:
     def get_config(self, intent: QueryIntent) -> RetrievalConfig:
         """
         获取指定意图的检索配置
-        
+
         Args:
             intent: 查询意图
-            
+
         Returns:
             对应的检索配置
         """
@@ -109,7 +109,7 @@ class RetrievalStrategyManager:
     def update_config(self, intent: QueryIntent, config: RetrievalConfig) -> None:
         """
         更新指定意图的检索配置
-        
+
         Args:
             intent: 查询意图
             config: 新的检索配置
@@ -134,11 +134,11 @@ class RetrievalEnhancer:
     def apply_mmr_filter(documents: list, diversity_threshold: float = 0.5) -> list:
         """
         应用最大边际相关性过滤
-        
+
         Args:
             documents: 原始检索文档列表
             diversity_threshold: 多样性阈值
-            
+
         Returns:
             经过MMR过滤的文档列表
         """
@@ -181,11 +181,11 @@ class RetrievalEnhancer:
     def enhance_with_context(documents: list, context_window: int = 2) -> list:
         """
         通过上下文信息增强检索结果
-        
+
         Args:
             documents: 原始检索文档列表
             context_window: 上下文窗口大小
-            
+
         Returns:
             增强后的文档列表
         """
@@ -197,10 +197,10 @@ class RetrievalEnhancer:
     def prioritize_structured_content(documents: list) -> list:
         """
         优先排序结构化内容（标题、列表等）
-        
+
         Args:
             documents: 原始检索文档列表
-            
+
         Returns:
             重新排序的文档列表
         """

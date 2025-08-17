@@ -32,11 +32,11 @@ class EnhancedDocumentRetriever(DocumentRetriever):
     async def retrieve_documents(self, query: str, score_threshold: Optional[float] = None) -> list[dict[str, Any]]:
         """
         检索相关文档，支持动态阈值
-        
+
         Args:
             query: 查询文本
             score_threshold: 可选的相似度阈值
-            
+
         Returns:
             检索到的文档列表
         """
@@ -65,7 +65,7 @@ class EnhancedDocumentRetriever(DocumentRetriever):
 class EnhancedRetrievalChain(RetrievalChain):
     """
     增强的RAG检索链，支持智能查询路由和意图感知处理
-    
+
     主要功能：
     1. 智能查询意图分析
     2. 基于意图的检索策略选择
@@ -79,7 +79,7 @@ class EnhancedRetrievalChain(RetrievalChain):
                  enable_summary_overview: bool = True, enable_cache: bool = True):
         """
         初始化增强检索链
-        
+
         Args:
             collection_name: ChromaDB集合名称
             chroma_persist_directory: ChromaDB持久化目录
@@ -136,11 +136,11 @@ class EnhancedRetrievalChain(RetrievalChain):
     async def query(self, question: str, include_sources: bool = True) -> QueryResponse:
         """
         增强的查询处理，支持意图分析和智能路由
-        
+
         Args:
             question: 用户问题
             include_sources: 是否包含来源引用
-            
+
         Returns:
             查询响应对象
         """
@@ -289,10 +289,10 @@ class EnhancedRetrievalChain(RetrievalChain):
     async def _expand_overview_retrieval(self, question: str) -> list[dict[str, Any]]:
         """
         针对概述查询的扩展检索策略
-        
+
         Args:
             question: 查询问题
-            
+
         Returns:
             扩展后的文档列表
         """
@@ -330,11 +330,11 @@ class EnhancedRetrievalChain(RetrievalChain):
     def _format_context_by_intent(self, documents: list[dict[str, Any]], intent: QueryIntent) -> str:
         """
         根据意图格式化上下文
-        
+
         Args:
             documents: 文档列表
             intent: 查询意图
-            
+
         Returns:
             格式化的上下文文本
         """
@@ -351,10 +351,10 @@ class EnhancedRetrievalChain(RetrievalChain):
     def _format_overview_context(self, documents: list[dict[str, Any]]) -> str:
         """
         格式化概述上下文，按主题分组
-        
+
         Args:
             documents: 文档列表
-            
+
         Returns:
             格式化的概述上下文
         """
@@ -395,10 +395,10 @@ class EnhancedRetrievalChain(RetrievalChain):
     def _format_procedural_context(self, documents: list[dict[str, Any]]) -> str:
         """
         格式化操作指南上下文，优先显示步骤性内容
-        
+
         Args:
             documents: 文档列表
-            
+
         Returns:
             格式化的步骤上下文
         """
@@ -453,12 +453,12 @@ class EnhancedRetrievalChain(RetrievalChain):
     def _calculate_confidence(self, documents: list[dict[str, Any]], intent: QueryIntent, intent_confidence: float) -> float:
         """
         根据意图和检索结果计算置信度
-        
+
         Args:
             documents: 检索到的文档
             intent: 查询意图
             intent_confidence: 意图识别置信度
-            
+
         Returns:
             综合置信度分数
         """
@@ -493,12 +493,12 @@ class EnhancedRetrievalChain(RetrievalChain):
     def _format_sources_by_intent(self, documents: list[dict[str, Any]], intent: QueryIntent, include_sources: bool) -> list[dict[str, Any]]:
         """
         根据意图格式化来源信息
-        
+
         Args:
             documents: 文档列表
             intent: 查询意图
             include_sources: 是否包含来源
-            
+
         Returns:
             格式化的来源信息列表
         """
@@ -529,11 +529,11 @@ class EnhancedRetrievalChain(RetrievalChain):
     def _generate_no_results_response(self, question: str, intent: QueryIntent) -> QueryResponse:
         """
         生成无结果响应
-        
+
         Args:
             question: 用户问题
             intent: 查询意图
-            
+
         Returns:
             无结果响应
         """
@@ -556,11 +556,11 @@ class EnhancedRetrievalChain(RetrievalChain):
     def _generate_error_response(self, error_message: str, question: str) -> QueryResponse:
         """
         生成错误响应
-        
+
         Args:
             error_message: 错误消息
             question: 用户问题
-            
+
         Returns:
             错误响应
         """
@@ -574,10 +574,10 @@ class EnhancedRetrievalChain(RetrievalChain):
     async def get_intent_analysis(self, question: str) -> dict[str, Any]:
         """
         获取查询的意图分析结果（用于调试和分析）
-        
+
         Args:
             question: 查询问题
-            
+
         Returns:
             意图分析结果
         """
@@ -586,7 +586,7 @@ class EnhancedRetrievalChain(RetrievalChain):
     def get_cache_stats(self) -> Optional[dict[str, Any]]:
         """
         获取缓存统计信息
-        
+
         Returns:
             缓存统计信息或None（如果缓存未启用）
         """
@@ -597,10 +597,10 @@ class EnhancedRetrievalChain(RetrievalChain):
     def clear_cache(self, cache_type: Optional[str] = None) -> int:
         """
         清理缓存
-        
+
         Args:
             cache_type: 要清理的缓存类型，None表示清理全部
-            
+
         Returns:
             清理的项目数量
         """

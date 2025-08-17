@@ -4,3 +4,15 @@ backend.log
 .vscode
 .coverage
 .coverage.xml
+
+# Database files and data directory
+data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/

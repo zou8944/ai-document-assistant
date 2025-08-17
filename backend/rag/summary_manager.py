@@ -139,14 +139,14 @@ class SummaryManager:
                              embeddings_list: list[list[float]]) -> dict[str, Any]:
         """
         索引文档到集合
-        
+
         Args:
             collection_name: 集合名称  
             ids: 文档ID列表
             documents: 文档内容列表
             metadatas: 元数据列表
             embeddings_list: 向量列表
-            
+
         Returns:
             索引结果字典
         """
@@ -184,13 +184,13 @@ class SummaryManager:
                                         score_threshold: float = 0.1) -> list[SummaryPoint]:
         """
         检索与查询相关的文档摘要
-        
+
         Args:
             collection_name: 基础集合名称
             query: 查询文本
             limit: 返回结果数量限制
             score_threshold: 相似度阈值
-            
+
         Returns:
             相关摘要列表
         """
@@ -239,10 +239,10 @@ class SummaryManager:
     async def get_collection_summary_stats(self, collection_name: str) -> Optional[dict[str, Any]]:
         """
         获取摘要集合的统计信息
-        
+
         Args:
             collection_name: 基础集合名称
-            
+
         Returns:
             统计信息字典
         """
@@ -266,10 +266,10 @@ class SummaryManager:
     async def delete_summary_collection(self, collection_name: str) -> bool:
         """
         删除摘要集合
-        
+
         Args:
             collection_name: 基础集合名称
-            
+
         Returns:
             删除是否成功
         """
@@ -288,11 +288,11 @@ class SummaryManager:
     def format_summaries_context(self, summaries: list[SummaryPoint], max_length: int = 8000) -> str:
         """
         格式化摘要为上下文文本
-        
+
         Args:
             summaries: 摘要列表
             max_length: 最大上下文长度
-            
+
         Returns:
             格式化的上下文文本
         """
@@ -328,12 +328,12 @@ class SummaryManager:
                                     new_summary: DocumentSummary) -> bool:
         """
         更新单个文档摘要
-        
+
         Args:
             collection_name: 基础集合名称
             summary_id: 摘要ID
             new_summary: 新的摘要数据
-            
+
         Returns:
             更新是否成功
         """

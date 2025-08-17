@@ -28,7 +28,7 @@ class IntentAnalyzer:
     def __init__(self, llm: Optional[ChatOpenAI] = None):
         """
         初始化意图分析器
-        
+
         Args:
             llm: 可选的LLM实例，用于语义分析
         """
@@ -71,11 +71,11 @@ class IntentAnalyzer:
     def _calculate_keyword_score(self, query: str, intent: QueryIntent) -> float:
         """
         计算关键词匹配分数
-        
+
         Args:
             query: 查询文本
             intent: 意图类型
-            
+
         Returns:
             匹配分数 (0-1)
         """
@@ -111,10 +111,10 @@ class IntentAnalyzer:
     def analyze_intent_by_keywords(self, query: str) -> dict[QueryIntent, float]:
         """
         基于关键词分析查询意图
-        
+
         Args:
             query: 查询文本
-            
+
         Returns:
             各个意图的匹配分数字典
         """
@@ -129,11 +129,11 @@ class IntentAnalyzer:
     def analyze_intent(self, query: str, use_llm_fallback: bool = True) -> QueryIntent:
         """
         分析查询意图
-        
+
         Args:
             query: 查询文本
             use_llm_fallback: 是否使用LLM作为后备方案
-            
+
         Returns:
             识别出的查询意图
         """
@@ -174,10 +174,10 @@ class IntentAnalyzer:
     def _semantic_analysis(self, query: str) -> QueryIntent:
         """
         使用LLM进行语义分析
-        
+
         Args:
             query: 查询文本
-            
+
         Returns:
             识别出的查询意图
         """
@@ -214,10 +214,10 @@ class IntentAnalyzer:
     def get_intent_description(self, intent: QueryIntent) -> str:
         """
         获取意图的中文描述
-        
+
         Args:
             intent: 查询意图
-            
+
         Returns:
             意图的中文描述
         """
@@ -232,10 +232,10 @@ class IntentAnalyzer:
     def analyze_with_confidence(self, query: str) -> dict[str, any]:
         """
         分析查询意图并返回详细信息
-        
+
         Args:
             query: 查询文本
-            
+
         Returns:
             包含意图、置信度和详细分析的字典
         """

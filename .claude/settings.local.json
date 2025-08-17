@@ -29,7 +29,9 @@
       "Bash(npm run build:*)",
       "Bash(npm test)",
       "Bash(npm install:*)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(PYTHONPATH=. uv run python database/initialization.py)",
+      "Bash(PYTHONPATH=. uv run python test_database.py)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

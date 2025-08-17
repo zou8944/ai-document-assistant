@@ -32,7 +32,7 @@ class SummaryBasedOverviewGenerator:
     def __init__(self, summary_manager: SummaryManager, llm: ChatOpenAI):
         """
         初始化概述生成器
-        
+
         Args:
             summary_manager: 摘要管理器实例
             llm: 用于生成概述的语言模型
@@ -80,13 +80,13 @@ class SummaryBasedOverviewGenerator:
                               score_threshold: float = 0.15) -> OverviewResponse:
         """
         基于预生成摘要创建概述
-        
+
         Args:
             question: 用户查询问题
             collection_name: 文档集合名称
             max_summaries: 最大摘要数量
             score_threshold: 相似度阈值
-            
+
         Returns:
             概述回答对象
         """
@@ -160,10 +160,10 @@ class SummaryBasedOverviewGenerator:
     def _sort_summaries_by_relevance(self, summaries: list[SummaryPoint]) -> list[SummaryPoint]:
         """
         按相关性和文档类型排序摘要
-        
+
         Args:
             summaries: 原始摘要列表
-            
+
         Returns:
             排序后的摘要列表
         """
@@ -191,11 +191,11 @@ class SummaryBasedOverviewGenerator:
                                   max_length: int = 8000) -> list[SummaryPoint]:
         """
         根据长度限制选择摘要
-        
+
         Args:
             summaries: 排序后的摘要列表
             max_length: 最大总长度
-            
+
         Returns:
             选择的摘要列表
         """
@@ -220,10 +220,10 @@ class SummaryBasedOverviewGenerator:
     def _format_summary_context(self, summaries: list[SummaryPoint]) -> str:
         """
         格式化摘要为上下文文本
-        
+
         Args:
             summaries: 摘要列表
-            
+
         Returns:
             格式化的上下文文本
         """
@@ -248,11 +248,11 @@ class SummaryBasedOverviewGenerator:
     def _calculate_confidence(self, summaries: list[SummaryPoint], question: str) -> float:
         """
         计算概述回答的置信度
-        
+
         Args:
             summaries: 使用的摘要列表
             question: 用户问题
-            
+
         Returns:
             置信度分数 (0-1)
         """
@@ -281,10 +281,10 @@ class SummaryBasedOverviewGenerator:
     def _format_summary_sources(self, summaries: list[SummaryPoint]) -> list[dict[str, Any]]:
         """
         格式化摘要来源信息
-        
+
         Args:
             summaries: 摘要列表
-            
+
         Returns:
             来源信息列表
         """
@@ -307,10 +307,10 @@ class SummaryBasedOverviewGenerator:
     async def get_collection_overview_stats(self, collection_name: str) -> Optional[dict[str, Any]]:
         """
         获取集合的概述统计信息
-        
+
         Args:
             collection_name: 集合名称
-            
+
         Returns:
             统计信息字典
         """
