@@ -572,19 +572,306 @@ class TaskService:
         collection_id: str,
         input_params: dict[str, Any]
     ):
-        """Process URL ingestion task"""
+        """Process URL ingestion task with full web crawling integration"""
         try:
             await self.add_task_log(task_id, "info", "Starting URL ingestion")
 
-            # Get URLs from input params
+            # Get parameters from input
             urls = input_params.get("urls", [])
+            max_depth = input_params.get("max_depth", 2)
+            override = input_params.get("override", True)
+
             if not urls:
                 raise ValueError("No URLs specified for ingestion")
 
-            # TODO: Implement URL crawling logic
-            # This would use the existing web crawler
-            await self.add_task_log(task_id, "info", "URL ingestion not yet implemented")
-            await self.mark_task_completed(task_id, False, "URL ingestion not yet implemented")
+            # Import necessary modules
+            import hashlib
+            from urllib.parse import urlparse
+
+            from langchain_openai import OpenAIEmbeddings
+
+            from crawler.simple_web_crawler import create_simple_web_crawler
+            from data_processing.text_splitter import create_document_processor
+            from database.connection import get_db_session_context
+            from models.database.document import Document, DocumentChunk
+            from repository.document import DocumentChunkRepository, DocumentRepository
+            from vector_store.chroma_client import create_chroma_manager
+
+            # Initialize components
+            document_processor = create_document_processor(self.config)
+            chroma_manager = create_chroma_manager(self.config)
+
+            # Initialize embeddings
+            embeddings_kwargs = self.config.get_openai_embeddings_kwargs()
+            embeddings = OpenAIEmbeddings(**embeddings_kwargs)
+
+            # Ensure collection exists in ChromaDB
+            await chroma_manager.ensure_collection(collection_id)
+
+            # Initialize web crawler with config
+            crawler = create_simple_web_crawler(self.config)
+
+            total_urls = len(urls)
+            processed_urls = 0
+            total_pages = 0
+            indexed_pages = 0
+            skipped_pages = 0
+
+            await self.update_task_progress(task_id, 0, {
+                "urls_processed": 0,
+                "urls_total": total_urls,
+                "pages_crawled": 0,
+                "pages_indexed": 0,
+                "pages_skipped": 0
+            })
+
+            for url in urls:
+                try:
+                    await self.add_task_log(task_id, "info", f"Crawling URL: {url}")
+
+                    # Crawl the domain
+                    def progress_callback(current_url, completed, total):
+                        # Update progress periodically
+                        asyncio.create_task(self.add_task_log(
+                            task_id, "debug", f"Crawling page {completed + 1}/{total}: {current_url}"
+                        ))
+
+                    crawl_results = crawler.crawl_domain(url, progress_callback=progress_callback)
+                    successful_results = [r for r in crawl_results if r.success]
+
+                    await self.add_task_log(
+                        task_id, "info",
+                        f"Crawled {len(successful_results)}/{len(crawl_results)} pages successfully from {url}"
+                    )
+
+                    # Process each crawled page
+                    for crawl_result in successful_results:
+                        try:
+                            page_url = crawl_result.url
+                            await self.add_task_log(task_id, "debug", f"Processing page: {page_url}")
+
+                            # Generate document hash for deduplication
+                            content_for_hash = f"{page_url}:{crawl_result.title}:{crawl_result.content}"
+                            doc_hash = hashlib.md5(content_for_hash.encode()).hexdigest()
+
+                            # Check if document already exists
+                            with get_db_session_context() as session:
+                                doc_repo = DocumentRepository(session)
+                                existing_doc = doc_repo.find_by_hash(collection_id, doc_hash)
+
+                                if existing_doc and not override:
+                                    await self.add_task_log(task_id, "info", f"Skipping duplicate page: {page_url}")
+                                    skipped_pages += 1
+                                    total_pages += 1
+                                    continue
+
+                                # Delete existing document if override is True
+                                if existing_doc and override:
+                                    await self.add_task_log(task_id, "info", f"Overriding existing page: {page_url}")
+                                    doc_repo.delete(existing_doc.id)
+
+                            # Create document record
+                            parsed_url = urlparse(page_url)
+                            domain = parsed_url.netloc
+
+                            with get_db_session_context() as session:
+                                doc_repo = DocumentRepository(session)
+
+                                document = Document(
+                                    collection_id=collection_id,
+                                    name=crawl_result.title or f"Page from {domain}",
+                                    uri=page_url,
+                                    size_bytes=len(crawl_result.content.encode()),
+                                    mime_type="text/html",
+                                    status="processing",
+                                    hash_md5=doc_hash
+                                )
+
+                                created_doc = doc_repo.create_by_model(document)
+                                doc_id = created_doc.id
+
+                            # Process content into chunks
+                            if not crawl_result.content.strip():
+                                # Mark document as failed
+                                with get_db_session_context() as session:
+                                    doc_repo = DocumentRepository(session)
+                                    doc = doc_repo.get_by_id(doc_id)
+                                    if doc:
+                                        doc.status = "failed"
+                                        doc.error_message = "No content extracted from page"
+                                        session.commit()
+
+                                await self.add_task_log(task_id, "warning", f"No content extracted from {page_url}")
+                                total_pages += 1
+                                continue
+
+                            # Create chunks from web content
+                            chunks = document_processor.process_web_content(
+                                url=page_url,
+                                content=crawl_result.content,
+                                page_title=crawl_result.title
+                            )
+
+                            if not chunks:
+                                # Mark document as failed
+                                with get_db_session_context() as session:
+                                    doc_repo = DocumentRepository(session)
+                                    doc = doc_repo.get_by_id(doc_id)
+                                    if doc:
+                                        doc.status = "failed"
+                                        doc.error_message = "No content chunks extracted"
+                                        session.commit()
+
+                                await self.add_task_log(task_id, "warning", f"No content chunks extracted from {page_url}")
+                                total_pages += 1
+                                continue
+
+                            # Generate embeddings
+                            texts = [chunk.content for chunk in chunks]
+                            try:
+                                chunk_embeddings = await embeddings.aembed_documents(texts)
+                            except Exception as e:
+                                # Mark document as failed
+                                with get_db_session_context() as session:
+                                    doc_repo = DocumentRepository(session)
+                                    doc = doc_repo.get_by_id(doc_id)
+                                    if doc:
+                                        doc.status = "failed"
+                                        doc.error_message = f"Embedding generation failed: {str(e)}"
+                                        session.commit()
+
+                                await self.add_task_log(task_id, "error", f"Embedding failed for {page_url}: {str(e)}")
+                                total_pages += 1
+                                continue
+
+                            # Store chunks in database and ChromaDB
+                            with get_db_session_context() as session:
+                                chunk_repo = DocumentChunkRepository(session)
+                                doc_repo = DocumentRepository(session)
+
+                                chunk_records = []
+                                vector_data = []
+
+                                for i, (chunk, embedding) in enumerate(zip(chunks, chunk_embeddings)):
+                                    # Create unique vector ID
+                                    vector_id = f"{doc_id}_chunk_{i}"
+
+                                    # Create chunk record
+                                    chunk_record = DocumentChunk(
+                                        document_id=doc_id,
+                                        collection_id=collection_id,
+                                        chunk_index=i,
+                                        content_preview=chunk.content[:200] if chunk.content else "",
+                                        vector_id=vector_id,
+                                        content_hash=hashlib.md5(chunk.content.encode()).hexdigest(),
+                                        chunk_metadata=json.dumps(chunk.metadata)
+                                    )
+
+                                    chunk_records.append(chunk_record)
+
+                                    # Prepare vector data for ChromaDB
+                                    vector_data.append({
+                                        "id": vector_id,
+                                        "embedding": embedding,
+                                        "metadata": {
+                                            "document_id": doc_id,
+                                            "collection_id": collection_id,
+                                            "chunk_index": i,
+                                            "source": f"{page_url}#chunk_{i}",
+                                            "content_preview": chunk.content[:200] if chunk.content else "",
+                                            "url": page_url,
+                                            "title": crawl_result.title or ""
+                                        },
+                                        "document": chunk.content
+                                    })
+
+                                # Store chunks in database
+                                for chunk_record in chunk_records:
+                                    chunk_repo.create_by_model(chunk_record)
+
+                                # Store vectors in ChromaDB
+                                try:
+                                    collection = await chroma_manager.get_collection(collection_id)
+                                    if collection:
+                                        ids = [v["id"] for v in vector_data]
+                                        embeddings_list = [v["embedding"] for v in vector_data]
+                                        metadatas = [v["metadata"] for v in vector_data]
+                                        documents = [v["document"] for v in vector_data]
+
+                                        collection.add(
+                                            ids=ids,
+                                            embeddings=embeddings_list,
+                                            metadatas=metadatas,
+                                            documents=documents
+                                        )
+
+                                        indexed_pages += 1
+                                        await self.add_task_log(task_id, "info", f"Indexed {len(chunk_records)} chunks from {page_url}")
+                                    else:
+                                        raise Exception("ChromaDB collection not found")
+
+                                except Exception as e:
+                                    # Mark document as failed
+                                    doc = doc_repo.get_by_id(doc_id)
+                                    if doc:
+                                        doc.status = "failed"
+                                        doc.error_message = f"Vector storage failed: {str(e)}"
+                                        session.commit()
+
+                                    await self.add_task_log(task_id, "error", f"Vector storage failed for {page_url}: {str(e)}")
+                                    total_pages += 1
+                                    continue
+
+                                # Mark document as successfully indexed
+                                doc = doc_repo.get_by_id(doc_id)
+                                if doc:
+                                    doc.status = "indexed"
+                                    doc.chunk_count = len(chunk_records)
+                                    session.commit()
+
+                            total_pages += 1
+
+                        except Exception as e:
+                            await self.add_task_log(task_id, "error", f"Error processing page {crawl_result.url}: {str(e)}")
+                            total_pages += 1
+                            continue
+
+                    processed_urls += 1
+
+                    # Update progress
+                    progress = int((processed_urls / total_urls) * 100)
+                    await self.update_task_progress(task_id, progress, {
+                        "urls_processed": processed_urls,
+                        "urls_total": total_urls,
+                        "pages_crawled": total_pages,
+                        "pages_indexed": indexed_pages,
+                        "pages_skipped": skipped_pages
+                    })
+
+                except Exception as e:
+                    await self.add_task_log(task_id, "error", f"Error crawling {url}: {str(e)}")
+                    processed_urls += 1
+                    continue
+
+            # Final status update
+            success = indexed_pages > 0
+            await self.update_task_progress(task_id, 100, {
+                "urls_processed": processed_urls,
+                "urls_total": total_urls,
+                "pages_crawled": total_pages,
+                "pages_indexed": indexed_pages,
+                "pages_skipped": skipped_pages
+            })
+
+            if success:
+                await self.mark_task_completed(task_id, True)
+                await self.add_task_log(task_id, "info", f"URL ingestion completed: {indexed_pages} pages indexed from {processed_urls} URLs")
+            else:
+                await self.mark_task_completed(task_id, False, "No pages were successfully processed")
+                await self.add_task_log(task_id, "error", "URL ingestion failed: No pages were successfully processed")
+
+            # Cleanup
+            chroma_manager.close()
 
         except Exception as e:
             error_msg = f"URL ingestion failed: {str(e)}"
