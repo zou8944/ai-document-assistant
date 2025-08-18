@@ -1,123 +1,141 @@
 /**
  * REST API client for AI Document Assistant backend.
- * Replaces the python-shell based communication with standard HTTP requests.
+ * Updated to match the actual FastAPI backend endpoints.
  */
 
-// Type definitions for API requests and responses
-export interface ProcessFilesRequest {
-  file_paths: string[]
-  collection_name: string
+// Collection types
+export interface Collection {
+  id: string
+  name: string
+  description?: string
+  document_count: number
+  created_at: string
+  updated_at: string
 }
 
-export interface ProcessFilesResponse {
-  success: boolean
-  collection_name: string
-  processed_files: number
-  total_files: number
-  total_chunks: number
-  indexed_count: number
-  message?: string
+export interface CreateCollectionRequest {
+  id: string
+  name: string
+  description?: string
 }
 
-export interface CrawlWebsiteRequest {
-  url: string
-  collection_name: string
-  max_pages?: number
+export interface UpdateCollectionRequest {
+  name?: string
+  description?: string
 }
 
-export interface CrawlWebsiteResponse {
-  success: boolean
-  collection_name: string
-  crawled_pages: number
-  failed_pages: number
-  total_chunks: number
-  indexed_count: number
-  stats?: any
-  message?: string
+// Document types
+export interface Document {
+  id: string
+  name: string
+  file_path?: string
+  url?: string
+  content_type: string
+  file_size?: number
+  status: 'pending' | 'processing' | 'indexed' | 'failed'
+  created_at: string
+  updated_at: string
+  error_message?: string
 }
 
-export interface QueryRequest {
-  question: string
-  collection_name: string
+export interface DocumentListResponse {
+  documents: Document[]
+  total: number
+  page: number
+  page_size: number
+}
+
+// Ingestion types
+export interface IngestFilesRequest {
+  files: string[]
+}
+
+export interface IngestUrlsRequest {
+  urls: string[]
+  max_depth?: number
+  override?: boolean
+}
+
+// Task types
+export interface Task {
+  task_id: string
+  task_type: string
+  collection_id: string
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  progress?: number
+  result?: any
+  error_message?: string
+  created_at: string
+  updated_at: string
+}
+
+// Chat types
+export interface Chat {
+  chat_id: string
+  name: string
+  collection_ids: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateChatRequest {
+  name: string
+  collection_ids: string[]
+}
+
+export interface ChatMessage {
+  id: string
+  chat_id: string
+  role: 'user' | 'assistant'
+  content: string
+  sources?: string
+  metadata?: string
+  created_at: string
+}
+
+export interface ChatMessageRequest {
+  message: string
   include_sources?: boolean
 }
 
 export interface SourceInfo {
-  source: string
+  document_name: string
+  url?: string
   content_preview: string
-  score: number
-  start_index: number
+  relevance_score: number
 }
 
-export interface QueryResponse {
-  answer: string
-  sources: SourceInfo[]
-  confidence: number
-  collection_name: string
-  question: string
-}
-
-export interface CollectionInfo {
-  name: string
-  vector_size: number
-  document_count: number
-  source_type: string
-}
-
-export interface ListCollectionsResponse {
-  collections: CollectionInfo[]
-}
-
-export interface DeleteCollectionRequest {
-  collection_name: string
-}
-
-export interface DeleteCollectionResponse {
-  success: boolean
-  collection_name: string
-  message?: string
-}
-
+// Health check
 export interface HealthResponse {
   status: string
-  version: string
-  embeddings_available: boolean
-  chroma_available: boolean
+  version?: string
+  timestamp: string
 }
 
-// Streaming chunk types
-export interface StreamChunk {
-  type: string
+// Settings
+export interface Settings {
+  openai_api_key?: string
+  openai_model_name: string
+  embedding_model_name: string
+  chunk_size: number
+  chunk_overlap: number
+  top_k: number
+  temperature: number
 }
 
-export interface ProgressChunk extends StreamChunk {
-  type: 'progress'
-  message: string
-  current?: number
-  total?: number
+// Streaming types for SSE
+export interface SSEEvent {
+  event: string
+  data: any
 }
 
-export interface ContentChunk extends StreamChunk {
-  type: 'content'
-  content: string
+// Unified API response wrapper
+export interface APIResponse<T = any> {
+  success: boolean
+  data?: T
+  message?: string
+  timestamp: string
 }
-
-export interface SourcesChunk extends StreamChunk {
-  type: 'sources'
-  sources: SourceInfo[]
-}
-
-export interface ErrorChunk extends StreamChunk {
-  type: 'error'
-  error: string
-}
-
-export interface DoneChunk extends StreamChunk {
-  type: 'done'
-  confidence?: number
-}
-
-export type AnyStreamChunk = ProgressChunk | ContentChunk | SourcesChunk | ErrorChunk | DoneChunk
 
 // API Client class
 export class DocumentAssistantAPI {
@@ -195,55 +213,220 @@ export class DocumentAssistantAPI {
   /**
    * Health check endpoint
    */
-  async healthCheck(): Promise<HealthResponse> {
-    return this.request<HealthResponse>('/api/health')
+  async healthCheck(): Promise<APIResponse<HealthResponse>> {
+    return this.request<APIResponse<HealthResponse>>('/api/health')
   }
 
+  // Collection Management
   /**
-   * Process files and index them
+   * Create a new collection
    */
-  async processFiles(request: ProcessFilesRequest): Promise<ProcessFilesResponse> {
-    return this.request<ProcessFilesResponse>('/api/files/process', {
+  async createCollection(request: CreateCollectionRequest): Promise<APIResponse<Collection>> {
+    return this.request<APIResponse<Collection>>('/api/v1/collections', {
       method: 'POST',
       body: JSON.stringify(request),
     })
   }
 
   /**
-   * Crawl website and index content
+   * List all collections
    */
-  async crawlWebsite(request: CrawlWebsiteRequest): Promise<CrawlWebsiteResponse> {
-    return this.request<CrawlWebsiteResponse>('/api/crawler/crawl', {
+  async listCollections(search?: string): Promise<APIResponse<{ collections: Collection[], total: number }>> {
+    const url = search ? `/api/v1/collections?search=${encodeURIComponent(search)}` : '/api/v1/collections'
+    return this.request<APIResponse<{ collections: Collection[], total: number }>>(url)
+  }
+
+  /**
+   * Get a specific collection
+   */
+  async getCollection(collectionId: string): Promise<APIResponse<Collection>> {
+    return this.request<APIResponse<Collection>>(`/api/v1/collections/${encodeURIComponent(collectionId)}`)
+  }
+
+  /**
+   * Update a collection
+   */
+  async updateCollection(collectionId: string, request: UpdateCollectionRequest): Promise<APIResponse<Collection>> {
+    return this.request<APIResponse<Collection>>(`/api/v1/collections/${encodeURIComponent(collectionId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(request),
+    })
+  }
+
+  /**
+   * Delete a collection
+   */
+  async deleteCollection(collectionId: string): Promise<APIResponse<{}>> {
+    return this.request<APIResponse<{}>>(`/api/v1/collections/${encodeURIComponent(collectionId)}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // Document Management
+  /**
+   * List documents in a collection
+   */
+  async listDocuments(
+    collectionId: string,
+    page: number = 1,
+    pageSize: number = 50,
+    search?: string,
+    status?: string
+  ): Promise<APIResponse<DocumentListResponse>> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      page_size: pageSize.toString(),
+    })
+    if (search) params.append('search', search)
+    if (status) params.append('status', status)
+    
+    return this.request<APIResponse<DocumentListResponse>>(
+      `/api/v1/collections/${encodeURIComponent(collectionId)}/documents?${params}`
+    )
+  }
+
+  /**
+   * Get a specific document
+   */
+  async getDocument(collectionId: string, documentId: string): Promise<APIResponse<Document>> {
+    return this.request<APIResponse<Document>>(
+      `/api/v1/collections/${encodeURIComponent(collectionId)}/documents/${encodeURIComponent(documentId)}`
+    )
+  }
+
+  /**
+   * Delete a document
+   */
+  async deleteDocument(collectionId: string, documentId: string): Promise<APIResponse<{ document_id: string, deleted: boolean }>> {
+    return this.request<APIResponse<{ document_id: string, deleted: boolean }>>(
+      `/api/v1/collections/${encodeURIComponent(collectionId)}/documents/${encodeURIComponent(documentId)}`,
+      { method: 'DELETE' }
+    )
+  }
+
+  // Ingestion
+  /**
+   * Ingest files into a collection
+   */
+  async ingestFiles(collectionId: string, request: IngestFilesRequest): Promise<APIResponse<{ task_id: string, status: string }>> {
+    return this.request<APIResponse<{ task_id: string, status: string }>>(
+      `/api/v1/collections/${encodeURIComponent(collectionId)}/ingest/folder`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }
+    )
+  }
+
+  /**
+   * Ingest URLs into a collection
+   */
+  async ingestUrls(collectionId: string, request: IngestUrlsRequest): Promise<APIResponse<{ task_id: string, status: string }>> {
+    return this.request<APIResponse<{ task_id: string, status: string }>>(
+      `/api/v1/collections/${encodeURIComponent(collectionId)}/ingest/urls`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }
+    )
+  }
+
+  // Task Management
+  /**
+   * Get task status
+   */
+  async getTask(taskId: string): Promise<APIResponse<Task>> {
+    return this.request<APIResponse<Task>>(`/api/v1/tasks/${encodeURIComponent(taskId)}`)
+  }
+
+  /**
+   * List tasks
+   */
+  async listTasks(status?: string, taskType?: string): Promise<APIResponse<{ tasks: Task[], total: number }>> {
+    const params = new URLSearchParams()
+    if (status) params.append('status', status)
+    if (taskType) params.append('task_type', taskType)
+    
+    const url = params.toString() ? `/api/v1/tasks?${params}` : '/api/v1/tasks'
+    return this.request<APIResponse<{ tasks: Task[], total: number }>>(url)
+  }
+
+  // Chat Management
+  /**
+   * Create a new chat
+   */
+  async createChat(request: CreateChatRequest): Promise<APIResponse<Chat>> {
+    return this.request<APIResponse<Chat>>('/api/v1/chats', {
       method: 'POST',
       body: JSON.stringify(request),
     })
   }
 
   /**
-   * Synchronous document query
+   * List chats
    */
-  async query(request: QueryRequest): Promise<QueryResponse> {
-    return this.request<QueryResponse>('/api/query', {
+  async listChats(offset: number = 0, limit: number = 50): Promise<APIResponse<{ chats: Chat[], offset: number, limit: number, total: number }>> {
+    return this.request<APIResponse<{ chats: Chat[], offset: number, limit: number, total: number }>>(
+      `/api/v1/chats?offset=${offset}&limit=${limit}`
+    )
+  }
+
+  /**
+   * Get a specific chat
+   */
+  async getChat(chatId: string): Promise<APIResponse<Chat>> {
+    return this.request<APIResponse<Chat>>(`/api/v1/chats/${encodeURIComponent(chatId)}`)
+  }
+
+  /**
+   * Delete a chat
+   */
+  async deleteChat(chatId: string): Promise<APIResponse<{ chat_id: string, deleted: boolean }>> {
+    return this.request<APIResponse<{ chat_id: string, deleted: boolean }>>(`/api/v1/chats/${encodeURIComponent(chatId)}`, {
+      method: 'DELETE',
+    })
+  }
+
+  /**
+   * Get chat messages
+   */
+  async getChatMessages(
+    chatId: string,
+    offset: number = 0,
+    limit: number = 50
+  ): Promise<APIResponse<{ messages: ChatMessage[], offset: number, limit: number, total: number }>> {
+    return this.request<APIResponse<{ messages: ChatMessage[], offset: number, limit: number, total: number }>>(
+      `/api/v1/chats/${encodeURIComponent(chatId)}/messages?offset=${offset}&limit=${limit}`
+    )
+  }
+
+  /**
+   * Send a message to chat (synchronous)
+   */
+  async sendMessage(chatId: string, request: ChatMessageRequest): Promise<APIResponse<ChatMessage>> {
+    return this.request<APIResponse<ChatMessage>>(`/api/v1/chats/${encodeURIComponent(chatId)}/chat`, {
       method: 'POST',
       body: JSON.stringify(request),
     })
   }
 
   /**
-   * Streaming document query with real-time response
+   * Send a message to chat (streaming)
    */
-  async queryStream(
-    request: QueryRequest,
-    onChunk: (chunk: AnyStreamChunk) => void,
+  async sendMessageStream(
+    chatId: string,
+    request: ChatMessageRequest,
+    onEvent: (event: SSEEvent) => void,
     onError?: (error: Error) => void
   ): Promise<void> {
     this.abortController = new AbortController()
     
     try {
-      const response = await fetch(`${this.baseURL}/api/query/stream`, {
+      const response = await fetch(`${this.baseURL}/api/v1/chats/${encodeURIComponent(chatId)}/chat/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
         },
         body: JSON.stringify(request),
         signal: this.abortController.signal,
@@ -261,24 +444,31 @@ export class DocumentAssistantAPI {
       }
 
       try {
+        let buffer = ''
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
 
-          const chunk = decoder.decode(value, { stream: true })
-          const lines = chunk.split('\\n')
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          
+          // Keep the last incomplete line in the buffer
+          buffer = lines.pop() || ''
 
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               const data = line.slice(6).trim()
-              if (data) {
+              if (data && data !== '[DONE]') {
                 try {
-                  const parsed = JSON.parse(data) as AnyStreamChunk
-                  onChunk(parsed)
+                  const parsed = JSON.parse(data)
+                  onEvent({ event: 'data', data: parsed })
                 } catch (e) {
                   console.error('Failed to parse SSE data:', e, 'Data:', data)
                 }
               }
+            } else if (line.startsWith('event: ')) {
+              const eventType = line.slice(7).trim()
+              onEvent({ event: eventType, data: null })
             }
           }
         }
@@ -299,27 +489,21 @@ export class DocumentAssistantAPI {
     }
   }
 
+  // Settings
   /**
-   * List all available collections
+   * Get settings
    */
-  async listCollections(): Promise<ListCollectionsResponse> {
-    return this.request<ListCollectionsResponse>('/api/collections')
+  async getSettings(): Promise<APIResponse<Settings>> {
+    return this.request<APIResponse<Settings>>('/api/v1/settings')
   }
 
   /**
-   * Get information about a specific collection
+   * Update settings
    */
-  async getCollectionInfo(collectionName: string): Promise<CollectionInfo> {
-    return this.request<CollectionInfo>(`/api/collections/${encodeURIComponent(collectionName)}`)
-  }
-
-  /**
-   * Delete a collection
-   */
-  async deleteCollection(request: DeleteCollectionRequest): Promise<DeleteCollectionResponse> {
-    return this.request<DeleteCollectionResponse>('/api/collections', {
-      method: 'DELETE',
-      body: JSON.stringify(request),
+  async updateSettings(settings: Partial<Settings>): Promise<APIResponse<Settings>> {
+    return this.request<APIResponse<Settings>>('/api/v1/settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
     })
   }
 }
@@ -353,4 +537,12 @@ export const disposeAPIClient = () => {
 // React hook for using the API client
 export const useAPIClient = () => {
   return getAPIClient()
+}
+
+// Helper function to extract data from API response
+export const extractData = <T>(response: APIResponse<T>): T => {
+  if (!response.success) {
+    throw new Error(response.message || 'API request failed')
+  }
+  return response.data as T
 }

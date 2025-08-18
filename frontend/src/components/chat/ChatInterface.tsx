@@ -11,6 +11,7 @@ import {
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { useAppStore } from '../../store/appStore'
+import { useAPIClient, extractData, ChatMessage as APIChatMessage, SSEEvent } from '../../services/apiClient'
 import KnowledgeBaseSelector from './KnowledgeBaseSelector'
 
 interface Message {
@@ -24,6 +25,30 @@ interface Message {
   }>
 }
 
+// Map API message to UI message
+const mapAPIMessageToUIMessage = (msg: APIChatMessage): Message => {
+  let sources: Array<{ name: string, url?: string }> = []
+  if (msg.sources) {
+    try {
+      const parsedSources = JSON.parse(msg.sources)
+      sources = parsedSources.map((s: any) => ({
+        name: s.document_name || s.name,
+        url: s.url
+      }))
+    } catch (e) {
+      console.error('Failed to parse sources:', e)
+    }
+  }
+  
+  return {
+    id: msg.id,
+    type: msg.role,
+    content: msg.content,
+    timestamp: msg.created_at,
+    sources
+  }
+}
+
 interface ChatInterfaceProps {
   className?: string
 }
@@ -33,7 +58,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [showKnowledgeBaseSelector, setShowKnowledgeBaseSelector] = useState(false)
+  const [streamingContent, setStreamingContent] = useState('')
+  const [isStreaming, setIsStreaming] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const apiClient = useAPIClient()
   
   const {
     getCurrentChat,
@@ -48,61 +76,144 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Mock initial messages
+  // Load chat messages from API
   useEffect(() => {
-    if (currentChat && messages.length === 0) {
-      setMessages([
-        {
-          id: '1',
+    if (currentChat) {
+      loadChatMessages()
+    }
+  }, [currentChat])
+  
+  const loadChatMessages = async () => {
+    if (!currentChat) return
+    
+    try {
+      const response = await apiClient.getChatMessages(currentChat.id)
+      const data = extractData(response)
+      const uiMessages = data.messages.map(mapAPIMessageToUIMessage)
+      setMessages(uiMessages)
+      
+      // If no messages, add a welcome message
+      if (uiMessages.length === 0) {
+        setMessages([{
+          id: 'welcome',
           type: 'assistant',
           content: '您好！我可以帮您解答关于已加载知识库的问题。请问有什么需要了解的吗？',
           timestamp: new Date().toISOString()
-        }
-      ])
+        }])
+      }
+    } catch (error) {
+      console.error('加载聊天消息失败:', error)
     }
-  }, [currentChat])
+  }
 
   const handleSendMessage = async () => {
-    if (!message.trim() || isLoading) return
+    if (!message.trim() || isLoading || !currentChat) return
 
-    const userMessage: Message = {
-      id: `msg_${Date.now()}`,
-      type: 'user',
-      content: message.trim(),
-      timestamp: new Date().toISOString()
-    }
-
-    setMessages(prev => [...prev, userMessage])
+    const userMessageContent = message.trim()
     setMessage('')
     setIsLoading(true)
+    setIsStreaming(true)
+    setStreamingContent('')
 
-    // Mock AI response
-    setTimeout(() => {
-      const aiMessage: Message = {
-        id: `msg_${Date.now()}_ai`,
-        type: 'assistant',
-        content: '这是一个模拟的回复。在实际应用中，这里会调用后端API来获取基于知识库的回答。',
-        timestamp: new Date().toISOString(),
-        sources: [
-          { name: '用户手册.pdf' },
-          { name: 'API文档', url: 'https://example.com/api' }
-        ]
-      }
-      setMessages(prev => [...prev, aiMessage])
+    try {
+      // Send message via streaming API
+      await apiClient.sendMessageStream(
+        currentChat.id,
+        { message: userMessageContent, include_sources: true },
+        handleStreamEvent,
+        handleStreamError
+      )
+    } catch (error) {
+      console.error('发送消息失败:', error)
       setIsLoading(false)
-
-      // Update chat session
-      if (currentChat) {
-        updateChatSession(currentChat.id, {
-          messageCount: messages.length + 2,
-          lastMessageAt: new Date().toISOString()
-        })
-      }
-    }, 1500)
+      setIsStreaming(false)
+      alert('发送消息失败: ' + (error as Error).message)
+    }
+  }
+  
+  const handleStreamEvent = (event: SSEEvent) => {
+    console.log('Stream event:', event)
+    
+    switch (event.event) {
+      case 'metadata':
+        // Add user message to UI immediately
+        const userMessage: Message = {
+          id: `user_${Date.now()}`,
+          type: 'user',
+          content: event.data.user_message,
+          timestamp: new Date().toISOString()
+        }
+        setMessages(prev => [...prev, userMessage])
+        break
+        
+      case 'user_message':
+        // User message saved to backend
+        break
+        
+      case 'status':
+        // Update loading status if needed
+        break
+        
+      case 'sources':
+        // Sources found - could show in UI if needed
+        break
+        
+      case 'content':
+        // Streaming content
+        setStreamingContent(prev => prev + event.data.content)
+        break
+        
+      case 'done':
+        // Response complete
+        setIsLoading(false)
+        setIsStreaming(false)
+        
+        // Add complete AI message
+        const aiMessage: Message = {
+          id: event.data.message_id || `ai_${Date.now()}`,
+          type: 'assistant',
+          content: streamingContent,
+          timestamp: new Date().toISOString()
+        }
+        setMessages(prev => [...prev, aiMessage])
+        setStreamingContent('')
+        
+        // Update chat session
+        if (currentChat) {
+          updateChatSession(currentChat.id, {
+            messageCount: messages.length + 2,
+            lastMessageAt: new Date().toISOString()
+          })
+        }
+        break
+        
+      case 'error':
+        console.error('Stream error:', event.data)
+        setIsLoading(false)
+        setIsStreaming(false)
+        setStreamingContent('')
+        alert('生成回复失败: ' + event.data.message)
+        break
+        
+      default:
+        if (event.event === 'data') {
+          // Handle generic data events
+          console.log('Data event:', event.data)
+        }
+        break
+    }
+  }
+  
+  const handleStreamError = (error: Error) => {
+    console.error('流式响应错误:', error)
+    setIsLoading(false)
+    setIsStreaming(false)
+    setStreamingContent('')
+    alert('生成回复失败: ' + error.message)
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !isLoading && !isStreaming) {
       e.preventDefault()
       handleSendMessage()
     }
@@ -249,8 +360,25 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
           </div>
         ))}
 
+        {/* Streaming content */}
+        {isStreaming && streamingContent && (
+          <div className="flex justify-start">
+            <div className="flex max-w-3xl space-x-3">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center">
+                <CpuChipIcon className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="px-4 py-3 rounded-2xl bg-white/80 backdrop-blur-sm border border-gray-200/50 text-gray-900">
+                  <p className="whitespace-pre-wrap">{streamingContent}</p>
+                  <div className="mt-2 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
         {/* Loading indicator */}
-        {isLoading && (
+        {isLoading && !streamingContent && (
           <div className="flex justify-start">
             <div className="flex max-w-3xl space-x-3">
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center">
@@ -281,7 +409,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
               onChange={(e) => setMessage(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder="输入您的问题..."
-              disabled={isLoading}
+              disabled={isLoading || isStreaming}
               rows={1}
               className="w-full resize-none rounded-lg border border-gray-300 bg-white/80 backdrop-blur-sm px-4 py-3 pr-12 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ minHeight: '48px', maxHeight: '120px' }}
@@ -289,7 +417,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
           </div>
           <button
             onClick={handleSendMessage}
-            disabled={!message.trim() || isLoading}
+            disabled={!message.trim() || isLoading || isStreaming}
             className="flex-shrink-0 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white p-3 rounded-lg transition-colors disabled:cursor-not-allowed"
           >
             <PaperAirplaneIcon className="w-5 h-5" />

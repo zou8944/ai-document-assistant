@@ -5,19 +5,23 @@
 import React, { useState } from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { useAppStore } from '../../store/appStore'
+import { useAPIClient, extractData } from '../../services/apiClient'
 
 interface AddKnowledgeBaseModalProps {
   isOpen: boolean
   onClose: () => void
+  onSuccess?: () => void
 }
 
 export const AddKnowledgeBaseModal: React.FC<AddKnowledgeBaseModalProps> = ({
   isOpen,
-  onClose
+  onClose,
+  onSuccess
 }) => {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const apiClient = useAPIClient()
   
   const { addKnowledgeBase, setActiveKnowledgeBase } = useAppStore()
 
@@ -28,22 +32,43 @@ export const AddKnowledgeBaseModal: React.FC<AddKnowledgeBaseModalProps> = ({
     setIsSubmitting(true)
 
     try {
-      const newKb = {
-        id: `kb_${Date.now()}`,
+      // Create collection via API
+      const collectionId = `kb_${Date.now()}`
+      const response = await apiClient.createCollection({
+        id: collectionId,
         name: name.trim(),
-        description: description.trim(),
-        createdAt: new Date().toISOString(),
-        documentCount: 0,
+        description: description.trim() || undefined
+      })
+      
+      const collection = extractData(response)
+      
+      // Map collection to knowledge base format for app store
+      const newKb = {
+        id: collection.id,
+        name: collection.name,
+        description: collection.description || '',
+        createdAt: collection.created_at,
+        documentCount: collection.document_count,
         sourceType: 'files' as const
       }
 
+      // Add to app store for UI consistency
       addKnowledgeBase(newKb)
       setActiveKnowledgeBase(newKb.id)
       
       // Reset form
       setName('')
       setDescription('')
+      
+      // Call success callback to refresh the list
+      if (onSuccess) {
+        onSuccess()
+      }
+      
       onClose()
+    } catch (error) {
+      console.error('创建知识库失败:', error)
+      alert('创建知识库失败: ' + (error as Error).message)
     } finally {
       setIsSubmitting(false)
     }

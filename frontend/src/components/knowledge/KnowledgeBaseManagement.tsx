@@ -2,7 +2,7 @@
  * Knowledge base management page with import area and document list
  */
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   ArrowLeftIcon,
   CloudArrowUpIcon,
@@ -14,52 +14,47 @@ import {
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { useAppStore } from '../../store/appStore'
-import { Document, ImportProgress } from '../../types/app'
+import { Document as APIDocument, Task, useAPIClient, extractData } from '../../services/apiClient'
+import { ImportProgress } from '../../types/app'
 
 interface KnowledgeBaseManagementProps {
   className?: string
 }
 
-// Mock documents data - replace with real data
-const mockDocuments: Document[] = [
-  {
-    id: '1',
-    name: 'user_guide.pdf',
-    source: '本地文件',
-    createdAt: '2024-01-15T10:30:00Z',
-    size: '2.1MB',
-    type: 'file'
-  },
-  {
-    id: '2',
-    name: 'api_docs.md',
-    source: '本地文件',
-    createdAt: '2024-01-14T15:20:00Z',
-    size: '856KB',
-    type: 'file'
-  },
-  {
-    id: '3',
-    name: 'FAQ页面',
-    source: 'https://example.com/faq',
-    url: 'https://example.com/faq',
-    createdAt: '2024-01-13T09:15:00Z',
-    size: '1.2MB',
-    type: 'website'
-  }
-]
+// Map API document to UI document
+const mapAPIDocumentToUIDocument = (doc: APIDocument) => ({
+  id: doc.id,
+  name: doc.name,
+  source: doc.url ? doc.url : '本地文件',
+  url: doc.url,
+  createdAt: doc.created_at,
+  size: doc.file_size ? formatFileSize(doc.file_size) : '-',
+  type: doc.url ? 'website' as const : 'file' as const,
+  status: doc.status
+})
+
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
 
 export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = ({
   className
 }) => {
   const { getCurrentKnowledgeBase, setActiveKnowledgeBase } = useAppStore()
+  const apiClient = useAPIClient()
   const [importProgress, setImportProgress] = useState<ImportProgress>({
     isActive: false,
     progress: 0,
     total: 0,
     message: ''
   })
-  const [documents] = useState<Document[]>(mockDocuments)
+  const [documents, setDocuments] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [currentTask, setCurrentTask] = useState<Task | null>(null)
 
   const currentKb = getCurrentKnowledgeBase()
 
@@ -78,77 +73,154 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     setActiveKnowledgeBase(null)
   }
 
-  const handleFileUpload = () => {
-    // Mock import progress
-    setImportProgress({
-      isActive: true,
-      currentFile: 'document.pdf',
-      progress: 80,
-      total: 100,
-      message: '正在处理文档...'
-    })
+  const handleFileUpload = async () => {
+    if (!currentKb) return
     
-    // Simulate completion after 3 seconds
-    setTimeout(() => {
+    try {
+      // In a real implementation, you would show a file picker dialog
+      // For now, we'll simulate with a prompt
+      const filePath = prompt('请输入文件路径:')
+      if (!filePath) return
+      
+      setImportProgress({
+        isActive: true,
+        currentFile: filePath,
+        progress: 0,
+        total: 100,
+        message: '正在创建处理任务...'
+      })
+      
+      // Start ingestion task
+      const response = await apiClient.ingestFiles(currentKb.id, {
+        files: [filePath]
+      })
+      
+      const taskData = extractData(response)
+      const task = await apiClient.getTask(taskData.task_id)
+      setCurrentTask(extractData(task))
+      
+      // Poll task status
+      pollTaskStatus(taskData.task_id)
+      
+    } catch (error) {
+      console.error('文件导入失败:', error)
       setImportProgress({
         isActive: false,
         progress: 0,
         total: 0,
         message: ''
       })
-    }, 3000)
-  }
-
-  const handleUrlImport = () => {
-    const url = prompt('请输入要导入的网页URL:')
-    if (url) {
-      setImportProgress({
-        isActive: true,
-        currentFile: url,
-        progress: 45,
-        total: 100,
-        message: '正在抓取网页内容...'
-      })
-      
-      setTimeout(() => {
-        setImportProgress({
-          isActive: false,
-          progress: 0,
-          total: 0,
-          message: ''
-        })
-      }, 3000)
+      alert('文件导入失败: ' + (error as Error).message)
     }
   }
 
-  const handleFolderUpload = () => {
-    setImportProgress({
-      isActive: true,
-      currentFile: 'project_docs/',
-      progress: 60,
-      total: 100,
-      message: '正在处理文件夹...'
-    })
+  const handleUrlImport = async () => {
+    if (!currentKb) return
     
-    setTimeout(() => {
+    try {
+      const url = prompt('请输入要导入的网页URL:')
+      if (!url) return
+      
+      setImportProgress({
+        isActive: true,
+        currentFile: url,
+        progress: 0,
+        total: 100,
+        message: '正在创建爬取任务...'
+      })
+      
+      // Start URL ingestion task
+      const response = await apiClient.ingestUrls(currentKb.id, {
+        urls: [url],
+        max_depth: 1
+      })
+      
+      const taskData = extractData(response)
+      const task = await apiClient.getTask(taskData.task_id)
+      setCurrentTask(extractData(task))
+      
+      // Poll task status
+      pollTaskStatus(taskData.task_id)
+      
+    } catch (error) {
+      console.error('URL导入失败:', error)
       setImportProgress({
         isActive: false,
         progress: 0,
         total: 0,
         message: ''
       })
-    }, 3000)
+      alert('URL导入失败: ' + (error as Error).message)
+    }
   }
 
-  const handleDownload = (doc: Document) => {
-    console.log('下载文档:', doc.name)
-    // TODO: Implement download functionality
+  const handleFolderUpload = async () => {
+    if (!currentKb) return
+    
+    try {
+      // In a real implementation, you would show a folder picker dialog
+      const folderPath = prompt('请输入文件夹路径:')
+      if (!folderPath) return
+      
+      setImportProgress({
+        isActive: true,
+        currentFile: folderPath,
+        progress: 0,
+        total: 100,
+        message: '正在扫描文件夹...'
+      })
+      
+      // For folder upload, we would need to scan the folder first
+      // This is a simplified implementation
+      const response = await apiClient.ingestFiles(currentKb.id, {
+        files: [folderPath] // In reality, this would be a list of files
+      })
+      
+      const taskData = extractData(response)
+      const task = await apiClient.getTask(taskData.task_id)
+      setCurrentTask(extractData(task))
+      
+      pollTaskStatus(taskData.task_id)
+      
+    } catch (error) {
+      console.error('文件夹导入失败:', error)
+      setImportProgress({
+        isActive: false,
+        progress: 0,
+        total: 0,
+        message: ''
+      })
+      alert('文件夹导入失败: ' + (error as Error).message)
+    }
   }
 
-  const handleDelete = (doc: Document) => {
+  const handleDownload = async (doc: any) => {
+    if (!currentKb || doc.type === 'website') return
+    
+    try {
+      // For local files, we could implement download functionality
+      // This would need to be implemented in the backend
+      console.log('下载文档:', doc.name)
+      alert('下载功能暂未实现')
+    } catch (error) {
+      console.error('下载失败:', error)
+      alert('下载失败: ' + (error as Error).message)
+    }
+  }
+
+  const handleDelete = async (doc: any) => {
+    if (!currentKb) return
+    
     if (confirm(`确定要删除 "${doc.name}" 吗？`)) {
-      console.log('删除文档:', doc.name)
-      // TODO: Implement delete functionality
+      try {
+        await apiClient.deleteDocument(currentKb.id, doc.id)
+        // Refresh documents list
+        loadDocuments()
+        alert('文档删除成功')
+      } catch (error) {
+        console.error('删除失败:', error)
+        alert('删除失败: ' + (error as Error).message)
+      }
     }
   }
 
@@ -161,6 +233,93 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       minute: '2-digit'
     })
   }
+
+  // Load documents from API
+  const loadDocuments = async () => {
+    if (!currentKb) return
+    
+    try {
+      setLoading(true)
+      const response = await apiClient.listDocuments(currentKb.id)
+      const data = extractData(response)
+      const mappedDocs = data.documents.map(mapAPIDocumentToUIDocument)
+      setDocuments(mappedDocs)
+    } catch (error) {
+      console.error('加载文档列表失败:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Poll task status
+  const pollTaskStatus = async (taskId: string) => {
+    try {
+      const response = await apiClient.getTask(taskId)
+      const task = extractData(response)
+      
+      setImportProgress({
+        isActive: task.status === 'running' || task.status === 'pending',
+        progress: task.progress || 0,
+        total: 100,
+        message: getTaskStatusMessage(task)
+      })
+      
+      if (task.status === 'completed') {
+        setCurrentTask(null)
+        loadDocuments() // Refresh documents list
+        setTimeout(() => {
+          setImportProgress({
+            isActive: false,
+            progress: 0,
+            total: 0,
+            message: ''
+          })
+        }, 1000)
+      } else if (task.status === 'failed') {
+        setCurrentTask(null)
+        alert('任务执行失败: ' + (task.error_message || '未知错误'))
+        setImportProgress({
+          isActive: false,
+          progress: 0,
+          total: 0,
+          message: ''
+        })
+      } else if (task.status === 'running' || task.status === 'pending') {
+        // Continue polling
+        setTimeout(() => pollTaskStatus(taskId), 2000)
+      }
+    } catch (error) {
+      console.error('获取任务状态失败:', error)
+      setImportProgress({
+        isActive: false,
+        progress: 0,
+        total: 0,
+        message: ''
+      })
+    }
+  }
+
+  const getTaskStatusMessage = (task: Task): string => {
+    switch (task.status) {
+      case 'pending':
+        return '任务等待中...'
+      case 'running':
+        return task.task_type === 'ingest_files' ? '正在处理文件...' : '正在抓取网页...'
+      case 'completed':
+        return '处理完成！'
+      case 'failed':
+        return '处理失败'
+      default:
+        return '处理中...'
+    }
+  }
+
+  // Load documents when component mounts or knowledge base changes
+  useEffect(() => {
+    if (currentKb) {
+      loadDocuments()
+    }
+  }, [currentKb])
 
   return (
     <div className={clsx('h-full flex flex-col', className)}>
@@ -242,10 +401,11 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
           {!importProgress.isActive && (
             <div className="flex justify-end">
               <button
-                onClick={() => handleFileUpload()}
-                className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
+                onClick={loadDocuments}
+                disabled={importProgress.isActive}
+                className="bg-gray-500 hover:bg-gray-600 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg transition-colors mr-2 disabled:cursor-not-allowed"
               >
-                开始导入
+                刷新列表
               </button>
             </div>
           )}
@@ -266,6 +426,10 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                 <p>暂无文档</p>
                 <p className="text-sm">请使用上方导入区域添加文档</p>
               </div>
+            ) : loading ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="text-gray-500">加载中...</div>
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -276,6 +440,9 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         来源
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        状态
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         创建时间
@@ -317,6 +484,23 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                             doc.source
                           )}
                         </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={clsx(
+                            'inline-flex px-2 py-1 text-xs font-semibold rounded-full',
+                            {
+                              'bg-green-100 text-green-800': doc.status === 'indexed',
+                              'bg-yellow-100 text-yellow-800': doc.status === 'processing' || doc.status === 'pending',
+                              'bg-red-100 text-red-800': doc.status === 'failed'
+                            }
+                          )}>
+                            {({
+                              indexed: '已索引',
+                              processing: '处理中',
+                              pending: '等待中',
+                              failed: '失败'
+                            } as Record<'indexed' | 'processing' | 'pending' | 'failed', string>)[doc.status as 'indexed' | 'processing' | 'pending' | 'failed'] || doc.status}
+                          </span>
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {formatDate(doc.createdAt)}
                         </td>
@@ -325,13 +509,15 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex items-center justify-end space-x-2">
-                            <button
-                              onClick={() => handleDownload(doc)}
-                              className="p-1 hover:bg-gray-100 rounded transition-colors"
-                              title="下载"
-                            >
-                              <ArrowDownTrayIcon className="w-4 h-4 text-gray-400 hover:text-blue-500" />
-                            </button>
+                            {doc.type === 'file' && (
+                              <button
+                                onClick={() => handleDownload(doc)}
+                                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                                title="下载"
+                              >
+                                <ArrowDownTrayIcon className="w-4 h-4 text-gray-400 hover:text-blue-500" />
+                              </button>
+                            )}
                             <button
                               onClick={() => handleDelete(doc)}
                               className="p-1 hover:bg-gray-100 rounded transition-colors"
