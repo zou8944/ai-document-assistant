@@ -1,11 +1,11 @@
 """Repository pattern implementations for database operations."""
 
-from .base import BaseRepository
-from .chat import ChatMessageRepository, ChatRepository
-from .collection import CollectionRepository
-from .document import DocumentChunkRepository, DocumentRepository
-from .settings import SettingsRepository
-from .task import TaskLogRepository, TaskRepository
+from repository.base import BaseRepository
+from repository.chat import ChatMessageRepository, ChatRepository
+from repository.collection import CollectionRepository
+from repository.document import DocumentChunkRepository, DocumentRepository
+from repository.settings import SettingsRepository
+from repository.task import TaskLogRepository, TaskRepository
 
 __all__ = [
     "BaseRepository",

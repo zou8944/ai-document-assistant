@@ -6,8 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from models.database.document import Document, DocumentChunk
-
-from .base import BaseRepository
+from repository.base import BaseRepository
 
 
 class DocumentRepository(BaseRepository[Document]):

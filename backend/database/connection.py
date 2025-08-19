@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from .base import Base
+from database.base import Base
 
 
 def _configure_sqlite(dbapi_connection, connection_record):

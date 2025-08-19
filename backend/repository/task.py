@@ -7,8 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from models.database.task import Task, TaskLog
-
-from .base import BaseRepository
+from repository.base import BaseRepository
 
 
 class TaskRepository(BaseRepository[Task]):

@@ -8,8 +8,8 @@ from typing import Any, Optional
 
 from pydantic import BaseModel
 
-from ..vector_store.chroma_client import ChromaManager
-from .document_summarizer import DocumentSummary
+from rag.document_summarizer import DocumentSummary
+from vector_store.chroma_client import ChromaManager
 
 logger = logging.getLogger(__name__)
 

@@ -6,7 +6,7 @@ Enhanced with intent-specific templates for different query types.
 
 from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
 
-from .intent_analyzer import QueryIntent
+from rag.intent_analyzer import QueryIntent
 
 # System prompt for RAG question answering
 RAG_SYSTEM_PROMPT = """你是一个专业的AI文档助手，专门帮助用户从提供的文档中查找和总结信息。

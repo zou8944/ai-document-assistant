@@ -7,8 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from models.database.settings import Settings
-
-from .base import BaseRepository
+from repository.base import BaseRepository
 
 
 class SettingsRepository(BaseRepository[Settings]):

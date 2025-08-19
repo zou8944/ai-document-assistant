@@ -6,7 +6,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from .intent_analyzer import QueryIntent
+from rag.intent_analyzer import QueryIntent
 
 
 @dataclass

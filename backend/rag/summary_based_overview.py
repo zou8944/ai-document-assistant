@@ -11,7 +11,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
-from .summary_manager import SummaryManager, SummaryPoint
+from rag.summary_manager import SummaryManager, SummaryPoint
 
 logger = logging.getLogger(__name__)
 

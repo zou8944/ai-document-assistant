@@ -6,8 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from models.database.collection import Collection
-
-from .base import BaseRepository
+from repository.base import BaseRepository
 
 
 class CollectionRepository(BaseRepository[Collection]):

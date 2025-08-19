@@ -3,10 +3,18 @@ Web crawler package with multiple implementation options.
 """
 
 # Import factory functions and types
-from .scrapy_web_crawler import ScrapyCrawlResult, ScrapyWebCrawler, create_scrapy_web_crawler
+from crawler.scrapy_web_crawler import (
+    ScrapyCrawlResult,
+    ScrapyWebCrawler,
+    create_scrapy_web_crawler,
+)
 
 # Import specific crawler implementations
-from .simple_web_crawler import SimpleCrawlResult, SimpleWebCrawler, create_simple_web_crawler
+from crawler.simple_web_crawler import (
+    SimpleCrawlResult,
+    SimpleWebCrawler,
+    create_simple_web_crawler,
+)
 
 __all__ = [
     # Simple crawler

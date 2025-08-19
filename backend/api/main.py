@@ -132,7 +132,6 @@ setup_exception_handlers(app)
 
 
 # Include routers with versioned API prefix
-app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 app.include_router(collections.router, prefix="/api/v1", tags=["collections"])
 app.include_router(documents.router, prefix="/api/v1", tags=["documents"])
