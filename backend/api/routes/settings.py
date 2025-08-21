@@ -11,6 +11,7 @@ from api.response_utils import (
     raise_internal_error,
     success_response,
 )
+from api.state import get_app_state
 from models.requests import UpdateSettingsRequest
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,9 @@ async def get_settings(request: Request):
         Settings object with masked sensitive information
     """
     try:
-        settings_service = request.app.state.settings_service
+        app_state = get_app_state(request)
+
+        settings_service = app_state.settings_service
 
         settings = await settings_service.get_settings()
 
@@ -52,7 +55,9 @@ async def update_settings(
         Updated settings object
     """
     try:
-        settings_service = request.app.state.settings_service
+        app_state = get_app_state(request)
+
+        settings_service = app_state.settings_service
 
         # Convert request data to dict, excluding None values
         updates = {}
@@ -85,7 +90,9 @@ async def get_settings_by_category(category: str, request: Request):
         Settings for the specified category
     """
     try:
-        settings_service = request.app.state.settings_service
+        app_state = get_app_state(request)
+
+        settings_service = app_state.settings_service
 
         # Get all settings first
         all_settings = await settings_service.get_settings()
@@ -119,7 +126,9 @@ async def get_setting_value(key: str, request: Request):
         Setting value
     """
     try:
-        settings_service = request.app.state.settings_service
+        app_state = get_app_state(request)
+
+        settings_service = app_state.settings_service
 
         value = await settings_service.get_setting_value(key)
 
@@ -151,7 +160,9 @@ async def set_setting_value(
         Success status
     """
     try:
-        settings_service = request.app.state.settings_service
+        app_state = get_app_state(request)
+
+        settings_service = app_state.settings_service
 
         success = await settings_service.set_setting_value(key, value, value_type)
 

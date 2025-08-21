@@ -16,6 +16,7 @@ from api.response_utils import (
     raise_not_found,
     success_response,
 )
+from api.state import get_app_state
 from models.requests import ChatMessageRequest
 from services.enhanced_chat_service import EnhancedChatService
 
@@ -55,10 +56,14 @@ async def send_enhanced_message(
     """
     try:
         # Get enhanced chat service
-        enhanced_service = request.app.state.enhanced_chat_service
+        app_state = get_app_state(request)
+
+        enhanced_service = app_state.enhanced_chat_service
         if not enhanced_service:
             # Fall back to creating service on demand
-            chat_service = request.app.state.chat_service
+            app_state = get_app_state(request)
+
+            chat_service = app_state.chat_service
             enhanced_service = EnhancedChatService(
                 base_service=chat_service,
                 enable_intent_analysis=enable_intent_analysis,
@@ -124,10 +129,14 @@ async def send_enhanced_message_stream(
     """
     try:
         # Get enhanced chat service
-        enhanced_service = request.app.state.enhanced_chat_service
+        app_state = get_app_state(request)
+
+        enhanced_service = app_state.enhanced_chat_service
         if not enhanced_service:
             # Fall back to creating service on demand
-            chat_service = request.app.state.chat_service
+            app_state = get_app_state(request)
+
+            chat_service = app_state.chat_service
             enhanced_service = EnhancedChatService(
                 base_service=chat_service,
                 enable_intent_analysis=enable_intent_analysis,
@@ -202,9 +211,13 @@ async def analyze_message_intent(
     """
     try:
         # Get enhanced chat service
-        enhanced_service = request.app.state.enhanced_chat_service
+        app_state = get_app_state(request)
+
+        enhanced_service = app_state.enhanced_chat_service
         if not enhanced_service:
-            chat_service = request.app.state.chat_service
+            app_state = get_app_state(request)
+
+            chat_service = app_state.chat_service
             enhanced_service = EnhancedChatService(
                 base_service=chat_service,
                 enable_intent_analysis=True
@@ -243,9 +256,13 @@ async def get_cache_statistics(
     """
     try:
         # Get enhanced chat service
-        enhanced_service = request.app.state.enhanced_chat_service
+        app_state = get_app_state(request)
+
+        enhanced_service = app_state.enhanced_chat_service
         if not enhanced_service:
-            chat_service = request.app.state.chat_service
+            app_state = get_app_state(request)
+
+            chat_service = app_state.chat_service
             enhanced_service = EnhancedChatService(
                 base_service=chat_service,
                 enable_cache=True
@@ -286,9 +303,13 @@ async def clear_cache(
     """
     try:
         # Get enhanced chat service
-        enhanced_service = request.app.state.enhanced_chat_service
+        app_state = get_app_state(request)
+
+        enhanced_service = app_state.enhanced_chat_service
         if not enhanced_service:
-            chat_service = request.app.state.chat_service
+            app_state = get_app_state(request)
+
+            chat_service = app_state.chat_service
             enhanced_service = EnhancedChatService(
                 base_service=chat_service,
                 enable_cache=True

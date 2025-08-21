@@ -14,6 +14,7 @@ from api.response_utils import (
     raise_not_found,
     success_response,
 )
+from api.state import get_app_state
 from models.requests import ChatMessageRequest, CreateChatRequest, UpdateChatRequest
 
 logger = logging.getLogger(__name__)
@@ -32,10 +33,11 @@ async def create_chat(request_data: CreateChatRequest, request: Request):
         Created chat information
     """
     try:
-        chat_service = request.app.state.chat_service
+        app_state = get_app_state(request)
+        chat_service = app_state.chat_service
 
         # Validate collections exist
-        collection_service = request.app.state.collection_service
+        collection_service = app_state.collection_service
         for collection_id in request_data.collection_ids:
             collection = await collection_service.get_collection(collection_id)
             if not collection:
@@ -76,7 +78,9 @@ async def list_chats(
         List of chat conversations
     """
     try:
-        chat_service = request.app.state.chat_service
+        app_state = get_app_state(request)
+
+        chat_service = app_state.chat_service
 
         chats = await chat_service.list_chats(offset=offset, limit=limit)
 
@@ -104,7 +108,9 @@ async def get_chat(chat_id: str, request: Request):
         Chat information
     """
     try:
-        chat_service = request.app.state.chat_service
+        app_state = get_app_state(request)
+
+        chat_service = app_state.chat_service
 
         chat = await chat_service.get_chat(chat_id)
 
@@ -135,11 +141,15 @@ async def update_chat(
         Updated chat information
     """
     try:
-        chat_service = request.app.state.chat_service
+        app_state = get_app_state(request)
+
+        chat_service = app_state.chat_service
 
         # Validate collections exist if provided
         if request_data.collection_ids:
-            collection_service = request.app.state.collection_service
+            app_state = get_app_state(request)
+
+            collection_service = app_state.collection_service
             for collection_id in request_data.collection_ids:
                 collection = await collection_service.get_collection(collection_id)
                 if not collection:
@@ -176,7 +186,9 @@ async def delete_chat(chat_id: str, request: Request):
         Success status
     """
     try:
-        chat_service = request.app.state.chat_service
+        app_state = get_app_state(request)
+
+        chat_service = app_state.chat_service
 
         success = await chat_service.delete_chat(chat_id)
 
@@ -214,7 +226,9 @@ async def get_chat_messages(
         List of chat messages
     """
     try:
-        chat_service = request.app.state.chat_service
+        app_state = get_app_state(request)
+
+        chat_service = app_state.chat_service
 
         # Verify chat exists
         chat = await chat_service.get_chat(chat_id)
@@ -256,7 +270,9 @@ async def send_message(
         AI response message
     """
     try:
-        chat_service = request.app.state.chat_service
+        app_state = get_app_state(request)
+
+        chat_service = app_state.chat_service
 
         # Verify chat exists
         chat = await chat_service.get_chat(chat_id)
@@ -298,7 +314,9 @@ async def send_message_stream(
         SSE stream with AI response
     """
     try:
-        chat_service = request.app.state.chat_service
+        app_state = get_app_state(request)
+
+        chat_service = app_state.chat_service
 
         # Verify chat exists
         chat = await chat_service.get_chat(chat_id)

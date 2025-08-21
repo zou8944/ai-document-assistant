@@ -12,6 +12,7 @@ from api.response_utils import (
     raise_not_found,
     success_response,
 )
+from api.state import get_app_state
 from models.requests import IngestFilesRequest, IngestUrlsRequest
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,9 @@ async def ingest_files(
     """
     try:
         # Validate collection exists
-        collection_service = request.app.state.collection_service
+        app_state = get_app_state(request)
+
+        collection_service = app_state.collection_service
         collection = await collection_service.get_collection(collection_id)
 
         if not collection:
@@ -47,7 +50,9 @@ async def ingest_files(
             raise_bad_request("Files list cannot be empty")
 
         # Create task
-        task_service = request.app.state.task_service
+        app_state = get_app_state(request)
+
+        task_service = app_state.task_service
         task = await task_service.create_task(
             task_type="ingest_files",
             collection_id=collection_id,
@@ -84,7 +89,9 @@ async def ingest_urls(
     """
     try:
         # Validate collection exists
-        collection_service = request.app.state.collection_service
+        app_state = get_app_state(request)
+
+        collection_service = app_state.collection_service
         collection = await collection_service.get_collection(collection_id)
 
         if not collection:
@@ -95,7 +102,9 @@ async def ingest_urls(
             raise_bad_request("URLs list cannot be empty")
 
         # Create task
-        task_service = request.app.state.task_service
+        app_state = get_app_state(request)
+
+        task_service = app_state.task_service
         task = await task_service.create_task(
             task_type="ingest_urls",
             collection_id=collection_id,

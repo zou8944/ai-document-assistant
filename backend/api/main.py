@@ -6,10 +6,8 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
-from api.middleware import UnifiedResponseMiddleware, setup_exception_handlers
-from api.routes import chats, collections, documents, enhanced_chat, health, ingest, settings, tasks
+from api.state import AppState, set_app_state
 from config import get_config
 from database.connection import create_tables
 from services.chat_service import ChatService
@@ -69,14 +67,17 @@ async def lifespan(app: FastAPI):
         logger.info("Starting task workers...")
         await task_service.start_workers(num_workers=2)
 
-        # Store services in app state for access in routes
-        app.state.chat_service = chat_service
-        app.state.enhanced_chat_service = enhanced_chat_service
-        app.state.document_service = document_service
-        app.state.query_service = query_service
-        app.state.collection_service = collection_service
-        app.state.settings_service = settings_service
-        app.state.task_service = task_service
+        # Store services in typed app state for access in routes
+        state = AppState(
+            chat_service=chat_service,
+            enhanced_chat_service=enhanced_chat_service,
+            document_service=document_service,
+            query_service=query_service,
+            collection_service=collection_service,
+            settings_service=settings_service,
+            task_service=task_service
+        )
+        set_app_state(app, state)
 
         yield
 

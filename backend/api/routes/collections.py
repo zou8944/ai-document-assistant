@@ -13,6 +13,7 @@ from api.response_utils import (
     raise_not_found,
     success_response,
 )
+from api.state import get_app_state
 from models.requests import (
     CreateCollectionRequest,
     DeleteCollectionRequest,
@@ -35,7 +36,9 @@ async def create_collection(
     Args:
         request_data: Collection creation data
     """
-    collection_service = request.app.state.collection_service
+    app_state = get_app_state(request)
+
+    collection_service = app_state.collection_service
 
     collection = await collection_service.create_collection(
         collection_id=request_data.id,
@@ -57,7 +60,9 @@ async def list_collections(request: Request, search: Optional[str] = None):
     Args:
         search: Optional search keyword to filter collections
     """
-    collection_service = request.app.state.collection_service
+    app_state = get_app_state(request)
+
+    collection_service = app_state.collection_service
 
     collections = await collection_service.list_collections(search=search)
 
@@ -72,7 +77,9 @@ async def list_collections(request: Request, search: Optional[str] = None):
 @router.get("/collections/{collection_id}")
 async def get_collection(collection_id: str, request: Request):
     """Get information about a specific collection"""
-    collection_service = request.app.state.collection_service
+    app_state = get_app_state(request)
+
+    collection_service = app_state.collection_service
 
     collection = await collection_service.get_collection(collection_id)
 
@@ -89,7 +96,9 @@ async def update_collection(
     request: Request
 ):
     """Update a collection"""
-    collection_service = request.app.state.collection_service
+    app_state = get_app_state(request)
+
+    collection_service = app_state.collection_service
 
     # Validate at least one field is provided
     if request_data.name is None and request_data.description is None:
@@ -110,7 +119,9 @@ async def update_collection(
 @router.delete("/collections/{collection_id}")
 async def delete_collection(collection_id: str, request: Request):
     """Delete a collection"""
-    collection_service = request.app.state.collection_service
+    app_state = get_app_state(request)
+
+    collection_service = app_state.collection_service
 
     success = await collection_service.delete_collection(collection_id)
 
@@ -127,7 +138,9 @@ async def delete_collection_legacy(
     request: Request
 ):
     """Delete a collection (legacy endpoint)"""
-    collection_service = request.app.state.collection_service
+    app_state = get_app_state(request)
+
+    collection_service = app_state.collection_service
 
     success = await collection_service.delete_collection(request_data.collection_name)
 

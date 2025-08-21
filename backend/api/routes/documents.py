@@ -12,6 +12,7 @@ from api.response_utils import (
     raise_not_found,
     success_response,
 )
+from api.state import get_app_state
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -37,7 +38,9 @@ async def list_documents(
         status: Optional status filter (pending, processing, indexed, failed)
     """
     try:
-        document_service = request.app.state.document_service
+        app_state = get_app_state(request)
+
+        document_service = app_state.document_service
 
         result = await document_service.list_documents(
             collection_id=collection_id,
@@ -62,7 +65,9 @@ async def get_document(
 ):
     """Get a specific document"""
     try:
-        document_service = request.app.state.document_service
+        app_state = get_app_state(request)
+
+        document_service = app_state.document_service
 
         document = await document_service.get_document(collection_id, document_id)
 
@@ -84,7 +89,9 @@ async def delete_document(
 ):
     """Delete a document and its associated chunks/vectors"""
     try:
-        document_service = request.app.state.document_service
+        app_state = get_app_state(request)
+
+        document_service = app_state.document_service
 
         success = await document_service.delete_document(collection_id, document_id)
 
@@ -115,7 +122,9 @@ async def download_document(
         File download response or error
     """
     try:
-        document_service = request.app.state.document_service
+        app_state = get_app_state(request)
+
+        document_service = app_state.document_service
 
         file_response = await document_service.download_document(collection_id, document_id)
 

@@ -15,6 +15,7 @@ from api.response_utils import (
     raise_not_found,
     success_response,
 )
+from api.state import get_app_state
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -32,14 +33,16 @@ async def get_task(task_id: str, request: Request):
         Task information including status, progress, and statistics
     """
     try:
-        task_service = request.app.state.task_service
+        app_state = get_app_state(request)
+
+        task_service = app_state.task_service
 
         task = await task_service.get_task(task_id)
 
         if not task:
             raise_not_found(f"Task '{task_id}' not found")
 
-        return success_response(data=task.dict())
+        return success_response(data=task)
 
     except Exception as e:
         logger.error(f"Failed to get task: {e}")
@@ -58,7 +61,9 @@ async def stream_task_progress(task_id: str, request: Request):
         SSE stream with task progress and log events
     """
     try:
-        task_service = request.app.state.task_service
+        app_state = get_app_state(request)
+
+        task_service = app_state.task_service
 
         # Verify task exists
         task = await task_service.get_task(task_id)
@@ -189,7 +194,9 @@ async def get_task_logs(
     """
     try:
         # Get logs using repository
-        task_service = request.app.state.task_service
+        app_state = get_app_state(request)
+
+        task_service = app_state.task_service
 
         # Verify task exists
         task = await task_service.get_task(task_id)
@@ -247,7 +254,9 @@ async def cancel_task(task_id: str, request: Request):
         Success status
     """
     try:
-        task_service = request.app.state.task_service
+        app_state = get_app_state(request)
+
+        task_service = app_state.task_service
 
         # Verify task exists
         task = await task_service.get_task(task_id)
@@ -332,7 +341,9 @@ async def list_tasks(
             )
 
             # Convert to response format
-            task_service = request.app.state.task_service
+            app_state = get_app_state(request)
+
+            task_service = app_state.task_service
             task_data = []
             for task in tasks:
                 task_response = task_service._to_response(task)

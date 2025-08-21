@@ -5,6 +5,7 @@ Health check routes.
 from fastapi import APIRouter, Request
 
 from api.response_utils import success_response
+from api.state import get_app_state
 
 router = APIRouter()
 
@@ -29,7 +30,9 @@ async def health_check(request: Request):
     # Check if embeddings are available
     embeddings_available = True
     try:
-        document_service = request.app.state.document_service
+        app_state = get_app_state(request)
+
+        document_service = app_state.document_service
         if not document_service.embeddings:
             embeddings_available = False
     except Exception:
@@ -38,7 +41,9 @@ async def health_check(request: Request):
     # Check if Chroma is available
     chroma_available = True
     try:
-        query_service = request.app.state.query_service
+        app_state = get_app_state(request)
+
+        query_service = app_state.query_service
         # Try a simple operation
         await query_service.chroma_manager.list_collections()
     except Exception:
