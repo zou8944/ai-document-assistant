@@ -16,3 +16,4 @@ data/
 # Logs
 *.log
 logs/
+api_server.log
