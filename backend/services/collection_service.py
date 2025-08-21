@@ -7,7 +7,7 @@ from typing import Optional
 
 from database.connection import get_db_session_context
 from models.database.collection import Collection
-from models.responses import CollectionInfo, CollectionResponse
+from models.responses import CollectionResponse
 from repository.collection import CollectionRepository
 
 logger = logging.getLogger(__name__)
@@ -40,144 +40,97 @@ class CollectionService:
 
     async def create_collection(self, collection_id: str, name: str, description: str = "") -> Optional[CollectionResponse]:
         """Create a new collection"""
-        try:
-            with get_db_session_context() as session:
-                repo = CollectionRepository(session)
+        with get_db_session_context() as session:
+            repo = CollectionRepository(session)
 
-                # Check if collection already exists
-                existing = repo.get_by_id(collection_id)
-                if existing:
-                    logger.warning(f"Collection with id '{collection_id}' already exists")
-                    return None
+            # Check if collection already exists
+            existing = repo.get_by_id(collection_id)
+            if existing:
+                logger.warning(f"Collection with id '{collection_id}' already exists")
+                return None
 
-                # Create new collection
-                collection = Collection(
-                    id=collection_id,
-                    name=name,
-                    description=description
-                )
+            # Create new collection
+            collection = Collection(
+                id=collection_id,
+                name=name,
+                description=description
+            )
 
-                created_collection = repo.create_by_model(collection)
+            created_collection = repo.create_by_model(collection)
 
-                # Create ChromaDB collection
-                await self.chroma_manager.ensure_collection(collection_id)
+            # Create ChromaDB collection
+            await self.chroma_manager.ensure_collection(collection_id)
 
-                logger.info(f"Created collection '{collection_id}' with name '{name}'")
-                return self._to_response(created_collection)
-
-        except Exception as e:
-            logger.error(f"Failed to create collection '{collection_id}': {e}")
-            return None
+            logger.info(f"Created collection '{collection_id}' with name '{name}'")
+            return self._to_response(created_collection)
 
     async def list_collections(self, search: Optional[str] = None) -> list[CollectionResponse]:
         """List all collections with optional search"""
-        try:
-            with get_db_session_context() as session:
-                repo = CollectionRepository(session)
-                collections = repo.get_all_ordered(search=search)
+        with get_db_session_context() as session:
+            repo = CollectionRepository(session)
+            collections = repo.get_all_ordered(search=search)
 
-                # Update stats for each collection
-                for collection in collections:
-                    repo.update_stats(collection.id)
+            # Update stats for each collection
+            for collection in collections:
+                repo.update_stats(collection.id)
 
-                return [self._to_response(c) for c in collections]
-
-        except Exception as e:
-            logger.error(f"Failed to list collections: {e}")
-            return []
+            return [self._to_response(c) for c in collections]
 
     async def get_collection(self, collection_id: str) -> Optional[CollectionResponse]:
         """Get collection by ID with updated stats"""
-        try:
-            with get_db_session_context() as session:
-                repo = CollectionRepository(session)
-                collection = repo.get_with_stats(collection_id)
+        with get_db_session_context() as session:
+            repo = CollectionRepository(session)
+            collection = repo.get_with_stats(collection_id)
 
-                if not collection:
-                    return None
+            if not collection:
+                return None
 
-                return self._to_response(collection)
-
-        except Exception as e:
-            logger.error(f"Failed to get collection '{collection_id}': {e}")
-            return None
+            return self._to_response(collection)
 
     async def update_collection(self, collection_id: str, name: Optional[str] = None, description: Optional[str] = None) -> Optional[CollectionResponse]:
         """Update collection"""
-        try:
-            with get_db_session_context() as session:
-                repo = CollectionRepository(session)
-                collection = repo.get_by_id(collection_id)
+        with get_db_session_context() as session:
+            repo = CollectionRepository(session)
+            collection = repo.get_by_id(collection_id)
 
-                if not collection:
-                    return None
+            if not collection:
+                return None
 
-                # Update fields
-                if name is not None:
-                    collection.name = name
-                if description is not None:
-                    collection.description = description
+            # Update fields
+            if name is not None:
+                collection.name = name
+            if description is not None:
+                collection.description = description
 
-                updated_collection = repo.update(collection)
-                logger.info(f"Updated collection '{collection_id}'")
+            updated_collection = repo.update_by_model(collection)
+            logger.info(f"Updated collection '{collection_id}'")
 
-                assert updated_collection is not None
-                return self._to_response(updated_collection)
+            assert updated_collection is not None
+            return self._to_response(updated_collection)
 
-        except Exception as e:
-            logger.error(f"Failed to update collection '{collection_id}': {e}")
-            return None
-
-    async def delete_collection(self, collection_id: str) -> bool:
+    async def delete_collection(self, collection_id: str):
         """Delete a collection"""
-        try:
-            with get_db_session_context() as session:
-                repo = CollectionRepository(session)
-                collection = repo.get_by_id(collection_id)
+        with get_db_session_context() as session:
+            repo = CollectionRepository(session)
+            collection = repo.get_by_id(collection_id)
 
-                if not collection:
-                    return False
+            if not collection:
+                return False
 
-                # Delete from ChromaDB first
-                chroma_success = await self.chroma_manager.delete_collection(collection_id)
-                if not chroma_success:
-                    logger.warning(f"Failed to delete ChromaDB collection '{collection_id}', but continuing with database deletion")
+            # Delete from ChromaDB first
+            chroma_success = await self.chroma_manager.delete_collection(collection_id)
+            if not chroma_success:
+                logger.warning(f"Failed to delete ChromaDB collection '{collection_id}', but continuing with database deletion")
 
-                # Delete from database (cascade will handle related records)
-                success = repo.delete(collection_id)
+            # Delete from database (cascade will handle related records)
+            success = repo.delete(collection_id)
 
-                if success:
-                    logger.info(f"Deleted collection '{collection_id}'")
+            if success:
+                logger.info(f"Deleted collection '{collection_id}'")
 
-                return success
-
-        except Exception as e:
-            logger.error(f"Failed to delete collection '{collection_id}': {e}")
-            return False
-
-    # Legacy methods for backward compatibility
-    async def get_collection_info(self, collection_name: str) -> Optional[CollectionInfo]:
-        """Get information about a specific collection (legacy method)"""
-        collection = await self.get_collection(collection_name)
-        if not collection:
-            return None
-
-        return CollectionInfo(
-            name=collection.name,
-            vector_size=0,  # Not tracked in new system
-            document_count=collection.document_count,
-            source_type='unknown'  # Not tracked in new system
-        )
-
-    def register_collection(self, collection_name: str, source_type: str):
-        """Register a collection with its source type for tracking (legacy method)"""
-        logger.info(f"Legacy register_collection called for '{collection_name}' (ignored in new system)")
+            return True
 
     def close(self):
         """Close connections and cleanup resources"""
-        try:
-            if hasattr(self, 'chroma_manager'):
-                self.chroma_manager.close()
-            logger.info("CollectionService resources closed")
-        except Exception as e:
-            logger.error(f"Error closing CollectionService: {e}")
+        self.chroma_manager.close()
+        logger.info("CollectionService resources closed")

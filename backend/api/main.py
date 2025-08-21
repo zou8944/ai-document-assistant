@@ -149,7 +149,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="AI Document Assistant API Server")
     parser.add_argument("--host", default="127.0.0.1", help="Host to bind to")
-    parser.add_argument("--port", type=int, default=0, help="Port to bind to (0 for auto)")
+    parser.add_argument("--port", type=int, default=8888, help="Port to bind to (0 for auto)")
     parser.add_argument("--workers", type=int, default=1, help="Number of worker processes")
     parser.add_argument("--log-level", default="info", help="Log level")
 

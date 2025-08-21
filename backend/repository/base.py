@@ -36,8 +36,7 @@ class BaseRepository(Generic[T]):
         """
         entity = self.model(**kwargs)
         self.session.add(entity)
-        self.session.commit()
-        self.session.refresh(entity)
+        self.session.flush()
         return entity
 
 
@@ -52,8 +51,7 @@ class BaseRepository(Generic[T]):
             Created entity
         """
         self.session.add(entity)
-        self.session.commit()
-        self.session.refresh(entity)
+        self.session.flush()
         return entity
 
     def get_by_id(self, entity_id: Any) -> Optional[T]:
@@ -117,8 +115,32 @@ class BaseRepository(Generic[T]):
         if result.rowcount == 0:
             return None
 
-        self.session.commit()
         return self.get_by_id(entity_id)
+
+    def update_by_model(self, entity: T) -> Optional[T]:
+        """
+        Update entity by model instance.
+
+        Args:
+            entity: Entity instance with updated values
+
+        Returns:
+            Updated entity or None if not found
+        """
+        # 获取主键值
+        entity_id = getattr(entity, 'id', None)
+        if entity_id is None:
+            return None
+
+        # 将实体转为字典，排除主键
+        update_data = {}
+        for column in self.model.__table__.columns:
+            if column.name != 'id':  # 排除主键
+                value = getattr(entity, column.name, None)
+                if value is not None:
+                    update_data[column.name] = value
+
+        return self.update(entity_id, **update_data)
 
     def delete(self, entity_id: Any) -> bool:
         """
@@ -136,7 +158,6 @@ class BaseRepository(Generic[T]):
         if result.rowcount == 0:
             return False
 
-        self.session.commit()
         return True
 
     def count(self, **filters) -> int:

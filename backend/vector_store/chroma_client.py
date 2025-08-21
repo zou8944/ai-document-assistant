@@ -9,6 +9,7 @@ from typing import Any, Optional
 
 import chromadb
 from chromadb.config import Settings
+from chromadb.errors import NotFoundError
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -45,7 +46,7 @@ class ChromaManager:
             logger.error(f"Failed to connect to ChromaDB: {e}")
             raise
 
-    async def ensure_collection(self, collection_name: str, vector_size: int = 384) -> bool:
+    async def ensure_collection(self, collection_name: str, vector_size: int = 384):
         """
         Ensure collection exists, create if not found.
 
@@ -57,27 +58,20 @@ class ChromaManager:
             True if collection exists or was created successfully
         """
         try:
-            # Try to get existing collection
-            try:
-                self.client.get_collection(name=collection_name)
-                logger.info(f"Collection '{collection_name}' already exists")
-                return True
-            except ValueError:
-                # Collection doesn't exist, create it
-                pass
+            self.client.get_collection(name=collection_name)
+            logger.info(f"Collection '{collection_name}' already exists")
+        except NotFoundError:
+            # Collection doesn't exist, create it
+            pass
 
-            # Create new collection with cosine distance (default in ChromaDB)
-            self.client.create_collection(
-                name=collection_name,
-                metadata={"hnsw:space": "cosine"}  # Use cosine distance for text embeddings
-            )
+        # Create new collection with cosine distance (default in ChromaDB)
+        self.client.create_collection(
+            name=collection_name,
+            metadata={"hnsw:space": "cosine"}  # Use cosine distance for text embeddings
+        )
 
-            logger.info(f"Created collection '{collection_name}'")
-            return True
+        logger.info(f"Created collection '{collection_name}'")
 
-        except Exception as e:
-            logger.error(f"Failed to ensure collection '{collection_name}': {e}")
-            return False
 
     async def index_documents(self, collection_name: str, chunks: list[DocumentChunk],
                             embeddings: list[list[float]]) -> dict[str, Any]:
