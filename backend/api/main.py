@@ -6,7 +6,10 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
+from api.middleware import UnifiedResponseMiddleware, setup_exception_handlers
+from api.routes import chats, collections, documents, enhanced_chat, health, ingest, settings, tasks
 from api.state import AppState, set_app_state
 from config import get_config
 from database.connection import create_tables

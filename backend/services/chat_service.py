@@ -75,53 +75,38 @@ class ChatService:
 
     async def create_chat(self, name: str, collection_ids: list[str]) -> Optional[ChatResponse]:
         """Create a new chat"""
-        try:
-            with get_db_session_context() as session:
-                repo = ChatRepository(session)
+        with get_db_session_context() as session:
+            repo = ChatRepository(session)
 
-                chat = Chat(
-                    name=name,
-                    collection_ids=json.dumps(collection_ids),
-                    message_count=0
-                )
+            chat = Chat(
+                name=name,
+                collection_ids=json.dumps(collection_ids),
+                message_count=0
+            )
 
-                created_chat = repo.create_by_model(chat)
-                logger.info(f"Created chat {created_chat.id} with name '{name}'")
+            created_chat = repo.create_by_model(chat)
+            logger.info(f"Created chat {created_chat.id} with name '{name}'")
 
-                return self._to_chat_response(created_chat)
-
-        except Exception as e:
-            logger.error(f"Failed to create chat: {e}")
-            return None
+            return self._to_chat_response(created_chat)
 
     async def get_chat(self, chat_id: str) -> Optional[ChatResponse]:
         """Get chat by ID"""
-        try:
-            with get_db_session_context() as session:
-                repo = ChatRepository(session)
-                chat = repo.get_by_id(chat_id)
+        with get_db_session_context() as session:
+            repo = ChatRepository(session)
+            chat = repo.get_by_id(chat_id)
 
-                if not chat:
-                    return None
+            if not chat:
+                return None
 
-                return self._to_chat_response(chat)
-
-        except Exception as e:
-            logger.error(f"Failed to get chat '{chat_id}': {e}")
-            return None
+            return self._to_chat_response(chat)
 
     async def list_chats(self, offset: int = 0, limit: int = 50) -> list[ChatResponse]:
         """List chats with pagination"""
-        try:
-            with get_db_session_context() as session:
-                repo = ChatRepository(session)
-                chats = repo.get_all_ordered(offset=offset, limit=limit)
+        with get_db_session_context() as session:
+            repo = ChatRepository(session)
+            chats = repo.get_all_ordered(offset=offset, limit=limit)
 
-                return [self._to_chat_response(chat) for chat in chats]
-
-        except Exception as e:
-            logger.error(f"Failed to list chats: {e}")
-            return []
+            return [self._to_chat_response(chat) for chat in chats]
 
     async def update_chat(
         self,
@@ -130,49 +115,39 @@ class ChatService:
         collection_ids: Optional[list[str]] = None
     ) -> Optional[ChatResponse]:
         """Update chat information"""
-        try:
-            with get_db_session_context() as session:
-                repo = ChatRepository(session)
-                chat = repo.get_by_id(chat_id)
+        with get_db_session_context() as session:
+            repo = ChatRepository(session)
+            chat = repo.get_by_id(chat_id)
 
-                if not chat:
-                    return None
+            if not chat:
+                return None
 
-                if name is not None:
-                    chat.name = name
-                if collection_ids is not None:
-                    chat.collection_ids = json.dumps(collection_ids)
+            if name is not None:
+                chat.name = name
+            if collection_ids is not None:
+                chat.collection_ids = json.dumps(collection_ids)
 
-                session.commit()
-                logger.info(f"Updated chat {chat_id}")
+            session.commit()
+            logger.info(f"Updated chat {chat_id}")
 
-                return self._to_chat_response(chat)
-
-        except Exception as e:
-            logger.error(f"Failed to update chat '{chat_id}': {e}")
-            return None
+            return self._to_chat_response(chat)
 
     async def delete_chat(self, chat_id: str) -> bool:
         """Delete chat and all its messages"""
-        try:
-            with get_db_session_context() as session:
-                chat_repo = ChatRepository(session)
-                message_repo = ChatMessageRepository(session)
+        with get_db_session_context() as session:
+            chat_repo = ChatRepository(session)
+            message_repo = ChatMessageRepository(session)
 
-                # Delete all messages first
-                message_repo.delete_by_chat(chat_id)
+            # Delete all messages first
+            message_repo.delete_by_chat(chat_id)
 
-                # Delete chat
-                success = chat_repo.delete(chat_id)
+            # Delete chat
+            success = chat_repo.delete(chat_id)
 
-                if success:
-                    logger.info(f"Deleted chat {chat_id}")
+            if success:
+                logger.info(f"Deleted chat {chat_id}")
 
-                return success
-
-        except Exception as e:
-            logger.error(f"Failed to delete chat '{chat_id}': {e}")
-            return False
+            return success
 
     async def get_chat_messages(
         self,
@@ -181,16 +156,11 @@ class ChatService:
         limit: int = 50
     ) -> list[ChatMessageResponse]:
         """Get messages for a chat"""
-        try:
-            with get_db_session_context() as session:
-                repo = ChatMessageRepository(session)
-                messages = repo.get_by_chat(chat_id, offset=offset, limit=limit)
+        with get_db_session_context() as session:
+            repo = ChatMessageRepository(session)
+            messages = repo.get_by_chat(chat_id, offset=offset, limit=limit)
 
-                return [self._to_message_response(message) for message in messages]
-
-        except Exception as e:
-            logger.error(f"Failed to get messages for chat '{chat_id}': {e}")
-            return []
+            return [self._to_message_response(message) for message in messages]
 
     async def _retrieve_from_multiple_collections(
         self,
@@ -201,55 +171,46 @@ class ChatService:
         """Retrieve documents from multiple collections"""
         all_results = []
 
-        try:
-            # Generate query embedding once
-            query_embedding = await self.embeddings.aembed_query(query)
+        # Generate query embedding once
+        query_embedding = await self.embeddings.aembed_query(query)
 
-            for collection_id in collection_ids:
-                try:
-                    # Search in this collection
-                    results = await self.chroma_manager.search_similar(
-                        collection_name=collection_id,
-                        query_embedding=query_embedding,
-                        limit=top_k_per_collection,
-                        score_threshold=0.3
-                    )
+        for collection_id in collection_ids:
+            try:
+                # Search in this collection
+                results = await self.chroma_manager.search_similar(
+                    collection_name=collection_id,
+                    query_embedding=query_embedding,
+                    limit=top_k_per_collection,
+                    score_threshold=0.3
+                )
 
-                    # Add collection info to results
-                    for result in results:
-                        result['collection_id'] = collection_id
+                # Add collection info to results
+                for result in results:
+                    result['collection_id'] = collection_id
 
-                    all_results.extend(results)
+                all_results.extend(results)
 
-                except Exception as e:
-                    logger.warning(f"Failed to search collection '{collection_id}': {e}")
-                    continue
+            except Exception as e:
+                logger.warning(f"Failed to search collection '{collection_id}': {e}")
+                continue
 
-            # Sort by relevance score and take top results
-            all_results.sort(key=lambda x: x.get('score', 0), reverse=True)
-            return all_results[:top_k_per_collection * 2]  # Return top results across all collections
-
-        except Exception as e:
-            logger.error(f"Multi-collection retrieval failed: {e}")
-            return []
+        # Sort by relevance score and take top results
+        all_results.sort(key=lambda x: x.get('score', 0), reverse=True)
+        return all_results[:top_k_per_collection * 2]  # Return top results across all collections
 
     def _format_sources(self, documents: list[dict[str, Any]]) -> list[SourceReference]:
         """Format retrieved documents as source references"""
         sources = []
 
         for doc in documents:
-            try:
-                source_ref = SourceReference(
-                    document_name=doc.get('source', 'Unknown Document'),
-                    document_id=doc.get('document_id', ''),
-                    chunk_index=doc.get('chunk_index', 0),
-                    content_preview=doc.get('content', '')[:200] + "..." if len(doc.get('content', '')) > 200 else doc.get('content', ''),
-                    relevance_score=doc.get('score', 0.0)
-                )
-                sources.append(source_ref)
-            except Exception as e:
-                logger.warning(f"Failed to format source: {e}")
-                continue
+            source_ref = SourceReference(
+                document_name=doc.get('source', 'Unknown Document'),
+                document_id=doc.get('document_id', ''),
+                chunk_index=doc.get('chunk_index', 0),
+                content_preview=doc.get('content', '')[:200] + "..." if len(doc.get('content', '')) > 200 else doc.get('content', ''),
+                relevance_score=doc.get('score', 0.0)
+            )
+            sources.append(source_ref)
 
         return sources
 
@@ -275,91 +236,83 @@ class ChatService:
         user_message: str
     ) -> Optional[ChatMessageResponse]:
         """Send a message and get AI response"""
-        try:
-            # Get chat information
-            chat = await self.get_chat(chat_id)
-            if not chat:
-                logger.error(f"Chat '{chat_id}' not found")
-                return None
+        # Get chat information
+        chat = await self.get_chat(chat_id)
+        if not chat:
+            raise ValueError(f"Chat '{chat_id}' not found")
 
-            # Save user message
-            with get_db_session_context() as session:
-                message_repo = ChatMessageRepository(session)
+        # Save user message
+        with get_db_session_context() as session:
+            message_repo = ChatMessageRepository(session)
 
-                message_repo.add_message(
-                    chat_id=chat_id,
-                    role="user",
-                    content=user_message
-                )
-
-            # Retrieve relevant documents from multiple collections
-            relevant_docs = await self._retrieve_from_multiple_collections(
-                user_message,
-                chat.collection_ids,
-                top_k_per_collection=3
+            message_repo.add_message(
+                chat_id=chat_id,
+                role="user",
+                content=user_message
             )
 
-            # Format context and sources
-            context = self._format_context(relevant_docs)
-            sources = self._format_sources(relevant_docs)
+        # Retrieve relevant documents from multiple collections
+        relevant_docs = await self._retrieve_from_multiple_collections(
+            user_message,
+            chat.collection_ids,
+            top_k_per_collection=3
+        )
 
-            # Get conversation history for context
-            with get_db_session_context() as session:
-                message_repo = ChatMessageRepository(session)
-                history = message_repo.get_conversation_history(chat_id, max_messages=10)
+        # Format context and sources
+        context = self._format_context(relevant_docs)
+        sources = self._format_sources(relevant_docs)
 
-            # Format conversation history
-            conversation_context = ""
-            if len(history) > 1:  # More than just the current message
-                conversation_context = "\n对话历史:\n"
-                for msg in history[:-1]:  # Exclude the current message
-                    conversation_context += f"{msg.role}: {msg.content}\n"
+        # Get conversation history for context
+        with get_db_session_context() as session:
+            message_repo = ChatMessageRepository(session)
+            history = message_repo.get_conversation_history(chat_id, max_messages=10)
 
-            # Generate AI response using RAG
-            from rag.prompt_templates import get_rag_prompt
+        # Format conversation history
+        conversation_context = ""
+        if len(history) > 1:  # More than just the current message
+            conversation_context = "\n对话历史:\n"
+            for msg in history[:-1]:  # Exclude the current message
+                conversation_context += f"{msg.role}: {msg.content}\n"
 
-            prompt = get_rag_prompt()
+        # Generate AI response using RAG
+        from rag.prompt_templates import get_rag_prompt
 
-            # Prepare the full context
-            full_context = context
-            if conversation_context:
-                full_context = conversation_context + "\n\n当前文档上下文:\n" + context
+        prompt = get_rag_prompt()
 
-            # Generate response
-            from langchain_core.output_parsers import StrOutputParser
-            chain = prompt | self.llm | StrOutputParser()
+        # Prepare the full context
+        full_context = context
+        if conversation_context:
+            full_context = conversation_context + "\n\n当前文档上下文:\n" + context
 
-            ai_response = await chain.ainvoke({
-                "context": full_context,
-                "question": user_message
-            })
+        # Generate response
+        from langchain_core.output_parsers import StrOutputParser
+        chain = prompt | self.llm | StrOutputParser()
 
-            # Save AI response with sources
-            with get_db_session_context() as session:
-                message_repo = ChatMessageRepository(session)
+        ai_response = await chain.ainvoke({
+            "context": full_context,
+            "question": user_message
+        })
 
-                ai_msg = message_repo.add_message(
-                    chat_id=chat_id,
-                    role="assistant",
-                    content=ai_response,
-                    sources=json.dumps([source.dict() for source in sources]),
-                    metadata=json.dumps({
-                        "model": self.config.openai_chat_model,
-                        "sources_count": len(sources),
-                        "collections_searched": chat.collection_ids
-                    })
-                )
+        # Save AI response with sources
+        with get_db_session_context() as session:
+            message_repo = ChatMessageRepository(session)
 
-            logger.info(f"Generated AI response for chat {chat_id} with {len(sources)} sources")
+            ai_msg = message_repo.add_message(
+                chat_id=chat_id,
+                role="assistant",
+                content=ai_response,
+                sources=json.dumps([source.dict() for source in sources]),
+                metadata=json.dumps({
+                    "model": self.config.openai_chat_model,
+                    "sources_count": len(sources),
+                    "collections_searched": chat.collection_ids
+                })
+            )
 
-            return self._to_message_response(ai_msg)
+        logger.info(f"Generated AI response for chat {chat_id} with {len(sources)} sources")
 
-        except Exception as e:
-            logger.error(f"Failed to send message in chat '{chat_id}': {e}")
-            return None
+        return self._to_message_response(ai_msg)
 
     def close(self):
-        """Close connections and cleanup resources"""
-        if hasattr(self, 'chroma_manager') and self.chroma_manager:
-            self.chroma_manager.close()
+        self.chroma_manager.close()
         logger.info("ChatService resources closed")

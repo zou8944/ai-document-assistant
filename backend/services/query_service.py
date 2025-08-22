@@ -41,23 +41,18 @@ class DocumentRetriever:
 
     async def retrieve_documents(self, query: str) -> list[dict[str, Any]]:
         """Retrieve relevant documents for a query"""
-        try:
-            # Generate query embedding
-            query_embedding = await self.embeddings.aembed_query(query)
+        # Generate query embedding
+        query_embedding = await self.embeddings.aembed_query(query)
 
-            # Search similar documents
-            results = await self.chroma_manager.search_similar(
-                collection_name=self.collection_name,
-                query_embedding=query_embedding,
-                limit=self.top_k,
-                score_threshold=0.3
-            )
+        # Search similar documents
+        results = await self.chroma_manager.search_similar(
+            collection_name=self.collection_name,
+            query_embedding=query_embedding,
+            limit=self.top_k,
+            score_threshold=0.3
+        )
 
-            return results
-
-        except Exception as e:
-            logger.error(f"Document retrieval failed: {e}")
-            return []
+        return results
 
 
 class QueryService:
@@ -69,33 +64,28 @@ class QueryService:
         """Initialize query service"""
         self.config = config or get_config()
 
-        try:
-            # Initialize ChromaDB manager (shared across retrievers)
-            from vector_store.chroma_client import create_chroma_manager
-            self.chroma_manager = create_chroma_manager(self.config)
+        # Initialize ChromaDB manager (shared across retrievers)
+        from vector_store.chroma_client import create_chroma_manager
+        self.chroma_manager = create_chroma_manager(self.config)
 
-            # Initialize embeddings
-            embeddings_kwargs = self.config.get_openai_embeddings_kwargs()
-            self.embeddings = OpenAIEmbeddings(**embeddings_kwargs)
+        # Initialize embeddings
+        embeddings_kwargs = self.config.get_openai_embeddings_kwargs()
+        self.embeddings = OpenAIEmbeddings(**embeddings_kwargs)
 
-            # Initialize LLM for answer generation
-            chat_kwargs = self.config.get_openai_chat_kwargs()
-            self.llm = ChatOpenAI(**chat_kwargs)
+        # Initialize LLM for answer generation
+        chat_kwargs = self.config.get_openai_chat_kwargs()
+        self.llm = ChatOpenAI(**chat_kwargs)
 
-            # Initialize streaming LLM
-            self.streaming_llm = ChatOpenAI(**{**chat_kwargs, "streaming": True})
+        # Initialize streaming LLM
+        self.streaming_llm = ChatOpenAI(**{**chat_kwargs, "streaming": True})
 
-            # Get prompt template
-            self.prompt = get_rag_prompt()
+        # Get prompt template
+        self.prompt = get_rag_prompt()
 
-            # Cache for active retrievers by collection
-            self._retrievers: dict[str, DocumentRetriever] = {}
+        # Cache for active retrievers by collection
+        self._retrievers: dict[str, DocumentRetriever] = {}
 
-            logger.info("QueryService initialized successfully")
-
-        except Exception as e:
-            logger.error(f"Failed to initialize QueryService: {e}")
-            raise
+        logger.info("QueryService initialized successfully")
 
     def _get_retriever(self, collection_name: str) -> DocumentRetriever:
         """Get or create a retriever for the specified collection"""
@@ -157,69 +147,59 @@ class QueryService:
         Returns:
             QueryResult with answer and sources
         """
-        try:
-            logger.info(f"Processing query for collection '{collection_name}': {question}")
+        logger.info(f"Processing query for collection '{collection_name}': {question}")
 
-            # Check if collection exists
-            if not await self.check_collection_exists(collection_name):
-                return QueryResult(
-                    answer=f"Collection '{collection_name}' not found. Please process documents first.",
-                    sources=[],
-                    confidence=0.0,
-                    question=question
-                )
-
-            # Retrieve relevant documents
-            retriever = self._get_retriever(collection_name)
-            relevant_docs = await retriever.retrieve_documents(question)
-
-            if not relevant_docs:
-                return QueryResult(
-                    answer="抱歉，我在提供的文档中没有找到与您的问题相关的信息。请确认您的问题是否在文档范围内，或者尝试用不同的方式提问。",
-                    sources=[],
-                    confidence=0.0,
-                    question=question
-                )
-
-            # Format context for LLM
-            context = self._format_context(relevant_docs)
-
-            # Generate answer using LLM
-            chain = self.prompt | self.llm | StrOutputParser()
-            answer = await chain.ainvoke({
-                "context": context,
-                "question": question
-            })
-
-            # Calculate confidence based on retrieval scores
-            avg_score = sum(doc.get('score', 0) for doc in relevant_docs) / len(relevant_docs)
-            confidence = min(avg_score * 2, 1.0)  # Scale to 0-1 range
-
-            # Format sources
-            sources = self._format_sources(relevant_docs)
-
-            # Add formatted source citations to answer
-            source_citation = format_sources([s.model_dump() for s in sources])
-            if source_citation:
-                answer += source_citation
-
-            logger.info(f"Successfully generated answer with {len(relevant_docs)} sources")
-
+        # Check if collection exists
+        if not await self.check_collection_exists(collection_name):
             return QueryResult(
-                answer=answer,
-                sources=sources,
-                confidence=confidence,
-                question=question
-            )
-
-        except Exception as e:
-            logger.error(f"Query processing failed: {e}")
-            return QueryResult(
-                answer=f"抱歉，处理您的问题时出现错误：{str(e)}",
+                answer=f"Collection '{collection_name}' not found. Please process documents first.",
                 sources=[],
                 confidence=0.0,
                 question=question
             )
+
+        # Retrieve relevant documents
+        retriever = self._get_retriever(collection_name)
+        relevant_docs = await retriever.retrieve_documents(question)
+
+        if not relevant_docs:
+            return QueryResult(
+                answer="抱歉，我在提供的文档中没有找到与您的问题相关的信息。请确认您的问题是否在文档范围内，或者尝试用不同的方式提问。",
+                sources=[],
+                confidence=0.0,
+                question=question
+            )
+
+        # Format context for LLM
+        context = self._format_context(relevant_docs)
+
+        # Generate answer using LLM
+        chain = self.prompt | self.llm | StrOutputParser()
+        answer = await chain.ainvoke({
+            "context": context,
+            "question": question
+        })
+
+        # Calculate confidence based on retrieval scores
+        avg_score = sum(doc.get('score', 0) for doc in relevant_docs) / len(relevant_docs)
+        confidence = min(avg_score * 2, 1.0)  # Scale to 0-1 range
+
+        # Format sources
+        sources = self._format_sources(relevant_docs)
+
+        # Add formatted source citations to answer
+        source_citation = format_sources([s.model_dump() for s in sources])
+        if source_citation:
+            answer += source_citation
+
+        logger.info(f"Successfully generated answer with {len(relevant_docs)} sources")
+
+        return QueryResult(
+            answer=answer,
+            sources=sources,
+            confidence=confidence,
+            question=question
+        )
 
     async def query_documents_stream(self, question: str,
                                    collection_name: str = "documents") -> AsyncGenerator[Any, None]:
@@ -233,58 +213,53 @@ class QueryService:
         Yields:
             Stream chunks (ProgressChunk, ContentChunk, SourcesChunk, DoneChunk, ErrorChunk)
         """
-        try:
-            logger.info(f"Processing streaming query for collection '{collection_name}': {question}")
+        logger.info(f"Processing streaming query for collection '{collection_name}': {question}")
 
-            # Phase 1: Check collection
-            yield ProgressChunk(message="检查文档集合...")
+        # Phase 1: Check collection
+        yield ProgressChunk(message="检查文档集合...")
 
-            if not await self.check_collection_exists(collection_name):
-                yield ErrorChunk(error=f"Collection '{collection_name}' not found. Please process documents first.")
-                return
+        if not await self.check_collection_exists(collection_name):
+            yield ErrorChunk(error=f"Collection '{collection_name}' not found. Please process documents first.")
+            return
 
-            # Phase 2: Retrieve documents
-            yield ProgressChunk(message="正在检索相关文档...")
+        # Phase 2: Retrieve documents
+        yield ProgressChunk(message="正在检索相关文档...")
 
-            retriever = self._get_retriever(collection_name)
-            relevant_docs = await retriever.retrieve_documents(question)
+        retriever = self._get_retriever(collection_name)
+        relevant_docs = await retriever.retrieve_documents(question)
 
-            if not relevant_docs:
-                yield ContentChunk(content="抱歉，我在提供的文档中没有找到与您的问题相关的信息。请确认您的问题是否在文档范围内，或者尝试用不同的方式提问。")
-                yield DoneChunk(confidence=0.0)
-                return
+        if not relevant_docs:
+            yield ContentChunk(content="抱歉，我在提供的文档中没有找到与您的问题相关的信息。请确认您的问题是否在文档范围内，或者尝试用不同的方式提问。")
+            yield DoneChunk(confidence=0.0)
+            return
 
-            # Phase 3: Prepare context
-            yield ProgressChunk(message="正在准备上下文...")
-            context = self._format_context(relevant_docs)
+        # Phase 3: Prepare context
+        yield ProgressChunk(message="正在准备上下文...")
+        context = self._format_context(relevant_docs)
 
-            # Phase 4: Stream LLM response
-            yield ProgressChunk(message="正在生成回答...")
+        # Phase 4: Stream LLM response
+        yield ProgressChunk(message="正在生成回答...")
 
-            chain = self.prompt | self.streaming_llm
+        chain = self.prompt | self.streaming_llm
 
-            async for chunk in chain.astream({
-                "context": context,
-                "question": question
-            }):
-                if hasattr(chunk, 'content') and chunk.content:
-                    yield ContentChunk(content=chunk.content)
+        async for chunk in chain.astream({
+            "context": context,
+            "question": question
+        }):
+            if hasattr(chunk, 'content') and chunk.content:
+                yield ContentChunk(content=chunk.content)
 
-            # Phase 5: Send sources and finish
-            sources = self._format_sources(relevant_docs)
-            yield SourcesChunk(sources=sources)
+        # Phase 5: Send sources and finish
+        sources = self._format_sources(relevant_docs)
+        yield SourcesChunk(sources=sources)
 
-            # Calculate final confidence
-            avg_score = sum(doc.get('score', 0) for doc in relevant_docs) / len(relevant_docs)
-            confidence = min(avg_score * 2, 1.0)
+        # Calculate final confidence
+        avg_score = sum(doc.get('score', 0) for doc in relevant_docs) / len(relevant_docs)
+        confidence = min(avg_score * 2, 1.0)
 
-            yield DoneChunk(confidence=confidence)
+        yield DoneChunk(confidence=confidence)
 
-            logger.info(f"Successfully completed streaming query with {len(relevant_docs)} sources")
-
-        except Exception as e:
-            logger.error(f"Streaming query failed: {e}")
-            yield ErrorChunk(error=f"处理您的问题时出现错误：{str(e)}")
+        logger.info(f"Successfully completed streaming query with {len(relevant_docs)} sources")
 
     async def batch_query(self, questions: list[str], collection_name: str = "documents") -> list[QueryResult]:
         """Process multiple questions in batch"""
@@ -313,9 +288,6 @@ class QueryService:
 
     def close(self):
         """Close connections and cleanup resources"""
-        try:
-            if hasattr(self, 'chroma_manager'):
-                self.chroma_manager.close()
-            logger.info("QueryService resources closed")
-        except Exception as e:
-            logger.error(f"Error closing QueryService: {e}")
+        if hasattr(self, 'chroma_manager'):
+            self.chroma_manager.close()
+        logger.info("QueryService resources closed")

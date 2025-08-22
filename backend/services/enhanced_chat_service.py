@@ -102,10 +102,10 @@ class EnhancedChatService:
                 "analysis_method": "disabled"
             }
 
-        try:
-            # Use any collection's retrieval chain for intent analysis
-            if not self._retrieval_chains:
-                # Create a temporary chain for intent analysis
+        # Use any collection's retrieval chain for intent analysis
+        if not self._retrieval_chains:
+            # Create a temporary chain for intent analysis
+            try:
                 temp_chain = EnhancedRetrievalChain(
                     collection_name="temp",
                     enable_summary_overview=False,
@@ -113,21 +113,31 @@ class EnhancedChatService:
                 )
                 intent_analysis = await temp_chain.get_intent_analysis(message)
                 # Don't store this temp chain
-            else:
-                # Use an existing chain
-                chain = next(iter(self._retrieval_chains.values()))
+                return intent_analysis
+            except Exception as e:
+                # Only catch intent analysis specific errors, let system errors propagate
+                logger.warning(f"Intent analysis failed, using fallback: {e}")
+                return {
+                    "intent": QueryIntent.FACTUAL,
+                    "confidence": "low",
+                    "analysis_method": "fallback",
+                    "error": str(e)
+                }
+        else:
+            # Use an existing chain
+            chain = next(iter(self._retrieval_chains.values()))
+            try:
                 intent_analysis = await chain.get_intent_analysis(message)
-
-            return intent_analysis
-
-        except Exception as e:
-            logger.error(f"Intent analysis failed: {e}")
-            return {
-                "intent": QueryIntent.FACTUAL,
-                "confidence": "low",
-                "analysis_method": "fallback",
-                "error": str(e)
-            }
+                return intent_analysis
+            except Exception as e:
+                # Only catch intent analysis specific errors
+                logger.warning(f"Intent analysis failed, using fallback: {e}")
+                return {
+                    "intent": QueryIntent.FACTUAL,
+                    "confidence": "low",
+                    "analysis_method": "fallback",
+                    "error": str(e)
+                }
 
     async def _retrieve_enhanced_multi_collection(
         self,
@@ -155,80 +165,75 @@ class EnhancedChatService:
             "total_documents": 0
         }
 
-        try:
-            # Analyze intent if enabled
-            if self.enable_intent_analysis:
-                intent_analysis = await self.analyze_intent(query)
-                metadata["intent_analysis"] = intent_analysis
-                logger.info(f"Query intent: {intent_analysis.get('intent', {}).value if hasattr(intent_analysis.get('intent', {}), 'value') else 'unknown'}")
+        # Analyze intent if enabled
+        if self.enable_intent_analysis:
+            intent_analysis = await self.analyze_intent(query)
+            metadata["intent_analysis"] = intent_analysis
+            logger.info(f"Query intent: {intent_analysis.get('intent', {}).value if hasattr(intent_analysis.get('intent', {}), 'value') else 'unknown'}")
 
-            # Retrieve from each collection using enhanced chain
-            for collection_id in collection_ids:
-                try:
-                    chain = self._get_or_create_retrieval_chain(collection_id)
+        # Retrieve from each collection using enhanced chain
+        for collection_id in collection_ids:
+            try:
+                chain = self._get_or_create_retrieval_chain(collection_id)
 
-                    if retrieval_strategy == "auto":
-                        # Use enhanced query method (intent-aware)
-                        query_response = await chain.query(query, include_sources=True)
+                if retrieval_strategy == "auto":
+                    # Use enhanced query method (intent-aware)
+                    query_response = await chain.query(query, include_sources=True)
 
-                        # Extract documents from response
-                        if query_response and query_response.sources:
-                            for source in query_response.sources:
-                                doc = {
-                                    'content': source.get('content_preview', ''),
-                                    'source': source.get('source', 'Unknown'),
-                                    'document_id': source.get('document_id', ''),
-                                    'chunk_index': source.get('chunk_index', 0),
-                                    'score': source.get('score', 0.0),
-                                    'collection_id': collection_id,
-                                    'retrieval_method': 'enhanced_auto'
-                                }
-                                all_results.append(doc)
+                    # Extract documents from response
+                    if query_response and query_response.sources:
+                        for source in query_response.sources:
+                            doc = {
+                                'content': source.get('content_preview', ''),
+                                'source': source.get('source', 'Unknown'),
+                                'document_id': source.get('document_id', ''),
+                                'chunk_index': source.get('chunk_index', 0),
+                                'score': source.get('score', 0.0),
+                                'collection_id': collection_id,
+                                'retrieval_method': 'enhanced_auto'
+                            }
+                            all_results.append(doc)
 
-                    elif retrieval_strategy == "semantic" or retrieval_strategy == "hybrid":
-                        # Use base retrieval for non-auto strategies
-                        # Fall back to basic semantic search
-                        query_embedding = await self.base_service.embeddings.aembed_query(query)
+                elif retrieval_strategy == "semantic" or retrieval_strategy == "hybrid":
+                    # Use base retrieval for non-auto strategies
+                    # Fall back to basic semantic search
+                    query_embedding = await self.base_service.embeddings.aembed_query(query)
 
-                        results = await self.base_service.chroma_manager.search_similar(
-                            collection_name=collection_id,
-                            query_embedding=query_embedding,
-                            limit=5,
-                            score_threshold=0.3
-                        )
+                    results = await self.base_service.chroma_manager.search_similar(
+                        collection_name=collection_id,
+                        query_embedding=query_embedding,
+                        limit=5,
+                        score_threshold=0.3
+                    )
 
-                        for result in results:
-                            result['collection_id'] = collection_id
-                            result['retrieval_method'] = retrieval_strategy
+                    for result in results:
+                        result['collection_id'] = collection_id
+                        result['retrieval_method'] = retrieval_strategy
 
-                        all_results.extend(results)
+                    all_results.extend(results)
 
-                    # Check if cache was used
-                    if self.enable_cache and hasattr(chain, 'cache_manager') and chain.cache_manager:
-                        cache_stats = chain.get_cache_stats()
-                        if cache_stats and cache_stats.get('query_cache_hits', 0) > 0:
-                            metadata["cache_hits"] += 1
+                # Check if cache was used
+                if self.enable_cache and hasattr(chain, 'cache_manager') and chain.cache_manager:
+                    cache_stats = chain.get_cache_stats()
+                    if cache_stats and cache_stats.get('query_cache_hits', 0) > 0:
+                        metadata["cache_hits"] += 1
 
-                except Exception as e:
-                    logger.warning(f"Failed to search collection '{collection_id}': {e}")
-                    continue
+            except Exception as e:
+                logger.warning(f"Failed to search collection '{collection_id}': {e}")
+                continue
 
-            # Sort by relevance score
-            all_results.sort(key=lambda x: x.get('score', 0), reverse=True)
+        # Sort by relevance score
+        all_results.sort(key=lambda x: x.get('score', 0), reverse=True)
 
-            # Limit total results
-            max_results = 15 if metadata.get("intent_analysis", {}).get("intent") == QueryIntent.OVERVIEW else 10
-            all_results = all_results[:max_results]
+        # Limit total results
+        max_results = 15 if metadata.get("intent_analysis", {}).get("intent") == QueryIntent.OVERVIEW else 10
+        all_results = all_results[:max_results]
 
-            metadata["total_documents"] = len(all_results)
+        metadata["total_documents"] = len(all_results)
 
-            logger.info(f"Enhanced multi-collection retrieval completed: {len(all_results)} documents from {len(collection_ids)} collections")
+        logger.info(f"Enhanced multi-collection retrieval completed: {len(all_results)} documents from {len(collection_ids)} collections")
 
-            return all_results, metadata
-
-        except Exception as e:
-            logger.error(f"Enhanced multi-collection retrieval failed: {e}")
-            return [], metadata
+        return all_results, metadata
 
     async def send_enhanced_message(
         self,
@@ -249,83 +254,78 @@ class EnhancedChatService:
         Returns:
             Enhanced chat message response
         """
-        try:
-            # Get chat information
-            chat = await self.base_service.get_chat(chat_id)
-            if not chat:
-                logger.error(f"Chat '{chat_id}' not found")
-                return None
+        # Get chat information
+        chat = await self.base_service.get_chat(chat_id)
+        if not chat:
+            raise ValueError(f"Chat '{chat_id}' not found")
 
-            # Save user message
-            with get_db_session_context() as session:
-                message_repo = ChatMessageRepository(session)
-                message_repo.add_message(
-                    chat_id=chat_id,
-                    role="user",
-                    content=user_message
-                )
-
-            # Enhanced multi-collection retrieval
-            relevant_docs, retrieval_metadata = await self._retrieve_enhanced_multi_collection(
-                user_message,
-                chat.collection_ids,
-                retrieval_strategy
+        # Save user message
+        with get_db_session_context() as session:
+            message_repo = ChatMessageRepository(session)
+            message_repo.add_message(
+                chat_id=chat_id,
+                role="user",
+                content=user_message
             )
 
-            # If we have enhanced retrieval chains and auto strategy, use enhanced query
-            if (retrieval_strategy == "auto" and
-                chat.collection_ids and
-                len(relevant_docs) > 0):
+        # Enhanced multi-collection retrieval
+        relevant_docs, retrieval_metadata = await self._retrieve_enhanced_multi_collection(
+            user_message,
+            chat.collection_ids,
+            retrieval_strategy
+        )
 
-                # Use the first collection's enhanced chain for final response generation
-                primary_collection = chat.collection_ids[0]
-                chain = self._get_or_create_retrieval_chain(primary_collection)
+        # If we have enhanced retrieval chains and auto strategy, use enhanced query
+        if (retrieval_strategy == "auto" and
+            chat.collection_ids and
+            len(relevant_docs) > 0):
 
-                # Generate enhanced response
-                query_response = await chain.query(user_message, include_sources=include_sources)
+            # Use the first collection's enhanced chain for final response generation
+            primary_collection = chat.collection_ids[0]
+            chain = self._get_or_create_retrieval_chain(primary_collection)
 
-                if query_response:
-                    ai_response = query_response.answer
-                    sources = self.base_service._format_sources(relevant_docs)
-                    confidence = query_response.confidence
-                else:
-                    # Fallback to basic response generation
-                    ai_response, sources, confidence = await self._generate_basic_response(
-                        user_message, relevant_docs, chat_id
-                    )
+            # Generate enhanced response
+            query_response = await chain.query(user_message, include_sources=include_sources)
+
+            if query_response:
+                ai_response = query_response.answer
+                sources = self.base_service._format_sources(relevant_docs)
+                confidence = query_response.confidence
             else:
-                # Use basic response generation for non-auto strategies
+                # Fallback to basic response generation
                 ai_response, sources, confidence = await self._generate_basic_response(
                     user_message, relevant_docs, chat_id
                 )
+        else:
+            # Use basic response generation for non-auto strategies
+            ai_response, sources, confidence = await self._generate_basic_response(
+                user_message, relevant_docs, chat_id
+            )
 
-            # Save AI response with enhanced metadata
-            enhanced_metadata = {
-                "model": self.base_service.config.openai_chat_model,
-                "sources_count": len(sources),
-                "collections_searched": chat.collection_ids,
-                "retrieval_strategy": retrieval_strategy,
-                "confidence": confidence,
-                **retrieval_metadata
-            }
+        # Save AI response with enhanced metadata
+        enhanced_metadata = {
+            "model": self.base_service.config.openai_chat_model,
+            "sources_count": len(sources),
+            "collections_searched": chat.collection_ids,
+            "retrieval_strategy": retrieval_strategy,
+            "confidence": confidence,
+            **retrieval_metadata
+        }
 
-            with get_db_session_context() as session:
-                message_repo = ChatMessageRepository(session)
-                ai_msg = message_repo.add_message(
-                    chat_id=chat_id,
-                    role="assistant",
-                    content=ai_response,
-                    sources=json.dumps([source.dict() for source in sources]),
-                    metadata=json.dumps(enhanced_metadata)
-                )
+        with get_db_session_context() as session:
+            message_repo = ChatMessageRepository(session)
+            ai_msg = message_repo.add_message(
+                chat_id=chat_id,
+                role="assistant",
+                content=ai_response,
+                sources=json.dumps([source.dict() for source in sources]),
+                metadata=json.dumps(enhanced_metadata)
+            )
 
-            logger.info(f"Generated enhanced AI response for chat {chat_id} with {len(sources)} sources")
+        logger.info(f"Generated enhanced AI response for chat {chat_id} with {len(sources)} sources")
 
-            return self.base_service._to_message_response(ai_msg)
+        return self.base_service._to_message_response(ai_msg)
 
-        except Exception as e:
-            logger.error(f"Failed to send enhanced message in chat '{chat_id}': {e}")
-            return None
 
     async def _generate_basic_response(
         self,
@@ -403,113 +403,105 @@ class EnhancedChatService:
         Yields:
             SSE events for streaming response
         """
-        try:
-            # Get chat information
-            chat = await self.base_service.get_chat(chat_id)
-            if not chat:
-                yield {
-                    "event": "error",
-                    "data": json.dumps({"message": f"Chat '{chat_id}' not found"})
-                }
-                return
-
-            # Send initial status
+        # Get chat information
+        chat = await self.base_service.get_chat(chat_id)
+        if not chat:
             yield {
-                "event": "status",
-                "data": json.dumps({"status": "analyzing_intent"})
+                "event": "error",
+                "data": json.dumps({"message": f"Chat '{chat_id}' not found"})
+            }
+            return
+
+        # Send initial status
+        yield {
+            "event": "status",
+            "data": json.dumps({"status": "analyzing_intent"})
+        }
+
+        # Analyze intent
+        intent_analysis = None
+        if self.enable_intent_analysis:
+            intent_analysis = await self.analyze_intent(user_message)
+            yield {
+                "event": "intent_analysis",
+                "data": json.dumps(intent_analysis)
             }
 
-            # Analyze intent
-            intent_analysis = None
-            if self.enable_intent_analysis:
-                intent_analysis = await self.analyze_intent(user_message)
-                yield {
-                    "event": "intent_analysis",
-                    "data": json.dumps(intent_analysis)
-                }
-
-            # Save user message
-            with get_db_session_context() as session:
-                message_repo = ChatMessageRepository(session)
-                user_msg = message_repo.add_message(
-                    chat_id=chat_id,
-                    role="user",
-                    content=user_message
-                )
-
-            yield {
-                "event": "user_message",
-                "data": json.dumps({
-                    "message_id": user_msg.id,
-                    "content": user_message
-                })
-            }
-
-            # Enhanced retrieval
-            yield {
-                "event": "status",
-                "data": json.dumps({"status": "retrieving_documents_enhanced"})
-            }
-
-            relevant_docs, retrieval_metadata = await self._retrieve_enhanced_multi_collection(
-                user_message,
-                chat.collection_ids,
-                retrieval_strategy
+        # Save user message
+        with get_db_session_context() as session:
+            message_repo = ChatMessageRepository(session)
+            user_msg = message_repo.add_message(
+                chat_id=chat_id,
+                role="user",
+                content=user_message
             )
 
-            # Send sources and metadata
-            sources = self.base_service._format_sources(relevant_docs)
-            yield {
-                "event": "sources",
-                "data": json.dumps({
-                    "sources": [source.dict() for source in sources],
-                    "count": len(sources),
-                    "metadata": retrieval_metadata
-                })
-            }
+        yield {
+            "event": "user_message",
+            "data": json.dumps({
+                "message_id": user_msg.id,
+                "content": user_message
+            })
+        }
 
-            # Generate response
-            yield {
-                "event": "status",
-                "data": json.dumps({"status": "generating_enhanced_response"})
-            }
+        # Enhanced retrieval
+        yield {
+            "event": "status",
+            "data": json.dumps({"status": "retrieving_documents_enhanced"})
+        }
 
-            # Prepare streaming response
-            if (retrieval_strategy == "auto" and
-                chat.collection_ids and
-                len(relevant_docs) > 0):
+        relevant_docs, retrieval_metadata = await self._retrieve_enhanced_multi_collection(
+            user_message,
+            chat.collection_ids,
+            retrieval_strategy
+        )
 
-                # Use enhanced streaming if available
-                try:
-                    primary_collection = chat.collection_ids[0]
-                    chain = self._get_or_create_retrieval_chain(primary_collection)
+        # Send sources and metadata
+        sources = self.base_service._format_sources(relevant_docs)
+        yield {
+            "event": "sources",
+            "data": json.dumps({
+                "sources": [source.dict() for source in sources],
+                "count": len(sources),
+                "metadata": retrieval_metadata
+            })
+        }
 
-                    # Stream enhanced response (would need to implement streaming in EnhancedRetrievalChain)
-                    # For now, fall back to basic streaming
-                    async for event in self._stream_basic_response(
-                        user_message, relevant_docs, chat_id, sources, retrieval_metadata
-                    ):
-                        yield event
+        # Generate response
+        yield {
+            "event": "status",
+            "data": json.dumps({"status": "generating_enhanced_response"})
+        }
 
-                except Exception as e:
-                    logger.warning(f"Enhanced streaming failed, falling back to basic: {e}")
-                    async for event in self._stream_basic_response(
-                        user_message, relevant_docs, chat_id, sources, retrieval_metadata
-                    ):
-                        yield event
-            else:
-                # Basic streaming
+        # Prepare streaming response
+        if (retrieval_strategy == "auto" and
+            chat.collection_ids and
+            len(relevant_docs) > 0):
+
+            # Use enhanced streaming if available
+            try:
+                primary_collection = chat.collection_ids[0]
+                chain = self._get_or_create_retrieval_chain(primary_collection)
+
+                # Stream enhanced response (would need to implement streaming in EnhancedRetrievalChain)
+                # For now, fall back to basic streaming
                 async for event in self._stream_basic_response(
                     user_message, relevant_docs, chat_id, sources, retrieval_metadata
                 ):
                     yield event
 
-        except Exception as e:
-            logger.error(f"Enhanced streaming failed: {e}")
-            yield {
-                "event": "error",
-                "data": json.dumps({"message": f"Enhanced streaming failed: {str(e)}"})
-            }
+            except Exception as e:
+                logger.warning(f"Enhanced streaming failed, falling back to basic: {e}")
+                async for event in self._stream_basic_response(
+                    user_message, relevant_docs, chat_id, sources, retrieval_metadata
+                ):
+                    yield event
+        else:
+            # Basic streaming
+            async for event in self._stream_basic_response(
+                user_message, relevant_docs, chat_id, sources, retrieval_metadata
+            ):
+                yield event
 
     async def _stream_basic_response(
         self,
@@ -532,85 +524,77 @@ class EnhancedChatService:
         Yields:
             SSE events for streaming
         """
-        try:
-            # Prepare context
-            context = self.base_service._format_context(relevant_docs)
+        # Prepare context
+        context = self.base_service._format_context(relevant_docs)
 
-            # Get conversation history
-            with get_db_session_context() as session:
-                message_repo = ChatMessageRepository(session)
-                history = message_repo.get_conversation_history(chat_id, max_messages=10)
+        # Get conversation history
+        with get_db_session_context() as session:
+            message_repo = ChatMessageRepository(session)
+            history = message_repo.get_conversation_history(chat_id, max_messages=10)
 
-            conversation_context = ""
-            if len(history) > 1:
-                conversation_context = "\n对话历史:\n"
-                for msg in history[:-1]:
-                    conversation_context += f"{msg.role}: {msg.content}\n"
+        conversation_context = ""
+        if len(history) > 1:
+            conversation_context = "\n对话历史:\n"
+            for msg in history[:-1]:
+                conversation_context += f"{msg.role}: {msg.content}\n"
 
-            full_context = context
-            if conversation_context:
-                full_context = conversation_context + "\n\n当前文档上下文:\n" + context
+        full_context = context
+        if conversation_context:
+            full_context = conversation_context + "\n\n当前文档上下文:\n" + context
 
-            # Stream response
-            from rag.prompt_templates import get_rag_prompt
-            prompt = get_rag_prompt()
-            chain = prompt | self.base_service.llm
+        # Stream response
+        from rag.prompt_templates import get_rag_prompt
+        prompt = get_rag_prompt()
+        chain = prompt | self.base_service.llm
 
-            full_response = ""
-            async for chunk in chain.astream({
-                "context": full_context,
-                "question": user_message
-            }):
-                content = chunk.content if hasattr(chunk, 'content') else str(chunk)
-                if content:
-                    full_response += content
-                    yield {
-                        "event": "content",
-                        "data": json.dumps({"content": content})
-                    }
+        full_response = ""
+        async for chunk in chain.astream({
+            "context": full_context,
+            "question": user_message
+        }):
+            content = chunk.content if hasattr(chunk, 'content') else str(chunk)
+            if content:
+                full_response += content
+                yield {
+                    "event": "content",
+                    "data": json.dumps({"content": content})
+                }
 
-            # Calculate confidence
-            confidence = 0.0
-            if relevant_docs:
-                avg_score = sum(doc.get('score', 0) for doc in relevant_docs) / len(relevant_docs)
-                confidence = min(avg_score * 2, 0.9)
+        # Calculate confidence
+        confidence = 0.0
+        if relevant_docs:
+            avg_score = sum(doc.get('score', 0) for doc in relevant_docs) / len(relevant_docs)
+            confidence = min(avg_score * 2, 0.9)
 
-            # Save complete response
-            enhanced_metadata = {
-                "model": self.base_service.config.openai_chat_model,
+        # Save complete response
+        enhanced_metadata = {
+            "model": self.base_service.config.openai_chat_model,
+            "sources_count": len(sources),
+            "confidence": confidence,
+            **retrieval_metadata
+        }
+
+        with get_db_session_context() as session:
+            message_repo = ChatMessageRepository(session)
+            ai_msg = message_repo.add_message(
+                chat_id=chat_id,
+                role="assistant",
+                content=full_response,
+                sources=json.dumps([source.dict() for source in sources]),
+                metadata=json.dumps(enhanced_metadata)
+            )
+
+        # Send completion
+        yield {
+            "event": "done",
+            "data": json.dumps({
+                "message_id": ai_msg.id,
                 "sources_count": len(sources),
                 "confidence": confidence,
-                **retrieval_metadata
-            }
-
-            with get_db_session_context() as session:
-                message_repo = ChatMessageRepository(session)
-                ai_msg = message_repo.add_message(
-                    chat_id=chat_id,
-                    role="assistant",
-                    content=full_response,
-                    sources=json.dumps([source.dict() for source in sources]),
-                    metadata=json.dumps(enhanced_metadata)
-                )
-
-            # Send completion
-            yield {
-                "event": "done",
-                "data": json.dumps({
-                    "message_id": ai_msg.id,
-                    "sources_count": len(sources),
-                    "confidence": confidence,
-                    "total_content_length": len(full_response),
-                    "metadata": enhanced_metadata
-                })
-            }
-
-        except Exception as e:
-            logger.error(f"Basic streaming failed: {e}")
-            yield {
-                "event": "error",
-                "data": json.dumps({"message": f"Streaming failed: {str(e)}"})
-            }
+                "total_content_length": len(full_response),
+                "metadata": enhanced_metadata
+            })
+        }
 
     def get_cache_stats(self) -> Optional[dict[str, Any]]:
         """

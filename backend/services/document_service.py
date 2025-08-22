@@ -73,12 +73,8 @@ class DocumentService:
         self.chroma_manager = create_chroma_manager(self.config)
 
         # Initialize embeddings
-        try:
-            embeddings_kwargs = self.config.get_openai_embeddings_kwargs()
-            self.embeddings = OpenAIEmbeddings(**embeddings_kwargs)
-        except Exception as e:
-            logger.error(f"Failed to initialize embeddings: {e}")
-            self.embeddings = None
+        embeddings_kwargs = self.config.get_openai_embeddings_kwargs()
+        self.embeddings = OpenAIEmbeddings(**embeddings_kwargs)
 
         # Detect embedding dimension
         self.embedding_dimension = self._detect_embedding_dimension()
@@ -112,145 +108,108 @@ class DocumentService:
         status: Optional[str] = None
     ) -> ListDocumentsResponse:
         """List documents in a collection with pagination and filters"""
-        try:
-            with get_db_session_context() as session:
-                repo = DocumentRepository(session)
+        with get_db_session_context() as session:
+            repo = DocumentRepository(session)
 
-                # Calculate offset
-                offset = (page - 1) * page_size
+            # Calculate offset
+            offset = (page - 1) * page_size
 
-                # Get documents
-                documents = repo.get_by_collection(
-                    collection_id=collection_id,
-                    status=status,
-                    search=search,
-                    offset=offset,
-                    limit=page_size
-                )
+            # Get documents
+            documents = repo.get_by_collection(
+                collection_id=collection_id,
+                status=status,
+                search=search,
+                offset=offset,
+                limit=page_size
+            )
 
-                # Get total count
-                total = repo.count_by_collection(collection_id=collection_id, status=status)
+            # Get total count
+            total = repo.count_by_collection(collection_id=collection_id, status=status)
 
-                return ListDocumentsResponse(
-                    documents=[self._to_response(doc) for doc in documents],
-                    page=page,
-                    page_size=page_size,
-                    total=total
-                )
-
-        except Exception as e:
-            logger.error(f"Failed to list documents: {e}")
             return ListDocumentsResponse(
-                documents=[],
+                documents=[self._to_response(doc) for doc in documents],
                 page=page,
                 page_size=page_size,
-                total=0
+                total=total
             )
 
     async def get_document(self, collection_id: str, document_id: str) -> Optional[DocumentResponse]:
         """Get a specific document"""
-        try:
-            with get_db_session_context() as session:
-                repo = DocumentRepository(session)
-                document = repo.get_by_id(document_id)
+        with get_db_session_context() as session:
+            repo = DocumentRepository(session)
+            document = repo.get_by_id(document_id)
 
-                if not document or document.collection_id != collection_id:
-                    return None
+            if not document or document.collection_id != collection_id:
+                return None
 
-                return self._to_response(document)
-
-        except Exception as e:
-            logger.error(f"Failed to get document '{document_id}': {e}")
-            return None
+            return self._to_response(document)
 
     async def delete_document(self, collection_id: str, document_id: str) -> bool:
         """Delete a document and its associated chunks/vectors"""
-        try:
-            with get_db_session_context() as session:
-                doc_repo = DocumentRepository(session)
-                chunk_repo = DocumentChunkRepository(session)
+        with get_db_session_context() as session:
+            doc_repo = DocumentRepository(session)
+            chunk_repo = DocumentChunkRepository(session)
 
-                document = doc_repo.get_by_id(document_id)
-                if not document or document.collection_id != collection_id:
-                    return False
+            document = doc_repo.get_by_id(document_id)
+            if not document or document.collection_id != collection_id:
+                return False
 
-                # Get all chunks to get vector IDs
-                chunks = chunk_repo.get_by_document(document_id)
-                vector_ids = [chunk.vector_id for chunk in chunks]
+            # Get all chunks to get vector IDs
+            chunks = chunk_repo.get_by_document(document_id)
+            vector_ids = [chunk.vector_id for chunk in chunks]
 
-                # Delete vectors from ChromaDB
-                if vector_ids:
-                    try:
-                        await self.chroma_manager.delete_collection(collection_id)
-                        logger.info(f"Deleted {len(vector_ids)} vectors from ChromaDB")
-                    except Exception as e:
-                        logger.warning(f"Failed to delete vectors from ChromaDB: {e}")
+            # Delete vectors from ChromaDB
+            if vector_ids:
+                await self.chroma_manager.delete_collection(collection_id)
+                logger.info(f"Deleted {len(vector_ids)} vectors from ChromaDB")
 
-                # Delete document from database (cascade will handle chunks)
-                success = doc_repo.delete(document_id)
+            # Delete document from database (cascade will handle chunks)
+            success = doc_repo.delete(document_id)
 
-                if success:
-                    logger.info(f"Deleted document '{document_id}' and {len(vector_ids)} chunks")
+            if success:
+                logger.info(f"Deleted document '{document_id}' and {len(vector_ids)} chunks")
 
-                return success
-
-        except Exception as e:
-            logger.error(f"Failed to delete document '{document_id}': {e}")
-            return False
+            return success
 
     async def download_document(self, collection_id: str, document_id: str) -> Optional[FileResponse]:
         """Download a document file (only for file:// URIs)"""
-        try:
-            with get_db_session_context() as session:
-                repo = DocumentRepository(session)
-                document = repo.get_by_id(document_id)
+        with get_db_session_context() as session:
+            repo = DocumentRepository(session)
+            document = repo.get_by_id(document_id)
 
-                if not document or document.collection_id != collection_id:
-                    return None
+            if not document or document.collection_id != collection_id:
+                return None
 
-                # Check if it's a file URI
-                parsed_uri = urlparse(document.uri)
-                if parsed_uri.scheme != 'file':
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Document is not a local file and cannot be downloaded"
-                    )
-
-                # Get file path
-                file_path = parsed_uri.path
-                if not os.path.exists(file_path):
-                    raise HTTPException(
-                        status_code=404,
-                        detail="File not found on disk"
-                    )
-
-                # Return file response
-                return FileResponse(
-                    path=file_path,
-                    filename=document.name,
-                    media_type=document.mime_type or 'application/octet-stream'
+            # Check if it's a file URI
+            parsed_uri = urlparse(document.uri)
+            if parsed_uri.scheme != 'file':
+                raise HTTPException(
+                    status_code=400,
+                    detail="Document is not a local file and cannot be downloaded"
                 )
 
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(f"Failed to download document '{document_id}': {e}")
-            raise HTTPException(status_code=500, detail="Internal server error") from e
+            # Get file path
+            file_path = parsed_uri.path
+            if not os.path.exists(file_path):
+                raise HTTPException(
+                    status_code=404,
+                    detail="File not found on disk"
+                )
+
+            # Return file response
+            return FileResponse(
+                path=file_path,
+                filename=document.name,
+                media_type=document.mime_type or 'application/octet-stream'
+            )
 
     def _detect_embedding_dimension(self) -> int:
         """Detect the actual embedding dimension from the model"""
-        if not self.embeddings:
-            return 1536
-
-        try:
-            vec = self.embeddings.embed_query("ping")
-            dim = len(vec)
-            if dim <= 0:
-                raise ValueError("empty embedding vector")
-            return dim
-        except Exception as e:
-            logger.warning(f"Failed to detect embedding dimension, fallback to 1536: {e}")
-            return 1536
+        vec = self.embeddings.embed_query("ping")
+        dim = len(vec)
+        if dim <= 0:
+            raise ValueError("Empty embedding vector returned")
+        return dim
 
     async def _embed_texts_in_batches(self, texts: list[str],
                                     progress_callback: Optional[Callable] = None) -> list[list[float]]:
@@ -269,16 +228,11 @@ class DocumentService:
             end = min(start + max_batch, total)
             batch = texts[start:end]
 
-            try:
-                batch_embeddings = await self.embeddings.aembed_documents(batch)
-                embeddings.extend(batch_embeddings)
+            batch_embeddings = await self.embeddings.aembed_documents(batch)
+            embeddings.extend(batch_embeddings)
 
-                if progress_callback:
-                    progress_callback(f"Embedding batch {end}/{total}", end, total)
-
-            except Exception as e:
-                logger.error(f"Embedding batch failed [{start}:{end}]: {e}")
-                raise
+            if progress_callback:
+                progress_callback(f"Embedding batch {end}/{total}", end, total)
 
         return embeddings
 
@@ -287,22 +241,18 @@ class DocumentService:
         Ensure collection exists with correct dimensions.
         Returns error message if there's a dimension mismatch.
         """
-        try:
-            info = await self.chroma_manager.get_collection_info(collection_name)
-            if info and info.get("vector_size") and info["vector_size"] != self.embedding_dimension:
-                return (f"Collection '{collection_name}' exists with vector size {info['vector_size']} "
-                       f"but current model outputs {self.embedding_dimension} dimensions. "
-                       f"Please delete the collection or use a different name.")
+        info = await self.chroma_manager.get_collection_info(collection_name)
+        if info and info.get("vector_size") and info["vector_size"] != self.embedding_dimension:
+            raise ValueError(f"Collection '{collection_name}' exists with vector size {info['vector_size']} "
+                           f"but current model outputs {self.embedding_dimension} dimensions. "
+                           f"Please delete the collection or use a different name.")
 
-            # Create or ensure collection exists
-            await self.chroma_manager.ensure_collection(
-                collection_name,
-                vector_size=self.embedding_dimension
-            )
-            return None
-
-        except Exception as e:
-            return f"Failed to create/check collection: {e}"
+        # Create or ensure collection exists
+        await self.chroma_manager.ensure_collection(
+            collection_name,
+            vector_size=self.embedding_dimension
+        )
+        return None
 
     async def process_files(self, file_paths: list[str], collection_name: str = "documents",
                           progress_callback: Optional[Callable] = None) -> ProcessResult:
@@ -317,37 +267,51 @@ class DocumentService:
         Returns:
             ProcessResult with processing statistics
         """
-        try:
-            logger.info(f"Processing {len(file_paths)} file paths for collection '{collection_name}'")
+        logger.info(f"Processing {len(file_paths)} file paths for collection '{collection_name}'")
 
-            if progress_callback:
-                progress_callback("Checking collection...", 0, len(file_paths))
+        if progress_callback:
+            progress_callback("Checking collection...", 0, len(file_paths))
 
-            # Ensure collection exists with correct dimensions
-            error_msg = await self._ensure_collection_with_dimension(collection_name)
-            if error_msg:
-                return ProcessResult(
-                    success=False, collection_name=collection_name,
-                    processed_count=0, total_count=0, total_chunks=0,
-                    indexed_count=0, message=error_msg
-                )
+        # Ensure collection exists with correct dimensions
+        await self._ensure_collection_with_dimension(collection_name)
 
-            all_chunks = []
-            processed_files = 0
-            total_files = 0
+        all_chunks = []
+        processed_files = 0
+        total_files = 0
 
-            # Process each path
-            for file_path in file_paths:
-                path_obj = Path(file_path)
+        # Process each path
+        for file_path in file_paths:
+            path_obj = Path(file_path)
 
-                if path_obj.is_file():
-                    # Single file processing
-                    total_files += 1
-                    result = self.file_processor.process_file(str(path_obj))
+            if path_obj.is_file():
+                # Single file processing
+                total_files += 1
+                result = self.file_processor.process_file(str(path_obj))
 
+                if result.success:
+                    chunks = self.document_processor.process_file_content(
+                        file_path=str(path_obj),
+                        content=result.content,
+                        file_type=result.file_type
+                    )
+                    all_chunks.extend(chunks)
+                    processed_files += 1
+
+                    if progress_callback:
+                        progress_callback(f"Processed: {path_obj.name}",
+                                        processed_files, total_files)
+                else:
+                    logger.warning(f"Failed to process file {file_path}: {result.error}")
+
+            elif path_obj.is_dir():
+                # Folder processing
+                folder_results = list(self.file_processor.process_folder(str(path_obj)))
+                total_files += len(folder_results)
+
+                for result in folder_results:
                     if result.success:
                         chunks = self.document_processor.process_file_content(
-                            file_path=str(path_obj),
+                            file_path=result.file_path,
                             content=result.content,
                             file_type=result.file_type
                         )
@@ -355,76 +319,47 @@ class DocumentService:
                         processed_files += 1
 
                         if progress_callback:
-                            progress_callback(f"Processed: {path_obj.name}",
+                            progress_callback(f"Processed: {Path(result.file_path).name}",
                                             processed_files, total_files)
-                    else:
-                        logger.warning(f"Failed to process file {file_path}: {result.error}")
 
-                elif path_obj.is_dir():
-                    # Folder processing
-                    folder_results = list(self.file_processor.process_folder(str(path_obj)))
-                    total_files += len(folder_results)
-
-                    for result in folder_results:
-                        if result.success:
-                            chunks = self.document_processor.process_file_content(
-                                file_path=result.file_path,
-                                content=result.content,
-                                file_type=result.file_type
-                            )
-                            all_chunks.extend(chunks)
-                            processed_files += 1
-
-                            if progress_callback:
-                                progress_callback(f"Processed: {Path(result.file_path).name}",
-                                                processed_files, total_files)
-
-            if not all_chunks:
-                return ProcessResult(
-                    success=False, collection_name=collection_name,
-                    processed_count=processed_files, total_count=total_files,
-                    total_chunks=0, indexed_count=0,
-                    message="No content extracted from provided files"
-                )
-
-            # Generate embeddings
-            if progress_callback:
-                progress_callback("Generating embeddings...", processed_files, total_files)
-
-            texts = [chunk.content for chunk in all_chunks]
-            embeddings = await self._embed_texts_in_batches(texts, progress_callback)
-
-            # Index in vector store
-            if progress_callback:
-                progress_callback("Indexing documents...", processed_files, total_files)
-
-            index_result = await self.chroma_manager.index_documents(
-                collection_name=collection_name,
-                chunks=all_chunks,
-                embeddings=embeddings
-            )
-
-            if index_result["status"] == "success":
-                return ProcessResult(
-                    success=True, collection_name=collection_name,
-                    processed_count=processed_files, total_count=total_files,
-                    total_chunks=len(all_chunks),
-                    indexed_count=index_result["indexed_count"]
-                )
-            else:
-                return ProcessResult(
-                    success=False, collection_name=collection_name,
-                    processed_count=processed_files, total_count=total_files,
-                    total_chunks=len(all_chunks), indexed_count=0,
-                    message=f"Indexing failed: {index_result['message']}"
-                )
-
-        except Exception as e:
-            logger.error(f"File processing failed: {e}")
+        if not all_chunks:
             return ProcessResult(
                 success=False, collection_name=collection_name,
-                processed_count=0, total_count=0, total_chunks=0,
-                indexed_count=0, message=str(e)
+                processed_count=processed_files, total_count=total_files,
+                total_chunks=0, indexed_count=0,
+                message="No content extracted from provided files"
+            )
+
+        # Generate embeddings
+        if progress_callback:
+            progress_callback("Generating embeddings...", processed_files, total_files)
+
+        texts = [chunk.content for chunk in all_chunks]
+        embeddings = await self._embed_texts_in_batches(texts, progress_callback)
+
+        # Index in vector store
+        if progress_callback:
+            progress_callback("Indexing documents...", processed_files, total_files)
+
+        index_result = await self.chroma_manager.index_documents(
+            collection_name=collection_name,
+            chunks=all_chunks,
+            embeddings=embeddings
+        )
+
+        if index_result["status"] == "success":
+            return ProcessResult(
+                success=True, collection_name=collection_name,
+                processed_count=processed_files, total_count=total_files,
+                total_chunks=len(all_chunks),
+                indexed_count=index_result["indexed_count"]
+            )
+        else:
+            return ProcessResult(
+                success=False, collection_name=collection_name,
+                processed_count=processed_files, total_count=total_files,
+                total_chunks=len(all_chunks), indexed_count=0,
+                message=f"Indexing failed: {index_result['message']}"
             )
 
     async def crawl_website(self, url: str, collection_name: str = "website",
@@ -440,113 +375,93 @@ class DocumentService:
         Returns:
             CrawlResult with crawling statistics
         """
-        try:
-            logger.info(f"Starting website crawl for: {url}")
+        logger.info(f"Starting website crawl for: {url}")
 
+        if progress_callback:
+            progress_callback("Checking collection...", 0, 1)
+
+        # Ensure collection exists with correct dimensions
+        await self._ensure_collection_with_dimension(collection_name)
+
+        # Progress callback for crawling
+        def crawl_progress_callback(current_url: str, current: int, total: int):
             if progress_callback:
-                progress_callback("Checking collection...", 0, 1)
+                progress_callback(f"Crawling: {current_url}", current, max(total, current))
 
-            # Ensure collection exists with correct dimensions
-            error_msg = await self._ensure_collection_with_dimension(collection_name)
-            if error_msg:
-                return CrawlResult(
-                    success=False, collection_name=collection_name,
-                    crawled_pages=0, failed_pages=0, total_chunks=0,
-                    indexed_count=0, message=error_msg
-                )
+        # Crawl the website
+        crawl_results = self.web_crawler.crawl_domain(url, crawl_progress_callback)
+        successful_results = [r for r in crawl_results if r.success]
 
-            # Progress callback for crawling
-            def crawl_progress_callback(current_url: str, current: int, total: int):
-                if progress_callback:
-                    progress_callback(f"Crawling: {current_url}", current, max(total, current))
-
-            # Crawl the website
-            crawl_results = self.web_crawler.crawl_domain(url, crawl_progress_callback)
-            successful_results = [r for r in crawl_results if r.success]
-
-            if not successful_results:
-                return CrawlResult(
-                    success=False, collection_name=collection_name,
-                    crawled_pages=0, failed_pages=len(crawl_results),
-                    total_chunks=0, indexed_count=0,
-                    message="No pages were successfully crawled"
-                )
-
-            # Process crawled content
-            if progress_callback:
-                progress_callback("Processing crawled content...",
-                                len(successful_results), len(successful_results))
-
-            all_chunks = []
-            for result in successful_results:
-                chunks = self.document_processor.process_web_content(
-                    url=result.url,
-                    content=result.content,
-                    page_title=result.title
-                )
-                all_chunks.extend(chunks)
-
-            if not all_chunks:
-                return CrawlResult(
-                    success=False, collection_name=collection_name,
-                    crawled_pages=len(successful_results),
-                    failed_pages=len(crawl_results) - len(successful_results),
-                    total_chunks=0, indexed_count=0,
-                    message="No content extracted from crawled pages"
-                )
-
-            # Generate embeddings
-            if progress_callback:
-                progress_callback("Generating embeddings...",
-                                len(successful_results), len(successful_results))
-
-            texts = [chunk.content for chunk in all_chunks]
-            embeddings = await self._embed_texts_in_batches(texts, progress_callback)
-
-            # Index in vector store
-            if progress_callback:
-                progress_callback("Indexing documents...",
-                                len(successful_results), len(successful_results))
-
-            index_result = await self.chroma_manager.index_documents(
-                collection_name=collection_name,
-                chunks=all_chunks,
-                embeddings=embeddings
-            )
-
-            if index_result["status"] == "success":
-                stats = self.web_crawler.get_crawl_stats(crawl_results)
-
-                return CrawlResult(
-                    success=True, collection_name=collection_name,
-                    crawled_pages=len(successful_results),
-                    failed_pages=len(crawl_results) - len(successful_results),
-                    total_chunks=len(all_chunks),
-                    indexed_count=index_result["indexed_count"],
-                    stats=stats
-                )
-            else:
-                return CrawlResult(
-                    success=False, collection_name=collection_name,
-                    crawled_pages=len(successful_results),
-                    failed_pages=len(crawl_results) - len(successful_results),
-                    total_chunks=len(all_chunks), indexed_count=0,
-                    message=f"Indexing failed: {index_result['message']}"
-                )
-
-        except Exception as e:
-            logger.error(f"Website crawling failed: {e}")
+        if not successful_results:
             return CrawlResult(
                 success=False, collection_name=collection_name,
-                crawled_pages=0, failed_pages=0, total_chunks=0,
-                indexed_count=0, message=str(e)
+                crawled_pages=0, failed_pages=len(crawl_results),
+                total_chunks=0, indexed_count=0,
+                message="No pages were successfully crawled"
+            )
+
+        # Process crawled content
+        if progress_callback:
+            progress_callback("Processing crawled content...",
+                            len(successful_results), len(successful_results))
+
+        all_chunks = []
+        for result in successful_results:
+            chunks = self.document_processor.process_web_content(
+                url=result.url,
+                content=result.content,
+                page_title=result.title
+            )
+            all_chunks.extend(chunks)
+
+        if not all_chunks:
+            return CrawlResult(
+                success=False, collection_name=collection_name,
+                crawled_pages=len(successful_results),
+                failed_pages=len(crawl_results) - len(successful_results),
+                total_chunks=0, indexed_count=0,
+                message="No content extracted from crawled pages"
+            )
+
+        # Generate embeddings
+        if progress_callback:
+            progress_callback("Generating embeddings...",
+                            len(successful_results), len(successful_results))
+
+        texts = [chunk.content for chunk in all_chunks]
+        embeddings = await self._embed_texts_in_batches(texts, progress_callback)
+
+        # Index in vector store
+        if progress_callback:
+            progress_callback("Indexing documents...",
+                            len(successful_results), len(successful_results))
+
+        index_result = await self.chroma_manager.index_documents(
+            collection_name=collection_name,
+            chunks=all_chunks,
+            embeddings=embeddings
+        )
+
+        if index_result["status"] == "success":
+            stats = self.web_crawler.get_crawl_stats(crawl_results)
+
+            return CrawlResult(
+                success=True, collection_name=collection_name,
+                crawled_pages=len(successful_results),
+                failed_pages=len(crawl_results) - len(successful_results),
+                total_chunks=len(all_chunks),
+                indexed_count=index_result["indexed_count"],
+                stats=stats
+            )
+        else:
+            return CrawlResult(
+                success=False, collection_name=collection_name,
+                crawled_pages=len(successful_results),
+                failed_pages=len(crawl_results) - len(successful_results),
+                total_chunks=len(all_chunks), indexed_count=0,
+                message=f"Indexing failed: {index_result['message']}"
             )
 
     def close(self):
-        """Close connections and cleanup resources"""
-        try:
-            if hasattr(self, 'chroma_manager'):
-                self.chroma_manager.close()
-            logger.info("DocumentService resources closed")
-        except Exception as e:
-            logger.error(f"Error closing DocumentService: {e}")
+        self.chroma_manager.close()
+        logger.info("DocumentService resources closed")

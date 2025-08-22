@@ -83,95 +83,64 @@ class SettingsService:
 
     async def get_settings(self) -> SettingsResponse:
         """Get all settings with sensitive values masked"""
-        try:
-            with get_db_session_context() as session:
-                repo = SettingsRepository(session)
-                masked_settings = repo.get_masked_settings()
+        with get_db_session_context() as session:
+            repo = SettingsRepository(session)
+            masked_settings = repo.get_masked_settings()
 
-                return self._format_settings_for_api(masked_settings)
-
-        except Exception as e:
-            logger.error(f"Failed to get settings: {e}")
-            # Return default settings on error
-            return SettingsResponse(
-                llm={},
-                embedding={},
-                data_location="./data",
-                paths={},
-                crawler={},
-                text={}
-            )
+            return self._format_settings_for_api(masked_settings)
 
     async def update_settings(self, updates: dict[str, Any]) -> SettingsResponse:
         """Update settings with new values"""
-        try:
-            with get_db_session_context() as session:
-                repo = SettingsRepository(session)
+        with get_db_session_context() as session:
+            repo = SettingsRepository(session)
 
-                # Flatten updates to match database keys
-                flattened_updates = {}
+            # Flatten updates to match database keys
+            flattened_updates = {}
 
-                for category, settings in updates.items():
-                    if category == "data_location":
-                        # Special handling for data_location
-                        flattened_updates["paths.data_location"] = settings
-                    elif isinstance(settings, dict):
-                        # Category-based settings
-                        for key, value in settings.items():
-                            flattened_updates[f"{category}.{key}"] = value
-                    else:
-                        # Direct settings
-                        flattened_updates[category] = settings
+            for category, settings in updates.items():
+                if category == "data_location":
+                    # Special handling for data_location
+                    flattened_updates["paths.data_location"] = settings
+                elif isinstance(settings, dict):
+                    # Category-based settings
+                    for key, value in settings.items():
+                        flattened_updates[f"{category}.{key}"] = value
+                else:
+                    # Direct settings
+                    flattened_updates[category] = settings
 
-                # Update settings in database
-                repo.update_multiple(flattened_updates)
+            # Update settings in database
+            repo.update_multiple(flattened_updates)
 
-                # Get updated settings
-                masked_settings = repo.get_masked_settings()
+            # Get updated settings
+            masked_settings = repo.get_masked_settings()
 
-                # Update global config if available
-                self._update_global_config(flattened_updates)
+            # Update global config if available
+            self._update_global_config(flattened_updates)
 
-                logger.info(f"Updated {len(flattened_updates)} settings")
+            logger.info(f"Updated {len(flattened_updates)} settings")
 
-                return self._format_settings_for_api(masked_settings)
-
-        except Exception as e:
-            logger.error(f"Failed to update settings: {e}")
-            raise
+            return self._format_settings_for_api(masked_settings)
 
     def _update_global_config(self, updates: dict[str, Any]) -> None:
         """Update global config object with new settings"""
-        try:
-            # This would update the global config instance
-            # Implementation depends on how config is structured
-            logger.info("Global config update would be implemented here")
-        except Exception as e:
-            logger.warning(f"Failed to update global config: {e}")
+        # This would update the global config instance
+        # Implementation depends on how config is structured
+        logger.info("Global config update would be implemented here")
 
     async def get_setting_value(self, key: str, default: Any = None) -> Any:
         """Get a specific setting value"""
-        try:
-            with get_db_session_context() as session:
-                repo = SettingsRepository(session)
-                return repo.get_value(key, default)
-
-        except Exception as e:
-            logger.error(f"Failed to get setting '{key}': {e}")
-            return default
+        with get_db_session_context() as session:
+            repo = SettingsRepository(session)
+            return repo.get_value(key, default)
 
     async def set_setting_value(self, key: str, value: Any, value_type: str = "string") -> bool:
         """Set a specific setting value"""
-        try:
-            with get_db_session_context() as session:
-                repo = SettingsRepository(session)
-                repo.set_value(key, value, value_type)
-                logger.info(f"Set setting '{key}' = '{value}'")
-                return True
-
-        except Exception as e:
-            logger.error(f"Failed to set setting '{key}': {e}")
-            return False
+        with get_db_session_context() as session:
+            repo = SettingsRepository(session)
+            repo.set_value(key, value, value_type)
+            logger.info(f"Set setting '{key}' = '{value}'")
+            return True
 
     def close(self):
         """Close connections and cleanup resources"""
