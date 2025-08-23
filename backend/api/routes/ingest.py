@@ -87,41 +87,34 @@ async def ingest_urls(
     Returns:
         Task information for tracking progress
     """
-    try:
-        # Validate collection exists
-        app_state = get_app_state(request)
+    # Validate collection exists
+    app_state = get_app_state(request)
 
-        collection_service = app_state.collection_service
-        collection = await collection_service.get_collection(collection_id)
+    collection_service = app_state.collection_service
+    collection = await collection_service.get_collection(collection_id)
 
-        if not collection:
-            raise_not_found(f"Collection '{collection_id}' not found")
+    if not collection:
+        raise_not_found(f"Collection '{collection_id}' not found")
 
-        # Validate URLs list
-        if not request_data.urls:
-            raise_bad_request("URLs list cannot be empty")
+    # Validate URLs list
+    if not request_data.urls:
+        raise_bad_request("URLs list cannot be empty")
 
-        # Create task
-        app_state = get_app_state(request)
+    # Create task
+    task_service = app_state.task_service
+    task = await task_service.create_task(
+        task_type="ingest_urls",
+        collection_id=collection_id,
+        input_params={
+            "urls": request_data.urls,
+            "max_depth": request_data.max_depth,
+            "override": request_data.override
+        }
+    )
 
-        task_service = app_state.task_service
-        task = await task_service.create_task(
-            task_type="ingest_urls",
-            collection_id=collection_id,
-            input_params={
-                "urls": request_data.urls,
-                "max_depth": request_data.max_depth,
-                "override": request_data.override
-            }
-        )
+    logger.info(f"Created URL ingestion task {task.task_id} for collection {collection_id}")
 
-        logger.info(f"Created URL ingestion task {task.task_id} for collection {collection_id}")
-
-        return success_response(data={
-            "task_id": task.task_id,
-            "status": task.status
-        })
-
-    except Exception as e:
-        logger.error(f"Failed to start URL ingestion: {e}")
-        raise_internal_error(f"Failed to start URL ingestion: {str(e)}")
+    return success_response(data={
+        "task_id": task.task_id,
+        "status": task.status
+    })
