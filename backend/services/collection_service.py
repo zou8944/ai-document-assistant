@@ -5,7 +5,6 @@ Collection management service.
 import logging
 from typing import Optional
 
-from database.connection import get_db_session_context
 from models.database.collection import Collection
 from models.responses import CollectionResponse
 from repository.collection import CollectionRepository
@@ -24,6 +23,8 @@ class CollectionService:
         self.config = config or get_config()
         self.chroma_manager = create_chroma_manager(self.config)
 
+        self.collection_repo = CollectionRepository()
+
         logger.info("CollectionService initialized successfully")
 
     def _to_response(self, collection: Collection) -> CollectionResponse:
@@ -40,95 +41,73 @@ class CollectionService:
 
     async def create_collection(self, collection_id: str, name: str, description: str = "") -> Optional[CollectionResponse]:
         """Create a new collection"""
-        with get_db_session_context() as session:
-            repo = CollectionRepository(session)
 
-            # Check if collection already exists
-            existing = repo.get_by_id(collection_id)
-            if existing:
-                logger.warning(f"Collection with id '{collection_id}' already exists")
-                return None
+        # Check if collection already exists
+        existing = self.collection_repo.get_by_id(collection_id)
+        if existing:
+            logger.warning(f"Collection with id '{collection_id}' already exists")
+            return None
 
-            # Create new collection
-            collection = Collection(
-                id=collection_id,
-                name=name,
-                description=description
-            )
+        # Create new collection
+        collection = Collection(
+            id=collection_id,
+            name=name,
+            description=description
+        )
 
-            created_collection = repo.create_by_model(collection)
+        created_collection = self.collection_repo.create_by_model(collection)
 
-            # Create ChromaDB collection
-            await self.chroma_manager.ensure_collection(collection_id)
+        # Create ChromaDB collection
+        await self.chroma_manager.ensure_collection(collection_id)
 
-            logger.info(f"Created collection '{collection_id}' with name '{name}'")
-            return self._to_response(created_collection)
+        logger.info(f"Created collection '{collection_id}' with name '{name}'")
+        return self._to_response(created_collection)
 
     async def list_collections(self, search: Optional[str] = None) -> list[CollectionResponse]:
         """List all collections with optional search"""
-        with get_db_session_context() as session:
-            repo = CollectionRepository(session)
-            collections = repo.get_all_ordered(search=search)
+        collections = self.collection_repo.get_all_ordered(search=search)
 
-            # Update stats for each collection
-            for collection in collections:
-                repo.update_stats(collection.id)
+        # Update stats for each collection
+        for collection in collections:
+            self.collection_repo.update_stats(collection.id)
 
-            return [self._to_response(c) for c in collections]
+        return [self._to_response(c) for c in collections]
 
     async def get_collection(self, collection_id: str) -> Optional[CollectionResponse]:
         """Get collection by ID with updated stats"""
-        with get_db_session_context() as session:
-            repo = CollectionRepository(session)
-            collection = repo.get_with_stats(collection_id)
+        collection = self.collection_repo.get_with_stats(collection_id)
 
-            if not collection:
-                return None
+        if not collection:
+            return None
 
-            return self._to_response(collection)
+        return self._to_response(collection)
 
     async def update_collection(self, collection_id: str, name: Optional[str] = None, description: Optional[str] = None) -> Optional[CollectionResponse]:
         """Update collection"""
-        with get_db_session_context() as session:
-            repo = CollectionRepository(session)
-            collection = repo.get_by_id(collection_id)
+        updated_collection = self.collection_repo.update_by_model(Collection(
+            id=collection_id,
+            name=name,
+            description=description
+        ))
+        logger.info(f"Updated collection '{collection_id}'")
 
-            if not collection:
-                return None
-
-            # Update fields
-            if name is not None:
-                collection.name = name
-            if description is not None:
-                collection.description = description
-
-            updated_collection = repo.update_by_model(collection)
-            logger.info(f"Updated collection '{collection_id}'")
-
-            assert updated_collection is not None
-            return self._to_response(updated_collection)
+        assert updated_collection is not None
+        return self._to_response(updated_collection)
 
     async def delete_collection(self, collection_id: str):
         """Delete a collection"""
-        with get_db_session_context() as session:
-            repo = CollectionRepository(session)
-            collection = repo.get_by_id(collection_id)
+        # Delete from ChromaDB first
+        chroma_success = await self.chroma_manager.delete_collection(collection_id)
+        if not chroma_success:
+            logger.warning(f"Failed to delete ChromaDB collection '{collection_id}', but continuing with database deletion")
 
-            if not collection:
-                return False
+        # Delete from database (cascade will handle related records)
+        success = self.collection_repo.delete(collection_id)
 
-            # Delete from ChromaDB first
-            chroma_success = await self.chroma_manager.delete_collection(collection_id)
-            if not chroma_success:
-                logger.warning(f"Failed to delete ChromaDB collection '{collection_id}', but continuing with database deletion")
+        if success:
+            logger.info(f"Deleted collection '{collection_id}'")
 
-            # Delete from database (cascade will handle related records)
-            success = repo.delete(collection_id)
-
-            if success:
-                logger.info(f"Deleted collection '{collection_id}'")
-
-            return True
+        return True
 
     def close(self):
         """Close connections and cleanup resources"""

@@ -4,8 +4,8 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
 
+from database.connection import session_context
 from models.database.task import Task, TaskLog
 from repository.base import BaseRepository
 
@@ -13,140 +13,80 @@ from repository.base import BaseRepository
 class TaskRepository(BaseRepository[Task]):
     """Repository for Task operations."""
 
-    def __init__(self, session: Session):
-        super().__init__(Task, session)
+    def __init__(self):
+        super().__init__(Task)
 
     def get_by_status(self, status: str) -> list[Task]:
-        """
-        Get tasks by status.
-
-        Args:
-            status: Task status
-
-        Returns:
-            list of tasks with given status
-        """
-        return list(self.session.scalars(
-            select(Task)
-            .where(Task.status == status)
-            .order_by(Task.created_at.desc())
-        ))
+        with session_context() as session:
+            return list(session.scalars(
+                select(Task)
+                .where(Task.status == status)
+                .order_by(Task.created_at.desc())
+            ))
 
     def get_by_collection(self, collection_id: str) -> list[Task]:
-        """
-        Get tasks by collection ID.
-
-        Args:
-            collection_id: Collection ID
-
-        Returns:
-            list of tasks for the collection
-        """
-        return list(self.session.scalars(
-            select(Task)
-            .where(Task.collection_id == collection_id)
-            .order_by(Task.created_at.desc())
-        ))
+        with session_context() as session:
+            return list(session.scalars(
+                select(Task)
+                .where(Task.collection_id == collection_id)
+                .order_by(Task.created_at.desc())
+            ))
 
     def get_by_type_and_status(self, task_type: str, status: str) -> list[Task]:
-        """
-        Get tasks by type and status.
-
-        Args:
-            task_type: Task type
-            status: Task status
-
-        Returns:
-            list of matching tasks
-        """
-        return list(self.session.scalars(
-            select(Task).where(
-                Task.type == task_type,
-                Task.status == status
-            ).order_by(Task.created_at.desc())
-        ))
+        with session_context() as session:
+            return list(session.scalars(
+                select(Task).where(
+                    Task.type == task_type,
+                    Task.status == status
+                ).order_by(Task.created_at.desc())
+            ))
 
     def update_progress(self, task_id: str, progress: int, stats: Optional[str] = None) -> bool:
-        """
-        Update task progress.
+        with session_context() as session:
+            task = session.get(Task, task_id)
+            if not task:
+                return False
 
-        Args:
-            task_id: Task ID
-            progress: Progress percentage (0-100)
-            stats: Optional stats JSON string
-
-        Returns:
-            True if updated, False if task not found
-        """
-        task = self.get_by_id(task_id)
-        if not task:
-            return False
-
-        task.progress_percentage = progress
-        if stats is not None:
-            task.stats = stats
-
-        self.session.commit()
-        return True
+            task.progress_percentage = progress
+            if stats is not None:
+                task.stats = stats
+            session.flush()
+            return True
 
     def mark_started(self, task_id: str) -> bool:
-        """
-        Mark task as started.
+        with session_context() as session:
+            task = session.get(Task, task_id)
+            if not task:
+                return False
 
-        Args:
-            task_id: Task ID
-
-        Returns:
-            True if updated, False if task not found
-        """
-        task = self.get_by_id(task_id)
-        if not task:
-            return False
-
-        task.status = "processing"
-        task.started_at = datetime.utcnow()
-
-        self.session.commit()
-        return True
+            task.status = "processing"
+            task.started_at = datetime.utcnow()
+            session.flush()
+            return True
 
     def mark_completed(self, task_id: str, success: bool, error_message: Optional[str] = None) -> bool:
-        """
-        Mark task as completed.
+        with session_context() as session:
+            task = session.get(Task, task_id)
+            if not task:
+                return False
 
-        Args:
-            task_id: Task ID
-            success: Whether task succeeded
-            error_message: Error message if failed
+            task.status = "success" if success else "failed"
+            task.completed_at = datetime.utcnow()
+            task.progress_percentage = 100 if success else task.progress_percentage
 
-        Returns:
-            True if updated, False if task not found
-        """
-        task = self.get_by_id(task_id)
-        if not task:
-            return False
+            if error_message:
+                task.error_message = error_message
 
-        task.status = "success" if success else "failed"
-        task.completed_at = datetime.utcnow()
-        task.progress_percentage = 100 if success else task.progress_percentage
-
-        if error_message:
-            task.error_message = error_message
-
-        self.session.commit()
-        return True
+            session.flush()
+            return True
 
     def get_active_tasks(self) -> list[Task]:
-        """
-        Get all active (pending/processing) tasks.
-
-        Returns:
-            list of active tasks
-        """
-        return list(self.session.scalars(
-            select(Task).where(
-                Task.status.in_(["pending", "processing"])
-            ).order_by(Task.created_at.desc())
-        ))
+        with session_context() as session:
+            return list(session.scalars(
+                select(Task).where(
+                    Task.status.in_(["pending", "processing"])
+                ).order_by(Task.created_at.desc())
+            ))
 
     def list_tasks_with_filters(
         self,
@@ -156,31 +96,19 @@ class TaskRepository(BaseRepository[Task]):
         offset: int = 0,
         limit: int = 50
     ) -> list[Task]:
-        """
-        List tasks with optional filtering and pagination.
+        with session_context() as session:
+            query = select(Task)
 
-        Args:
-            status: Optional status filter
-            task_type: Optional type filter
-            collection_id: Optional collection filter
-            offset: Offset for pagination
-            limit: Limit for pagination
+            if status:
+                query = query.where(Task.status == status)
+            if task_type:
+                query = query.where(Task.type == task_type)
+            if collection_id:
+                query = query.where(Task.collection_id == collection_id)
 
-        Returns:
-            list of filtered tasks
-        """
-        query = select(Task)
+            query = query.order_by(Task.created_at.desc()).offset(offset).limit(limit)
 
-        if status:
-            query = query.where(Task.status == status)
-        if task_type:
-            query = query.where(Task.type == task_type)
-        if collection_id:
-            query = query.where(Task.collection_id == collection_id)
-
-        query = query.order_by(Task.created_at.desc()).offset(offset).limit(limit)
-
-        return list(self.session.scalars(query))
+            return list(session.scalars(query))
 
     def count_tasks_with_filters(
         self,
@@ -188,34 +116,24 @@ class TaskRepository(BaseRepository[Task]):
         task_type: Optional[str] = None,
         collection_id: Optional[str] = None
     ) -> int:
-        """
-        Count tasks with optional filtering.
+        with session_context() as session:
+            query = select(func.count(Task.id))
 
-        Args:
-            status: Optional status filter
-            task_type: Optional type filter
-            collection_id: Optional collection filter
+            if status:
+                query = query.where(Task.status == status)
+            if task_type:
+                query = query.where(Task.type == task_type)
+            if collection_id:
+                query = query.where(Task.collection_id == collection_id)
 
-        Returns:
-            Task count
-        """
-        query = select(func.count(Task.id))
-
-        if status:
-            query = query.where(Task.status == status)
-        if task_type:
-            query = query.where(Task.type == task_type)
-        if collection_id:
-            query = query.where(Task.collection_id == collection_id)
-
-        return self.session.scalar(query) or 0
+            return session.scalar(query) or 0
 
 
 class TaskLogRepository(BaseRepository[TaskLog]):
     """Repository for TaskLog operations."""
 
-    def __init__(self, session: Session):
-        super().__init__(TaskLog, session)
+    def __init__(self):
+        super().__init__(TaskLog)
 
     def get_by_task(
         self,
@@ -224,29 +142,18 @@ class TaskLogRepository(BaseRepository[TaskLog]):
         offset: int = 0,
         limit: Optional[int] = None
     ) -> list[TaskLog]:
-        """
-        Get logs by task ID.
+        with session_context() as session:
+            query = select(TaskLog).where(TaskLog.task_id == task_id)
 
-        Args:
-            task_id: Task ID
-            level: Optional log level filter
-            offset: Offset for pagination
-            limit: Limit for pagination
+            if level:
+                query = query.where(TaskLog.level == level)
 
-        Returns:
-            list of task logs
-        """
-        query = select(TaskLog).where(TaskLog.task_id == task_id)
+            query = query.order_by(TaskLog.timestamp.desc()).offset(offset)
 
-        if level:
-            query = query.where(TaskLog.level == level)
+            if limit:
+                query = query.limit(limit)
 
-        query = query.order_by(TaskLog.timestamp.desc()).offset(offset)
-
-        if limit:
-            query = query.limit(limit)
-
-        return list(self.session.scalars(query))
+            return list(session.scalars(query))
 
     def add_log(
         self,
@@ -255,67 +162,38 @@ class TaskLogRepository(BaseRepository[TaskLog]):
         message: str,
         details: Optional[str] = None
     ) -> TaskLog:
-        """
-        Add a log entry.
-
-        Args:
-            task_id: Task ID
-            level: Log level
-            message: Log message
-            details: Optional details JSON
-
-        Returns:
-            Created task log
-        """
-        log = TaskLog(
-            task_id=task_id,
-            level=level,
-            message=message,
-            details=details or "{}"
+        with session_context() as session:
+            log = TaskLog(
+                task_id=task_id,
+                level=level,
+                message=message,
+                details=details or "{}"
         )
 
-        self.session.add(log)
-        self.session.commit()
-        self.session.refresh(log)
+            session.add(log)
+            session.flush()  # To get ID populated
+            session.refresh(log)
 
-        return log
+            return log
 
     def count_by_task(self, task_id: str, level: Optional[str] = None) -> int:
-        """
-        Count logs by task.
+        with session_context() as session:
+            query = select(func.count(TaskLog.id)).where(TaskLog.task_id == task_id)
 
-        Args:
-            task_id: Task ID
-            level: Optional log level filter
+            if level:
+                query = query.where(TaskLog.level == level)
 
-        Returns:
-            Log count
-        """
-        query = select(func.count(TaskLog.id)).where(TaskLog.task_id == task_id)
-
-        if level:
-            query = query.where(TaskLog.level == level)
-
-        return self.session.scalar(query) or 0
+            return session.scalar(query) or 0
 
     def delete_old_logs(self, days: int = 30) -> int:
-        """
-        Delete logs older than specified days.
-
-        Args:
-            days: Number of days to keep logs
-
-        Returns:
-            Number of deleted logs
-        """
         from datetime import timedelta
 
         from sqlalchemy import delete
 
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        with session_context() as session:
+            cutoff_date = datetime.utcnow() - timedelta(days=days)
 
-        stmt = delete(TaskLog).where(TaskLog.timestamp < cutoff_date)
-        result = self.session.execute(stmt)
-        self.session.commit()
+            stmt = delete(TaskLog).where(TaskLog.timestamp < cutoff_date)
+            result = session.execute(stmt)
 
         return result.rowcount or 0

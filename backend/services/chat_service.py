@@ -8,7 +8,6 @@ from typing import Any, Optional
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-from database.connection import get_db_session_context
 from models.database.chat import Chat, ChatMessage
 from models.responses import ChatMessageResponse, ChatResponse, SourceReference
 from repository.chat import ChatMessageRepository, ChatRepository
@@ -25,6 +24,10 @@ class ChatService:
         from config import get_config
 
         self.config = config or get_config()
+
+        # Initialize repository instance
+        self.chat_repo = ChatRepository()
+        self.chat_message_repo = ChatMessageRepository()
 
         # Initialize components that will be reused
         self.chroma_manager = create_chroma_manager(self.config)
@@ -58,7 +61,7 @@ class ChatService:
         """Convert ChatMessage model to response model"""
         try:
             sources = json.loads(message.sources) if message.sources else []
-            metadata = json.loads(message.metadata) if message.metadata else {}
+            metadata = json.loads(message.metadata) if message.metadata else {}  # type: ignore
         except json.JSONDecodeError:
             sources = []
             metadata = {}
@@ -75,38 +78,31 @@ class ChatService:
 
     async def create_chat(self, name: str, collection_ids: list[str]) -> Optional[ChatResponse]:
         """Create a new chat"""
-        with get_db_session_context() as session:
-            repo = ChatRepository(session)
+        chat = Chat(
+            name=name,
+            collection_ids=json.dumps(collection_ids),
+            message_count=0
+        )
 
-            chat = Chat(
-                name=name,
-                collection_ids=json.dumps(collection_ids),
-                message_count=0
-            )
+        created_chat = self.chat_repo.create_by_model(chat)
+        logger.info(f"Created chat {created_chat.id} with name '{name}'")
 
-            created_chat = repo.create_by_model(chat)
-            logger.info(f"Created chat {created_chat.id} with name '{name}'")
-
-            return self._to_chat_response(created_chat)
+        return self._to_chat_response(created_chat)
 
     async def get_chat(self, chat_id: str) -> Optional[ChatResponse]:
         """Get chat by ID"""
-        with get_db_session_context() as session:
-            repo = ChatRepository(session)
-            chat = repo.get_by_id(chat_id)
+        chat = self.chat_repo.get_by_id(chat_id)
 
-            if not chat:
-                return None
+        if not chat:
+            return None
 
-            return self._to_chat_response(chat)
+        return self._to_chat_response(chat)
 
     async def list_chats(self, offset: int = 0, limit: int = 50) -> list[ChatResponse]:
         """List chats with pagination"""
-        with get_db_session_context() as session:
-            repo = ChatRepository(session)
-            chats = repo.get_all_ordered(offset=offset, limit=limit)
+        chats = self.chat_repo.get_all_ordered(offset=offset, limit=limit)
 
-            return [self._to_chat_response(chat) for chat in chats]
+        return [self._to_chat_response(chat) for chat in chats]
 
     async def update_chat(
         self,
@@ -115,39 +111,21 @@ class ChatService:
         collection_ids: Optional[list[str]] = None
     ) -> Optional[ChatResponse]:
         """Update chat information"""
-        with get_db_session_context() as session:
-            repo = ChatRepository(session)
-            chat = repo.get_by_id(chat_id)
+        updated_model = self.chat_repo.update_by_model(Chat(
+            id=chat_id,
+            name=name,
+            collection_ids=json.dumps(collection_ids) if collection_ids else None
+        ))
+        if not updated_model:
+            return None
 
-            if not chat:
-                return None
-
-            if name is not None:
-                chat.name = name
-            if collection_ids is not None:
-                chat.collection_ids = json.dumps(collection_ids)
-
-            session.commit()
-            logger.info(f"Updated chat {chat_id}")
-
-            return self._to_chat_response(chat)
+        return self._to_chat_response(updated_model)
 
     async def delete_chat(self, chat_id: str) -> bool:
         """Delete chat and all its messages"""
-        with get_db_session_context() as session:
-            chat_repo = ChatRepository(session)
-            message_repo = ChatMessageRepository(session)
-
-            # Delete all messages first
-            message_repo.delete_by_chat(chat_id)
-
-            # Delete chat
-            success = chat_repo.delete(chat_id)
-
-            if success:
-                logger.info(f"Deleted chat {chat_id}")
-
-            return success
+        self.chat_message_repo.delete_by_chat(chat_id)
+        success = self.chat_repo.delete(chat_id)
+        return success
 
     async def get_chat_messages(
         self,
@@ -156,11 +134,8 @@ class ChatService:
         limit: int = 50
     ) -> list[ChatMessageResponse]:
         """Get messages for a chat"""
-        with get_db_session_context() as session:
-            repo = ChatMessageRepository(session)
-            messages = repo.get_by_chat(chat_id, offset=offset, limit=limit)
-
-            return [self._to_message_response(message) for message in messages]
+        messages = self.chat_message_repo.get_by_chat(chat_id, offset=offset, limit=limit)
+        return [self._to_message_response(message) for message in messages]
 
     async def _retrieve_from_multiple_collections(
         self,
@@ -242,14 +217,11 @@ class ChatService:
             raise ValueError(f"Chat '{chat_id}' not found")
 
         # Save user message
-        with get_db_session_context() as session:
-            message_repo = ChatMessageRepository(session)
-
-            message_repo.add_message(
-                chat_id=chat_id,
-                role="user",
-                content=user_message
-            )
+        self.chat_message_repo.add_message(
+            chat_id=chat_id,
+            role="user",
+            content=user_message
+        )
 
         # Retrieve relevant documents from multiple collections
         relevant_docs = await self._retrieve_from_multiple_collections(
@@ -263,9 +235,7 @@ class ChatService:
         sources = self._format_sources(relevant_docs)
 
         # Get conversation history for context
-        with get_db_session_context() as session:
-            message_repo = ChatMessageRepository(session)
-            history = message_repo.get_conversation_history(chat_id, max_messages=10)
+        history = self.chat_message_repo.get_conversation_history(chat_id, max_messages=10)
 
         # Format conversation history
         conversation_context = ""
@@ -294,20 +264,17 @@ class ChatService:
         })
 
         # Save AI response with sources
-        with get_db_session_context() as session:
-            message_repo = ChatMessageRepository(session)
-
-            ai_msg = message_repo.add_message(
-                chat_id=chat_id,
-                role="assistant",
-                content=ai_response,
-                sources=json.dumps([source.dict() for source in sources]),
-                metadata=json.dumps({
-                    "model": self.config.openai_chat_model,
-                    "sources_count": len(sources),
-                    "collections_searched": chat.collection_ids
-                })
-            )
+        ai_msg = self.chat_message_repo.add_message(
+            chat_id=chat_id,
+            role="assistant",
+            content=ai_response,
+            sources=json.dumps([source.dict() for source in sources]),
+            metadata=json.dumps({
+                "model": self.config.openai_chat_model,
+                "sources_count": len(sources),
+                "collections_searched": chat.collection_ids
+            })
+        )
 
         logger.info(f"Generated AI response for chat {chat_id} with {len(sources)} sources")
 

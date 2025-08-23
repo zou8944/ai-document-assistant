@@ -4,6 +4,7 @@ Lightweight solution for basic document crawling with domain restrictions.
 """
 
 import logging
+import os
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
@@ -36,8 +37,9 @@ class SimpleWebCrawler:
     Fast and lightweight for basic document crawling needs.
     """
 
-    def __init__(self, max_depth: int = 3, delay: float = 1.0, max_pages: int = 50):
+    def __init__(self, cache_dir: str, max_depth: int = 3, delay: float = 1.0, max_pages: int = 50):
         """Initialize crawler with basic settings"""
+        self.cache_dir = cache_dir
         self.max_depth = max_depth
         self.delay = max(delay, 1.0)
         self.max_pages = max_pages
@@ -131,21 +133,44 @@ class SimpleWebCrawler:
 
         return title, markdown_content, links
 
-    def _fetch_page(self, url: str) -> SimpleCrawlResult:
-        """Fetch and process a single page"""
-        response = self.session.get(url, timeout=30)
-        response.raise_for_status()
+    def _fetch_page_with_cache(self, url: str, force_crawl: bool) -> SimpleCrawlResult:
+        cache_file = self._parse_url_to_cache_file(url)
 
-        title, content, links = self._extract_content(response.text, url)
+        html_content = ""
+        if os.path.exists(cache_file) and not force_crawl:
+            logger.info(f"Loading from cache: {cache_file}")
+            with open(cache_file, encoding="utf-8") as f:
+                html_content = f.read()
+        else:
+            response = self.session.get(url, timeout=30)
+            response.raise_for_status()
+            html_content = response.text
 
+            os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+            with open(cache_file, "w", encoding="utf-8") as f:
+                f.write(html_content)
+
+        title, content, links = self._extract_content(html_content, url)
         return SimpleCrawlResult(url=url, title=title, content=content, links=links, success=True)
 
-    def crawl_single_url(self, url: str) -> SimpleCrawlResult:
+    def _parse_url_to_cache_file(self, url: str) -> str:
+        parsed_url = urlparse(self._clean_url(url))
+        url_domain = parsed_url.netloc.replace("www.", "")
+        path = parsed_url.path.strip("/")
+        if not path:
+            path = "index.html"
+        else:
+            path = f"{path}.html"
+        splites = path.split("/")
+        return os.path.join(self.cache_dir, url_domain, *splites)
+
+    def crawl_single_url(self, url: str, force_crawl: bool = False) -> SimpleCrawlResult:
         """Crawl a single URL"""
-        return self._fetch_page(url)
+        return self._fetch_page_with_cache(url, force_crawl)
 
     def crawl_recursive(
-        self, start_url: str, progress_callback: Optional[Callable[[str, int, int], None]] = None
+        self, start_url: str, force_crawl: bool = False,
+        progress_callback: Optional[Callable[[str, int, int], None]] = None
     ) -> list[SimpleCrawlResult]:
         """Crawl multiple pages within the same domain with improved queue management"""
         results = []
@@ -170,12 +195,12 @@ class SimpleWebCrawler:
             crawled_urls.add(url)
 
             # Progress callback
-            logger.debug(f"Crawling {url}, depth {depth}, crawled: {len(results)}, remaining: {len(to_crawl)}")
+            logger.info(f"Crawling {url}, depth {depth}, crawled: {len(results)}, remaining: {len(to_crawl)}")
             if progress_callback:
                 progress_callback(url, len(results), len(results) + len(to_crawl))
 
             # Fetch page
-            result = self._fetch_page(url)
+            result = self._fetch_page_with_cache(url, force_crawl)
             results.append(result)
 
             # Handle failed requests
@@ -220,14 +245,12 @@ class SimpleWebCrawler:
 
 def create_simple_web_crawler(config: Config) -> SimpleWebCrawler:
     """Create and return a SimpleWebCrawler instance with specified configuration"""
-    if config:
-        return SimpleWebCrawler(
-            max_depth=config.crawler_max_depth,
-            max_pages=config.crawler_max_pages,
-            delay=config.crawler_delay,
-        )
-    else:
-        return SimpleWebCrawler(max_depth=3, delay=1.0, max_pages=50)
+    return SimpleWebCrawler(
+        cache_dir=config.crawler_cache_dir,
+        max_depth=config.crawler_max_depth,
+        max_pages=config.crawler_max_pages,
+        delay=config.crawler_delay,
+    )
 
 
 if __name__ == "__main__":

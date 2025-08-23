@@ -5,15 +5,16 @@ Task management service for async operations.
 import asyncio
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any, Optional
 
 from langchain_openai import OpenAIEmbeddings
 
 from data_processing.text_splitter import DocumentProcessor
-from database.connection import get_db_session_context
+from models.database.document import Document, DocumentChunk
 from models.database.task import Task
 from models.responses import TaskResponse
+from repository.document import DocumentChunkRepository, DocumentRepository
 from repository.task import TaskLogRepository, TaskRepository
 from vector_store.chroma_client import ChromaManager
 
@@ -50,6 +51,11 @@ class TaskService:
         self.workers: list[asyncio.Task] = []
         self.running = False
 
+        self.task_repo = TaskRepository()
+        self.task_log_repo = TaskLogRepository()
+        self.doc_repo = DocumentRepository()
+        self.doc_chunk_repo = DocumentChunkRepository()
+
         logger.info("TaskService initialized successfully")
 
     def _to_response(self, task: Task) -> TaskResponse:
@@ -73,111 +79,61 @@ class TaskService:
             error=task.error_message
         )
 
-    async def log_info_task(self, task_id: str, message: str) -> None:
-        await self._log_task(task_id, "info", message)
+    def log_info_task(self, task_id: str, message: str) -> None:
+        self._log_task(task_id, "info", message)
 
-    async def log_debug_task(self, task_id: str, message: str) -> None:
-        await self._log_task(task_id, "debug", message)
+    def log_debug_task(self, task_id: str, message: str) -> None:
+        self._log_task(task_id, "debug", message)
 
-    async def log_err_task(self, task_id: str, message: str) -> None:
-        await self._log_task(task_id, "error", message)
+    def log_err_task(self, task_id: str, message: str) -> None:
+        self._log_task(task_id, "error", message)
 
-    async def _log_task(self, task_id: str, level: str, message: str):
-        with get_db_session_context() as session:
-            log_repo = TaskLogRepository(session)
-            log_repo.add_log(task_id, level, message, None)
+    def _log_task(self, task_id: str, level: str, message: str):
+        self.task_log_repo.add_log(task_id, level, message, None)
+        logger.log(getattr(logging, level.upper()), message)
 
-            # log to console
-            logger.log(getattr(logging, level.upper()), message)
-
-    async def create_task(
-        self,
-        task_type: str,
-        collection_id: str,
-        input_params: dict[str, Any]
-    ) -> TaskResponse:
+    async def create_task(self, task_type: str, collection_id: str, input_params: dict[str, Any]) -> TaskResponse:
         """Create a new task"""
-        with get_db_session_context() as session:
-            repo = TaskRepository(session)
+        created_task = self.task_repo.create_by_model(Task(
+            type=task_type,
+            collection_id=collection_id,
+            input_params=json.dumps(input_params),
+            status="pending"
+        ))
 
-            task = Task(
-                type=task_type,
-                collection_id=collection_id,
-                input_params=json.dumps(input_params),
-                status="pending"
-            )
+        # Add task to queue
+        await self.task_queue.put(created_task.id)
 
-            created_task = repo.create_by_model(task)
+        logger.info(f"Created task {created_task.id} of type {task_type}")
 
-            # Add task to queue
-            await self.task_queue.put(created_task.id)
-
-            logger.info(f"Created task {created_task.id} of type {task_type}")
-
-            return self._to_response(created_task)
+        return self._to_response(created_task)
 
     async def get_task(self, task_id: str) -> Optional[TaskResponse]:
-        """Get task by ID"""
-        with get_db_session_context() as session:
-            repo = TaskRepository(session)
-            task = repo.get_by_id(task_id)
+        task = self.task_repo.get_by_id(task_id)
 
-            if not task:
-                return None
+        if not task:
+            return None
 
-            return self._to_response(task)
+        return self._to_response(task)
 
-    async def update_task_progress(
-        self,
-        task_id: str,
-        progress: int,
-        stats: Optional[FileTaskProgressBody|UrlTaskProgressItem] = None
-    ) -> bool:
-        """Update task progress"""
-        with get_db_session_context() as session:
-            repo = TaskRepository(session)
+    async def update_task_progress(self, task_id: str, progress: int, stats: Optional[FileTaskProgressBody|UrlTaskProgressItem] = None) -> bool:
+        stats_json = json.dumps(asdict(stats)) if stats else None
+        return self.task_repo.update_progress(task_id, progress, stats_json)
 
-            stats_json = json.dumps(stats) if stats else None
-            success = repo.update_progress(task_id, progress, stats_json)
-
-            if success:
-                logger.debug(f"Updated task {task_id} progress to {progress}%")
-
-            return success
-
-    async def mark_task_started(self, task_id: str) -> bool:
-        """Mark task as started"""
-        with get_db_session_context() as session:
-            repo = TaskRepository(session)
-            success = repo.mark_started(task_id)
-
-            if success:
-                logger.info(f"Marked task {task_id} as started")
-
-            return success
-
-    async def mark_task_completed(
-        self,
-        task_id: str,
-        success: bool,
-        error_message: Optional[str] = None
-    ) -> bool:
-        """Mark task as completed"""
-        with get_db_session_context() as session:
-            repo = TaskRepository(session)
-            result = repo.mark_completed(task_id, success, error_message)
-
-            if result:
-                status = "success" if success else "failed"
-                logger.info(f"Marked task {task_id} as {status}")
-
-            return result
+    async def requeue_processing_task(self):
+        tasks = self.task_repo.get_active_tasks()
+        for task in tasks:
+            await self.task_queue.put(task.id)
+            logger.info(f"Re-queued processing task {task.id}")
 
     async def start_workers(self, num_workers: int = 2):
         """Start background task workers"""
         if self.running:
             logger.warning("Workers already running")
             return
+
+        # Requeue processing tasks
+        await self.requeue_processing_task()
 
         self.running = True
         logger.info(f"Starting {num_workers} task workers")
@@ -231,7 +187,7 @@ class TaskService:
                 logger.info(f"Worker {worker_name} cancelled")
                 break
             except Exception as e:
-                logger.error(f"Worker {worker_name} error: {e}")
+                logger.error(f"Worker {worker_name} error: {e}", exc_info=True)
                 # Continue processing other tasks
                 continue
 
@@ -240,33 +196,31 @@ class TaskService:
     async def _process_task(self, task_id: str):
         """Process a single task"""
         # Get task details
-        with get_db_session_context() as session:
-            repo = TaskRepository(session)
-            task = repo.get_by_id(task_id)
+        task = self.task_repo.get_by_id(task_id)
 
-            if not task:
-                logger.error(f"Task {task_id} not found")
-                return
+        if not task:
+            logger.error(f"Task {task_id} not found")
+            return
 
-            # Mark as started
-            await self.mark_task_started(task_id)
+        # Mark as started
+        self.task_repo.mark_started(task_id)
 
-            # Parse input parameters
-            try:
-                input_params = json.loads(task.input_params)
-            except json.JSONDecodeError:
-                input_params = {}
+        # Parse input parameters
+        try:
+            input_params = json.loads(task.input_params)
+        except json.JSONDecodeError:
+            input_params = {}
 
-            # Route to appropriate handler
-            assert task.collection_id
-            if task.type == "ingest_files":
-                await self._process_file_ingestion(task_id, task.collection_id, input_params)
-            elif task.type == "ingest_urls":
-                await self._process_url_ingestion(task_id, task.collection_id, input_params)
-            else:
-                error_msg = f"Unknown task type: {task.type}"
-                logger.error(error_msg)
-                await self.mark_task_completed(task_id, False, error_msg)
+        # Route to appropriate handler
+        assert task.collection_id
+        if task.type == "ingest_files":
+            await self._process_file_ingestion(task_id, task.collection_id, input_params)
+        elif task.type == "ingest_urls":
+            await self._process_url_ingestion(task_id, task.collection_id, input_params)
+        else:
+            error_msg = f"Unknown task type: {task.type}"
+            logger.error(error_msg)
+            self.task_repo.mark_completed(task_id, False, error_msg)
 
     async def _initialize_ingestion_components(self, collection_id: str) -> tuple[DocumentProcessor, ChromaManager, OpenAIEmbeddings]:
         """Initialize common components for ingestion tasks"""
@@ -290,49 +244,36 @@ class TaskService:
 
     async def _check_document_exists(self, collection_id: str, doc_hash: str) -> bool:
         """Check if document already exists and handle duplication logic"""
-        from repository.document import DocumentRepository
-
-        with get_db_session_context() as session:
-            doc_repo = DocumentRepository(session)
-            existing_doc = doc_repo.find_by_hash(collection_id, doc_hash)
-            if existing_doc:
-                return True
-            else:
-                return False
+        existing_doc = self.doc_repo.find_by_hash(collection_id, doc_hash)
+        if existing_doc:
+            return True
+        else:
+            return False
 
     async def _create_document_record(self, collection_id: str, name: str, uri: str,
                                       size_bytes: int, mime_type: Optional[str], doc_hash: str):
         """Create a new document record in database"""
-        from models.database.document import Document
-        from repository.document import DocumentRepository
 
-        with get_db_session_context() as session:
-            doc_repo = DocumentRepository(session)
+        document = Document(
+            collection_id=collection_id,
+            name=name,
+            uri=uri,
+            size_bytes=size_bytes,
+            mime_type=mime_type,
+            status="processing",
+            hash_md5=doc_hash
+        )
 
-            document = Document(
-                collection_id=collection_id,
-                name=name,
-                uri=uri,
-                size_bytes=size_bytes,
-                mime_type=mime_type,
-                status="processing",
-                hash_md5=doc_hash
-            )
+        created_doc = self.doc_repo.create_by_model(document)
+        return created_doc.id
 
-            created_doc = doc_repo.create_by_model(document)
-            return created_doc.id
-
-    async def _mark_document_failed(self, doc_id: str, error_message: str):
+    def _mark_document_failed(self, doc_id: str, error_message: str):
         """Mark document as failed with error message"""
-        from repository.document import DocumentRepository
-
-        with get_db_session_context() as session:
-            doc_repo = DocumentRepository(session)
-            doc = doc_repo.get_by_id(doc_id)
-            if doc:
-                doc.status = "failed"
-                doc.error_message = error_message
-                session.commit()
+        self.doc_repo.update_by_model(Document(
+            id=doc_id,
+            status="failed",
+            error_message=error_message,
+        ))
 
     async def _store_document_chunks(
         self, task_id: str, doc_id: str, collection_id: str,
@@ -343,96 +284,89 @@ class TaskService:
         import hashlib
         import json
 
-        from models.database.document import DocumentChunk
-        from repository.document import DocumentChunkRepository, DocumentRepository
+        chunk_records = []
+        vector_data = []
 
-        with get_db_session_context() as session:
-            chunk_repo = DocumentChunkRepository(session)
-            doc_repo = DocumentRepository(session)
+        for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+            # Create unique vector ID
+            vector_id = f"{doc_id}_chunk_{i}"
 
-            chunk_records = []
-            vector_data = []
+            # Create chunk record
+            chunk_record = DocumentChunk(
+                document_id=doc_id,
+                collection_id=collection_id,
+                chunk_index=i,
+                content_preview=chunk.content[:200] if chunk.content else "",
+                vector_id=vector_id,
+                content_hash=hashlib.md5(chunk.content.encode()).hexdigest(),
+                chunk_metadata=json.dumps(chunk.metadata)
+            )
 
-            for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-                # Create unique vector ID
-                vector_id = f"{doc_id}_chunk_{i}"
+            chunk_records.append(chunk_record)
 
-                # Create chunk record
-                chunk_record = DocumentChunk(
-                    document_id=doc_id,
-                    collection_id=collection_id,
-                    chunk_index=i,
-                    content_preview=chunk.content[:200] if chunk.content else "",
-                    vector_id=vector_id,
-                    content_hash=hashlib.md5(chunk.content.encode()).hexdigest(),
-                    chunk_metadata=json.dumps(chunk.metadata)
+            # Prepare vector data for ChromaDB
+            metadata = {
+                "document_id": doc_id,
+                "collection_id": collection_id,
+                "chunk_index": i,
+                "source": f"{source_name}#chunk_{i}",
+                "content_preview": chunk.content[:200] if chunk.content else ""
+            }
+
+            # Add extra metadata if provided
+            if extra_metadata:
+                metadata.update(extra_metadata)
+
+            vector_data.append({
+                "id": vector_id,
+                "embedding": embedding,
+                "metadata": metadata,
+                "document": chunk.content
+            })
+
+        # Store chunks in database
+        for chunk_record in chunk_records:
+            self.doc_chunk_repo.create_by_model(chunk_record)
+
+        # Store vectors in ChromaDB
+        try:
+            collection = await chroma_manager.get_collection(collection_id)
+            if collection:
+                ids = [v["id"] for v in vector_data]
+                embeddings_list = [v["embedding"] for v in vector_data]
+                metadatas = [v["metadata"] for v in vector_data]
+                documents = [v["document"] for v in vector_data]
+
+                collection.add(
+                    ids=ids,
+                    embeddings=embeddings_list,
+                    metadatas=metadatas,
+                    documents=documents
                 )
 
-                chunk_records.append(chunk_record)
+                self.log_info_task(task_id, f"Indexed {len(chunk_records)} chunks from {source_name}")
+            else:
+                raise Exception("ChromaDB collection not found")
 
-                # Prepare vector data for ChromaDB
-                metadata = {
-                    "document_id": doc_id,
-                    "collection_id": collection_id,
-                    "chunk_index": i,
-                    "source": f"{source_name}#chunk_{i}",
-                    "content_preview": chunk.content[:200] if chunk.content else ""
-                }
+        except Exception as e:
+            # Mark document as failed
+            self.doc_repo.update_by_model(Document(
+                id=doc_id,
+                status="failed",
+                error_message=f"Vector storage failed: {str(e)}"
+            ))
 
-                # Add extra metadata if provided
-                if extra_metadata:
-                    metadata.update(extra_metadata)
+            self.log_err_task(task_id, f"Vector storage failed for {source_name}: {str(e)}")
+            raise e
 
-                vector_data.append({
-                    "id": vector_id,
-                    "embedding": embedding,
-                    "metadata": metadata,
-                    "document": chunk.content
-                })
+        # Mark document as successfully indexed
+        self.doc_repo.update_by_model(Document(
+            id=doc_id,
+            status="indexed",
+            chunk_count=len(chunk_records)
+        ))
 
-            # Store chunks in database
-            for chunk_record in chunk_records:
-                chunk_repo.create_by_model(chunk_record)
-
-            # Store vectors in ChromaDB
-            try:
-                collection = await chroma_manager.get_collection(collection_id)
-                if collection:
-                    ids = [v["id"] for v in vector_data]
-                    embeddings_list = [v["embedding"] for v in vector_data]
-                    metadatas = [v["metadata"] for v in vector_data]
-                    documents = [v["document"] for v in vector_data]
-
-                    collection.add(
-                        ids=ids,
-                        embeddings=embeddings_list,
-                        metadatas=metadatas,
-                        documents=documents
-                    )
-
-                    await self.log_info_task(task_id, f"Indexed {len(chunk_records)} chunks from {source_name}")
-                else:
-                    raise Exception("ChromaDB collection not found")
-
-            except Exception as e:
-                # Mark document as failed
-                doc = doc_repo.get_by_id(doc_id)
-                if doc:
-                    doc.status = "failed"
-                    doc.error_message = f"Vector storage failed: {str(e)}"
-                    session.commit()
-
-                await self.log_err_task(task_id, f"Vector storage failed for {source_name}: {str(e)}")
-                raise e
-
-            # Mark document as successfully indexed
-            doc = doc_repo.get_by_id(doc_id)
-            if doc:
-                doc.status = "indexed"
-                doc.chunk_count = len(chunk_records)
-                session.commit()
-
-            return len(chunk_records)
+        return len(chunk_records)
 
     async def _process_file_ingestion(
         self,
@@ -441,7 +375,7 @@ class TaskService:
         input_params: dict[str, Any]
     ):
         """Process file ingestion task with full integration"""
-        await self.log_info_task(task_id, "Starting file ingestion")
+        self.log_info_task(task_id, "Starting file ingestion")
 
         # Get file paths from input params
         file_paths = input_params.get("files", [])
@@ -512,7 +446,7 @@ class TaskService:
                     ))
 
                 except Exception as e:
-                    await self.log_err_task(task_id, f"Error processing {file_path}: {str(e)}")
+                    self.log_err_task(task_id, f"Error processing {file_path}: {str(e)}")
                     processed_files += 1
                     continue
 
@@ -527,11 +461,11 @@ class TaskService:
             ))
 
             if success:
-                await self.mark_task_completed(task_id, True)
-                await self.log_info_task(task_id, f"File ingestion completed: {indexed_chunks} chunks indexed from {processed_files} files")
+                self.task_repo.mark_completed(task_id, True)
+                self.log_info_task(task_id, f"File ingestion completed: {indexed_chunks} chunks indexed from {processed_files} files")
             else:
-                await self.mark_task_completed(task_id, False, "No files were successfully processed")
-                await self.log_err_task(task_id, "File ingestion failed: No files were successfully processed")
+                self.task_repo.mark_completed(task_id, False, "No files were successfully processed")
+                self.log_err_task(task_id, "File ingestion failed: No files were successfully processed")
 
         finally:
             # Cleanup
@@ -545,7 +479,7 @@ class TaskService:
         from pathlib import Path
 
         file_path_obj = Path(file_path)
-        await self.log_info_task(task_id, f"Processing: {file_path_obj.name}")
+        self.log_info_task(task_id, f"Processing: {file_path_obj.name}")
 
         # Calculate file hash for deduplication
         with open(file_path, 'rb') as f:
@@ -554,13 +488,13 @@ class TaskService:
         # Check if file already exists
         exists = await self._check_document_exists(collection_id, file_hash)
         if exists:
-            await self.log_info_task(task_id, f"Skipping duplicate file: {file_path_obj.name}")
+            self.log_info_task(task_id, f"Skipping duplicate file: {file_path_obj.name}")
             return None
 
         # Process file content
         result = file_processor.process_file(file_path)
         if not result.success:
-            await self.log_err_task(task_id, f"Failed to process {file_path_obj.name}: {result.error}")
+            self.log_err_task(task_id, f"Failed to process {file_path_obj.name}: {result.error}")
             return 0
 
         # Get file metadata
@@ -581,8 +515,8 @@ class TaskService:
         )
 
         if not chunks:
-            await self._mark_document_failed(doc_id, "No content chunks extracted")
-            await self.log_err_task(task_id, f"No content extracted from {file_path_obj.name}")
+            self._mark_document_failed(doc_id, "No content chunks extracted")
+            self.log_err_task(task_id, f"No content extracted from {file_path_obj.name}")
             return 0
 
         # Generate embeddings
@@ -590,8 +524,8 @@ class TaskService:
         try:
             chunk_embeddings = await embeddings.aembed_documents(texts)
         except Exception as e:
-            await self._mark_document_failed(doc_id, f"Embedding generation failed: {str(e)}")
-            await self.log_err_task(task_id, f"Embedding failed for {file_path_obj.name}: {str(e)}")
+            self._mark_document_failed(doc_id, f"Embedding generation failed: {str(e)}")
+            self.log_err_task(task_id, f"Embedding failed for {file_path_obj.name}: {str(e)}")
             return 0
 
         # Store chunks
@@ -602,7 +536,7 @@ class TaskService:
             )
             return chunk_count
         except Exception as e:
-            await self.log_err_task(task_id, f"Storage failed for {file_path_obj.name}: {str(e)}")
+            self.log_err_task(task_id, f"Storage failed for {file_path_obj.name}: {str(e)}")
             return 0
 
     async def _process_url_ingestion(
@@ -612,7 +546,7 @@ class TaskService:
         input_params: dict[str, Any]
     ):
         """Process URL ingestion task with full web crawling integration"""
-        await self.log_info_task(task_id, "Starting URL ingestion")
+        self.log_info_task(task_id, "Starting URL ingestion")
 
         # Get parameters from input
         urls = input_params.get("urls", [])
@@ -647,16 +581,16 @@ class TaskService:
         try:
             for url in urls:
                 try:
-                    await self.log_info_task(task_id, f"Crawling URL: {url}")
+                    self.log_info_task(task_id, f"Crawling URL: {url}")
 
                     # Crawl this url, tracking progress asynchronously
                     def progress_callback(current_url, completed, total):
-                        asyncio.create_task(self.log_info_task(task_id, f"Crawling page {completed + 1}/{total}: {current_url}"))
+                        self.log_info_task(task_id, f"Crawling page {completed + 1}/{total}: {current_url}")
 
                     crawl_results = crawler.crawl_recursive(url, progress_callback=progress_callback)
                     successful_results = [r for r in crawl_results if r.success]
 
-                    await self.log_info_task(task_id, f"Crawled {len(successful_results)}/{len(crawl_results)} pages successfully from {url}")
+                    self.log_info_task(task_id, f"Crawled {len(successful_results)}/{len(crawl_results)} pages successfully from {url}")
 
                     indexed_pages = 0
                     skipped_pages = 0
@@ -677,7 +611,7 @@ class TaskService:
                                 skipped_pages += 1
 
                         except Exception as e:
-                            await self.log_err_task(task_id, f"Error processing page {crawl_result.url}: {str(e)}")
+                            self.log_err_task(task_id, f"Error processing page {crawl_result.url}: {str(e)}")
                             total_pages += 1
                             continue
 
@@ -692,7 +626,7 @@ class TaskService:
                     ))
 
                 except Exception as e:
-                    await self.log_err_task(task_id, f"Error crawling {url}: {str(e)}")
+                    self.log_err_task(task_id, f"Error crawling {url}: {str(e)}")
                 finally:
                     processed_urls += 1
 
@@ -707,11 +641,11 @@ class TaskService:
             ))
 
             if success:
-                await self.mark_task_completed(task_id, True)
-                await self.log_info_task(task_id, f"URL ingestion completed: {indexed_pages} pages indexed from {processed_urls} URLs")
+                self.task_repo.mark_completed(task_id, True)
+                self.log_info_task(task_id, f"URL ingestion completed: {indexed_pages} pages indexed from {processed_urls} URLs")
             else:
-                await self.mark_task_completed(task_id, False, "No pages were successfully processed")
-                await self.log_err_task(task_id, "URL ingestion failed: No pages were successfully processed")
+                self.task_repo.mark_completed(task_id, False, "No pages were successfully processed")
+                self.log_err_task(task_id, "URL ingestion failed: No pages were successfully processed")
 
         finally:
             # Cleanup
@@ -726,7 +660,7 @@ class TaskService:
         from urllib.parse import urlparse
 
         page_url = crawl_result.url
-        await self.log_info_task(task_id, f"Processing page: {page_url}")
+        self.log_info_task(task_id, f"Processing page: {page_url}")
 
         # Generate document hash for deduplication
         content_for_hash = f"{page_url}:{crawl_result.title}:{crawl_result.content}"
@@ -736,12 +670,12 @@ class TaskService:
         exists = await self._check_document_exists(collection_id, doc_hash)
         if exists:
             if override:
-                await self.log_info_task(task_id, f"Overriding existing page: {page_url}")
+                self.log_info_task(task_id, f"Overriding existing page: {page_url}")
             else:
-                await self.log_info_task(task_id, f"Skipping duplicate page: {page_url}")
+                self.log_info_task(task_id, f"Skipping duplicate page: {page_url}")
                 return "skipped"
         else:
-            await self.log_info_task(task_id, f"New page detected: {page_url}")
+            self.log_info_task(task_id, f"New page detected: {page_url}")
 
         # Create document record
         parsed_url = urlparse(page_url)
@@ -758,8 +692,8 @@ class TaskService:
 
         # Process content into chunks
         if not crawl_result.content.strip():
-            await self._mark_document_failed(doc_id, "No content extracted from page")
-            await self.log_err_task(task_id, f"No content extracted from {page_url}")
+            self._mark_document_failed(doc_id, "No content extracted from page")
+            self.log_err_task(task_id, f"No content extracted from {page_url}")
             return "failed"
 
         # Create chunks from web content
@@ -770,8 +704,8 @@ class TaskService:
         )
 
         if not chunks:
-            await self._mark_document_failed(doc_id, "No content chunks extracted")
-            await self.log_err_task(task_id, f"No content chunks extracted from {page_url}")
+            self._mark_document_failed(doc_id, "No content chunks extracted")
+            self.log_err_task(task_id, f"No content chunks extracted from {page_url}")
             return "failed"
 
         # Generate embeddings
@@ -779,8 +713,8 @@ class TaskService:
         try:
             chunk_embeddings = await embeddings.aembed_documents(texts)
         except Exception as e:
-            await self._mark_document_failed(doc_id, f"Embedding generation failed: {str(e)}")
-            await self.log_err_task(task_id, f"Embedding failed for {page_url}: {str(e)}")
+            self._mark_document_failed(doc_id, f"Embedding generation failed: {str(e)}")
+            self.log_err_task(task_id, f"Embedding failed for {page_url}: {str(e)}")
             return "failed"
 
         # Prepare extra metadata for URL content
@@ -797,7 +731,7 @@ class TaskService:
             )
             return "indexed"
         except Exception as e:
-            await self.log_err_task(task_id, f"Storage failed for {page_url}: {str(e)}")
+            self.log_err_task(task_id, f"Storage failed for {page_url}: {str(e)}")
             return "failed"
 
     def close(self):

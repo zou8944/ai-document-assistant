@@ -3,6 +3,8 @@
 import os
 from collections.abc import Generator
 from contextlib import contextmanager
+from contextvars import ContextVar
+from typing import Optional
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
@@ -46,29 +48,19 @@ if "sqlite" in DATABASE_URL:
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-def get_db_session() -> Generator[Session, None, None]:
-    """
-    Get a database session.
-
-    Yields:
-        Session: SQLAlchemy database session
-    """
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
+_current_session: ContextVar[Optional[Session]] = ContextVar[Optional[Session]]("_current_session", default=None)
 
 
 @contextmanager
-def get_db_session_context() -> Generator[Session, None, None]:
-    """
-    Get a database session with context management.
+def session_context() -> Generator[Session, None, None]:
+    # 如果有 session 就直接返回
+    session = _current_session.get()
+    if session:
+        yield session
 
-    Yields:
-        Session: SQLAlchemy database session
-    """
+    # 没有 session 则创建新的，同时存储上下文，并在后面全部执行完成后关闭 session
     session = SessionLocal()
+    _current_session.set(session)
     try:
         yield session
         session.commit()
@@ -76,7 +68,34 @@ def get_db_session_context() -> Generator[Session, None, None]:
         session.rollback()
         raise
     finally:
+        _current_session.set(None)
         session.close()
+
+
+def get_session() -> Session:
+    session = _current_session.get()
+    if not session:
+        session = SessionLocal()
+        _current_session.set(session)
+    return session
+
+class transaction:
+    """事务上下文管理器，用于启动一个长事务"""
+    def __init__(self):
+        self.session = get_session()
+
+    async def __aenter__(self):
+        _current_session.set(self.session)
+        self.session.begin()
+        return self.session
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if exc_type:
+            self.session.rollback()
+        else:
+            self.session.commit()
+        self.session.close()
+        _current_session.set(None)
 
 
 def create_tables():

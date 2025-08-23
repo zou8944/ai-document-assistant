@@ -16,7 +16,6 @@ from config import get_config
 from crawler import create_simple_web_crawler
 from data_processing.file_processor import create_file_processor
 from data_processing.text_splitter import create_document_processor
-from database.connection import get_db_session_context
 from models.database.document import Document
 from models.responses import DocumentResponse, ListDocumentsResponse
 from repository.document import DocumentChunkRepository, DocumentRepository
@@ -72,6 +71,10 @@ class DocumentService:
         self.web_crawler = create_simple_web_crawler(self.config)
         self.chroma_manager = create_chroma_manager(self.config)
 
+        # Initialize repositories
+        self.document_repo = DocumentRepository()
+        self.document_chunk_repo = DocumentChunkRepository()
+
         # Initialize embeddings
         embeddings_kwargs = self.config.get_openai_embeddings_kwargs()
         self.embeddings = OpenAIEmbeddings(**embeddings_kwargs)
@@ -108,100 +111,86 @@ class DocumentService:
         status: Optional[str] = None
     ) -> ListDocumentsResponse:
         """List documents in a collection with pagination and filters"""
-        with get_db_session_context() as session:
-            repo = DocumentRepository(session)
+        # Calculate offset
+        offset = (page - 1) * page_size
 
-            # Calculate offset
-            offset = (page - 1) * page_size
+        # Get documents
+        documents = self.document_repo.get_by_collection(
+            collection_id=collection_id,
+            status=status,
+            search=search,
+            offset=offset,
+            limit=page_size
+        )
 
-            # Get documents
-            documents = repo.get_by_collection(
-                collection_id=collection_id,
-                status=status,
-                search=search,
-                offset=offset,
-                limit=page_size
-            )
+        # Get total count
+        total = self.document_repo.count_by_collection(collection_id=collection_id, status=status)
 
-            # Get total count
-            total = repo.count_by_collection(collection_id=collection_id, status=status)
-
-            return ListDocumentsResponse(
-                documents=[self._to_response(doc) for doc in documents],
-                page=page,
-                page_size=page_size,
-                total=total
-            )
+        return ListDocumentsResponse(
+            documents=[self._to_response(doc) for doc in documents],
+            page=page,
+            page_size=page_size,
+            total=total
+        )
 
     async def get_document(self, collection_id: str, document_id: str) -> Optional[DocumentResponse]:
         """Get a specific document"""
-        with get_db_session_context() as session:
-            repo = DocumentRepository(session)
-            document = repo.get_by_id(document_id)
+        document = self.document_repo.get_by_id(document_id)
 
-            if not document or document.collection_id != collection_id:
-                return None
+        if not document or document.collection_id != collection_id:
+            return None
 
-            return self._to_response(document)
+        return self._to_response(document)
 
     async def delete_document(self, collection_id: str, document_id: str) -> bool:
         """Delete a document and its associated chunks/vectors"""
-        with get_db_session_context() as session:
-            doc_repo = DocumentRepository(session)
-            chunk_repo = DocumentChunkRepository(session)
+        # Get all chunks to get vector IDs
+        chunks = self.document_chunk_repo.get_by_document(document_id)
+        vector_ids = [chunk.vector_id for chunk in chunks]
 
-            document = doc_repo.get_by_id(document_id)
-            if not document or document.collection_id != collection_id:
-                return False
+        # Delete vectors from ChromaDB
+        if vector_ids:
+            # TODO: 这里只需要删除对应的向量记录，而不是删除整个 collection
+            await self.chroma_manager.delete_collection(collection_id)
+            logger.info(f"Deleted {len(vector_ids)} vectors from ChromaDB")
 
-            # Get all chunks to get vector IDs
-            chunks = chunk_repo.get_by_document(document_id)
-            vector_ids = [chunk.vector_id for chunk in chunks]
+        # Delete document from database (cascade will handle chunks)
+        success = self.document_repo.delete(document_id)
 
-            # Delete vectors from ChromaDB
-            if vector_ids:
-                await self.chroma_manager.delete_collection(collection_id)
-                logger.info(f"Deleted {len(vector_ids)} vectors from ChromaDB")
+        if success:
+            logger.info(f"Deleted document '{document_id}' and {len(vector_ids)} chunks")
 
-            # Delete document from database (cascade will handle chunks)
-            success = doc_repo.delete(document_id)
-
-            if success:
-                logger.info(f"Deleted document '{document_id}' and {len(vector_ids)} chunks")
-
-            return success
+        return success
 
     async def download_document(self, collection_id: str, document_id: str) -> Optional[FileResponse]:
         """Download a document file (only for file:// URIs)"""
-        with get_db_session_context() as session:
-            repo = DocumentRepository(session)
-            document = repo.get_by_id(document_id)
+        document = self.document_repo.get_by_id(document_id)
 
-            if not document or document.collection_id != collection_id:
-                return None
+        if not document or document.collection_id != collection_id:
+            return None
 
-            # Check if it's a file URI
-            parsed_uri = urlparse(document.uri)
-            if parsed_uri.scheme != 'file':
-                raise HTTPException(
-                    status_code=400,
-                    detail="Document is not a local file and cannot be downloaded"
-                )
-
-            # Get file path
-            file_path = parsed_uri.path
-            if not os.path.exists(file_path):
-                raise HTTPException(
-                    status_code=404,
-                    detail="File not found on disk"
-                )
-
-            # Return file response
-            return FileResponse(
-                path=file_path,
-                filename=document.name,
-                media_type=document.mime_type or 'application/octet-stream'
+        # Check if it's a file URI
+        parsed_uri = urlparse(document.uri)
+        if parsed_uri.scheme != 'file':
+            raise HTTPException(
+                status_code=400,
+                detail="Document is not a local file and cannot be downloaded"
             )
+
+        # Get file path
+        file_path = parsed_uri.path
+        if not os.path.exists(file_path):
+            raise HTTPException(
+                status_code=404,
+                detail="File not found on disk"
+            )
+
+        # Return file response
+        return FileResponse(
+            path=file_path,
+            filename=document.name,
+            media_type=document.mime_type or 'application/octet-stream'
+        )
 
     def _detect_embedding_dimension(self) -> int:
         """Detect the actual embedding dimension from the model"""
@@ -389,7 +378,7 @@ class DocumentService:
                 progress_callback(f"Crawling: {current_url}", current, max(total, current))
 
         # Crawl the website
-        crawl_results = self.web_crawler.crawl_recursive(url, crawl_progress_callback)
+        crawl_results = self.web_crawler.crawl_recursive(url, False, crawl_progress_callback)
         successful_results = [r for r in crawl_results if r.success]
 
         if not successful_results:

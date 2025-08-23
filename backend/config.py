@@ -35,9 +35,10 @@ class Config:
     chunk_overlap: int = 200
 
     # Web Crawling Configuration
+    crawler_cache_dir: str = "data/crawler_cache"
     crawler_max_depth: int = 3
     crawler_delay: float = 1.0
-    crawler_max_pages: int = 100
+    crawler_max_pages: int = 10
 
     # Application Configuration
     log_level: str = "DEBUG"

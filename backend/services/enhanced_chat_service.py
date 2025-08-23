@@ -9,7 +9,6 @@ import logging
 from collections.abc import AsyncGenerator
 from typing import Any, Optional
 
-from database.connection import get_db_session_context
 from models.responses import ChatMessageResponse
 from rag.enhanced_retrieval_chain import EnhancedRetrievalChain
 from rag.intent_analyzer import QueryIntent
@@ -51,6 +50,9 @@ class EnhancedChatService:
         self.enable_intent_analysis = enable_intent_analysis
         self.enable_cache = enable_cache
         self.enable_summary_overview = enable_summary_overview
+
+        self.chat_repo = ChatMessageRepository()
+        self.chat_message_repo = ChatMessageRepository()
 
         # Enhanced retrieval chains per collection (lazy initialization)
         self._retrieval_chains: dict[str, EnhancedRetrievalChain] = {}
@@ -260,13 +262,11 @@ class EnhancedChatService:
             raise ValueError(f"Chat '{chat_id}' not found")
 
         # Save user message
-        with get_db_session_context() as session:
-            message_repo = ChatMessageRepository(session)
-            message_repo.add_message(
-                chat_id=chat_id,
-                role="user",
-                content=user_message
-            )
+        self.chat_message_repo.add_message(
+            chat_id=chat_id,
+            role="user",
+            content=user_message
+        )
 
         # Enhanced multi-collection retrieval
         relevant_docs, retrieval_metadata = await self._retrieve_enhanced_multi_collection(
@@ -312,15 +312,13 @@ class EnhancedChatService:
             **retrieval_metadata
         }
 
-        with get_db_session_context() as session:
-            message_repo = ChatMessageRepository(session)
-            ai_msg = message_repo.add_message(
-                chat_id=chat_id,
-                role="assistant",
-                content=ai_response,
-                sources=json.dumps([source.dict() for source in sources]),
-                metadata=json.dumps(enhanced_metadata)
-            )
+        ai_msg = self.chat_message_repo.add_message(
+            chat_id=chat_id,
+            role="assistant",
+            content=ai_response,
+            sources=json.dumps([source.dict() for source in sources]),
+            metadata=json.dumps(enhanced_metadata)
+        )
 
         logger.info(f"Generated enhanced AI response for chat {chat_id} with {len(sources)} sources")
 
@@ -349,9 +347,7 @@ class EnhancedChatService:
         sources = self.base_service._format_sources(relevant_docs)
 
         # Get conversation history
-        with get_db_session_context() as session:
-            message_repo = ChatMessageRepository(session)
-            history = message_repo.get_conversation_history(chat_id, max_messages=10)
+        history = self.chat_message_repo.get_conversation_history(chat_id, max_messages=10)
 
         # Format conversation history
         conversation_context = ""
@@ -428,13 +424,11 @@ class EnhancedChatService:
             }
 
         # Save user message
-        with get_db_session_context() as session:
-            message_repo = ChatMessageRepository(session)
-            user_msg = message_repo.add_message(
-                chat_id=chat_id,
-                role="user",
-                content=user_message
-            )
+        user_msg = self.chat_message_repo.add_message(
+            chat_id=chat_id,
+            role="user",
+            content=user_message
+        )
 
         yield {
             "event": "user_message",
@@ -528,9 +522,7 @@ class EnhancedChatService:
         context = self.base_service._format_context(relevant_docs)
 
         # Get conversation history
-        with get_db_session_context() as session:
-            message_repo = ChatMessageRepository(session)
-            history = message_repo.get_conversation_history(chat_id, max_messages=10)
+        history = self.chat_message_repo.get_conversation_history(chat_id, max_messages=10)
 
         conversation_context = ""
         if len(history) > 1:
@@ -574,15 +566,13 @@ class EnhancedChatService:
             **retrieval_metadata
         }
 
-        with get_db_session_context() as session:
-            message_repo = ChatMessageRepository(session)
-            ai_msg = message_repo.add_message(
-                chat_id=chat_id,
-                role="assistant",
-                content=full_response,
-                sources=json.dumps([source.dict() for source in sources]),
-                metadata=json.dumps(enhanced_metadata)
-            )
+        ai_msg = self.chat_message_repo.add_message(
+            chat_id=chat_id,
+            role="assistant",
+            content=full_response,
+            sources=json.dumps([source.dict() for source in sources]),
+            metadata=json.dumps(enhanced_metadata)
+        )
 
         # Send completion
         yield {

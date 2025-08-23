@@ -60,6 +60,7 @@ class ChromaManager:
         try:
             self.client.get_collection(name=collection_name)
             logger.info(f"Collection '{collection_name}' already exists")
+            return
         except NotFoundError:
             # Collection doesn't exist, create it
             pass
@@ -86,52 +87,43 @@ class ChromaManager:
         Returns:
             Status dictionary with success/error information
         """
-        try:
-            if len(chunks) != len(embeddings):
-                raise ValueError("Number of chunks must match number of embeddings")
+        if len(chunks) != len(embeddings):
+            raise ValueError("Number of chunks must match number of embeddings")
 
-            collection = self.client.get_collection(name=collection_name)
+        collection = self.client.get_collection(name=collection_name)
 
-            # Prepare data for insertion
-            ids = []
-            documents = []
-            metadatas = []
-            embeddings_list = []
+        # Prepare data for insertion
+        ids = []
+        documents = []
+        metadatas = []
+        embeddings_list = []
 
-            for chunk, embedding in zip(chunks, embeddings):
-                chunk_id = chunk.id or str(uuid.uuid4())
-                ids.append(chunk_id)
-                documents.append(chunk.content)
-                metadatas.append({
-                    "source": chunk.source,
-                    "start_index": chunk.start_index,
-                    **chunk.metadata
-                })
-                embeddings_list.append(embedding)
+        for chunk, embedding in zip(chunks, embeddings):
+            chunk_id = chunk.id or str(uuid.uuid4())
+            ids.append(chunk_id)
+            documents.append(chunk.content)
+            metadatas.append({
+                "source": chunk.source,
+                "start_index": chunk.start_index,
+                **chunk.metadata
+            })
+            embeddings_list.append(embedding)
 
-            # Upsert documents (add or update)
-            collection.upsert(
-                ids=ids,
-                documents=documents,
-                metadatas=metadatas,
-                embeddings=embeddings_list
-            )
+        # Upsert documents (add or update)
+        collection.upsert(
+            ids=ids,
+            documents=documents,
+            metadatas=metadatas,
+            embeddings=embeddings_list
+        )
 
-            logger.info(f"Indexed {len(chunks)} documents in collection '{collection_name}'")
+        logger.info(f"Indexed {len(chunks)} documents in collection '{collection_name}'")
 
-            return {
-                "status": "success",
-                "indexed_count": len(chunks),
-                "collection_name": collection_name
-            }
-
-        except Exception as e:
-            logger.error(f"Failed to index documents: {e}")
-            return {
-                "status": "error",
-                "message": str(e),
-                "indexed_count": 0
-            }
+        return {
+            "status": "success",
+            "indexed_count": len(chunks),
+            "collection_name": collection_name
+        }
 
     async def search_similar(self, collection_name: str, query_embedding: list[float],
                            limit: int = 5, score_threshold: float = 0.5) -> list[dict[str, Any]]:
@@ -147,49 +139,44 @@ class ChromaManager:
         Returns:
             list of similar documents with scores
         """
-        try:
-            collection = self.client.get_collection(name=collection_name)
+        collection = self.client.get_collection(name=collection_name)
 
-            # Query the collection
-            results = collection.query(
-                query_embeddings=[query_embedding],
-                n_results=limit,
-                include=["documents", "metadatas", "distances"]
-            )
+        # Query the collection
+        results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=limit,
+            include=["documents", "metadatas", "distances"]
+        )
 
-            # Format results
-            formatted_results = []
-            if results and results["ids"]:
-                ids = results["ids"][0]
-                documents = results["documents"][0] if results["documents"] else []
-                metadatas = results["metadatas"][0] if results["metadatas"] else []
-                distances = results["distances"][0] if results["distances"] else []
+        # Format results
+        formatted_results = []
+        if results and results["ids"]:
+            ids = results["ids"][0]
+            documents = results["documents"][0] if results["documents"] else []
+            metadatas = results["metadatas"][0] if results["metadatas"] else []
+            distances = results["distances"][0] if results["distances"] else []
 
-                for i, doc_id in enumerate(ids):
-                    # Convert distance to similarity score (ChromaDB returns distances, not similarities)
-                    distance = distances[i] if i < len(distances) else 1.0
-                    # For cosine distance, similarity = 1 - distance
-                    score = 1.0 - distance
+            for i, doc_id in enumerate(ids):
+                # Convert distance to similarity score (ChromaDB returns distances, not similarities)
+                distance = distances[i] if i < len(distances) else 1.0
+                # For cosine distance, similarity = 1 - distance
+                score = 1.0 - distance
 
-                    # Apply score threshold
-                    if score >= score_threshold:
-                        metadata = metadatas[i] if i < len(metadatas) else {}
-                        formatted_results.append({
-                            "id": doc_id,
-                            "score": score,
-                            "content": documents[i] if i < len(documents) else "",
-                            "source": metadata.get("source", ""),
-                            "start_index": metadata.get("start_index", 0),
-                            "metadata": {k: v for k, v in metadata.items()
-                                       if k not in ["source", "start_index"]}
-                        })
+                # Apply score threshold
+                if score >= score_threshold:
+                    metadata = metadatas[i] if i < len(metadatas) else {}
+                    formatted_results.append({
+                        "id": doc_id,
+                        "score": score,
+                        "content": documents[i] if i < len(documents) else "",
+                        "source": metadata.get("source", ""),
+                        "start_index": metadata.get("start_index", 0),
+                        "metadata": {k: v for k, v in metadata.items()
+                                    if k not in ["source", "start_index"]}
+                    })
 
-            logger.info(f"Found {len(formatted_results)} similar documents")
-            return formatted_results
-
-        except Exception as e:
-            logger.error(f"Search failed: {e}")
-            return []
+        logger.info(f"Found {len(formatted_results)} similar documents")
+        return formatted_results
 
     async def get_collection(self, collection_name: str) -> Optional[chromadb.Collection]:
         """
@@ -205,7 +192,7 @@ class ChromaManager:
             collection = self.client.get_collection(name=collection_name)
             logger.debug(f"Retrieved collection '{collection_name}'")
             return collection
-        except ValueError:
+        except NotFoundError:
             # Collection doesn't exist
             logger.warning(f"Collection '{collection_name}' not found")
             return None

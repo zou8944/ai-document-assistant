@@ -5,7 +5,6 @@ Settings management service.
 import logging
 from typing import Any
 
-from database.connection import get_db_session_context
 from models.responses import SettingsResponse
 from repository.settings import SettingsRepository
 
@@ -20,6 +19,8 @@ class SettingsService:
         from config import get_config
 
         self.config = config or get_config()
+
+        self.setting_repo = SettingsRepository()
         logger.info("SettingsService initialized successfully")
 
     def _format_settings_for_api(self, masked_settings: dict[str, dict[str, Any]]) -> SettingsResponse:
@@ -83,44 +84,38 @@ class SettingsService:
 
     async def get_settings(self) -> SettingsResponse:
         """Get all settings with sensitive values masked"""
-        with get_db_session_context() as session:
-            repo = SettingsRepository(session)
-            masked_settings = repo.get_masked_settings()
-
-            return self._format_settings_for_api(masked_settings)
+        masked_settings = self.setting_repo.get_masked_settings()
+        return self._format_settings_for_api(masked_settings)
 
     async def update_settings(self, updates: dict[str, Any]) -> SettingsResponse:
         """Update settings with new values"""
-        with get_db_session_context() as session:
-            repo = SettingsRepository(session)
+        # Flatten updates to match database keys
+        flattened_updates = {}
 
-            # Flatten updates to match database keys
-            flattened_updates = {}
+        for category, settings in updates.items():
+            if category == "data_location":
+                # Special handling for data_location
+                flattened_updates["paths.data_location"] = settings
+            elif isinstance(settings, dict):
+                # Category-based settings
+                for key, value in settings.items():
+                    flattened_updates[f"{category}.{key}"] = value
+            else:
+                # Direct settings
+                flattened_updates[category] = settings
 
-            for category, settings in updates.items():
-                if category == "data_location":
-                    # Special handling for data_location
-                    flattened_updates["paths.data_location"] = settings
-                elif isinstance(settings, dict):
-                    # Category-based settings
-                    for key, value in settings.items():
-                        flattened_updates[f"{category}.{key}"] = value
-                else:
-                    # Direct settings
-                    flattened_updates[category] = settings
+        # Update settings in database
+        self.setting_repo.update_multiple(flattened_updates)
 
-            # Update settings in database
-            repo.update_multiple(flattened_updates)
+        # Get updated settings
+        masked_settings = self.setting_repo.get_masked_settings()
 
-            # Get updated settings
-            masked_settings = repo.get_masked_settings()
+        # Update global config if available
+        self._update_global_config(flattened_updates)
 
-            # Update global config if available
-            self._update_global_config(flattened_updates)
+        logger.info(f"Updated {len(flattened_updates)} settings")
 
-            logger.info(f"Updated {len(flattened_updates)} settings")
-
-            return self._format_settings_for_api(masked_settings)
+        return self._format_settings_for_api(masked_settings)
 
     def _update_global_config(self, updates: dict[str, Any]) -> None:
         """Update global config object with new settings"""
@@ -130,17 +125,13 @@ class SettingsService:
 
     async def get_setting_value(self, key: str, default: Any = None) -> Any:
         """Get a specific setting value"""
-        with get_db_session_context() as session:
-            repo = SettingsRepository(session)
-            return repo.get_value(key, default)
+        return self.setting_repo.get_value(key, default)
 
     async def set_setting_value(self, key: str, value: Any, value_type: str = "string") -> bool:
         """Set a specific setting value"""
-        with get_db_session_context() as session:
-            repo = SettingsRepository(session)
-            repo.set_value(key, value, value_type)
-            logger.info(f"Set setting '{key}' = '{value}'")
-            return True
+        self.setting_repo.set_value(key, value, value_type)
+        logger.info(f"Set setting '{key}' = '{value}'")
+        return True
 
     def close(self):
         """Close connections and cleanup resources"""
