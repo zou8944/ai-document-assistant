@@ -37,10 +37,10 @@ class Config:
     # Web Crawling Configuration
     crawler_max_depth: int = 3
     crawler_delay: float = 1.0
-    crawler_max_pages: int = 50
+    crawler_max_pages: int = 100
 
     # Application Configuration
-    log_level: str = "INFO"
+    log_level: str = "DEBUG"
 
     @classmethod
     def from_env(cls) -> 'Config':

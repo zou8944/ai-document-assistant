@@ -389,7 +389,7 @@ class DocumentService:
                 progress_callback(f"Crawling: {current_url}", current, max(total, current))
 
         # Crawl the website
-        crawl_results = self.web_crawler.crawl_domain(url, crawl_progress_callback)
+        crawl_results = self.web_crawler.crawl_recursive(url, crawl_progress_callback)
         successful_results = [r for r in crawl_results if r.success]
 
         if not successful_results:

@@ -593,7 +593,7 @@ class TaskService:
                         task_id, "debug", f"Crawling page {completed + 1}/{total}: {current_url}"
                     ))
 
-                crawl_results = crawler.crawl_domain(url, progress_callback=progress_callback)
+                crawl_results = crawler.crawl_recursive(url, progress_callback=progress_callback)
                 successful_results = [r for r in crawl_results if r.success]
 
                 await self.add_task_log(

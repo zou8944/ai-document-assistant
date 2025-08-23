@@ -64,7 +64,7 @@ class IngestUrlsRequest(BaseModel):
     """Request model for URL ingestion"""
     urls: list[str] = Field(..., description="List of URLs to crawl")
     max_depth: int = Field(default=2, description="Maximum crawling depth")
-    override: bool = Field(default=True, description="Whether to override existing URLs")
+    override: bool = Field(default=False, description="Whether to override existing URLs")
 
 
 class CreateChatRequest(BaseModel):
