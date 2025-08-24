@@ -10,13 +10,15 @@ from typing import Any, Optional
 
 from langchain_openai import OpenAIEmbeddings
 
-from data_processing.text_splitter import DocumentProcessor
+from crawler.simple_web_crawler import create_simple_web_crawler
+from data_processing.file_processor import create_file_processor
+from data_processing.text_splitter import create_document_processor
 from models.database.document import Document, DocumentChunk
 from models.database.task import Task
 from models.responses import TaskResponse
 from repository.document import DocumentChunkRepository, DocumentRepository
 from repository.task import TaskLogRepository, TaskRepository
-from vector_store.chroma_client import ChromaManager
+from vector_store.chroma_client import create_chroma_manager
 
 logger = logging.getLogger(__name__)
 
@@ -51,10 +53,21 @@ class TaskService:
         self.workers: list[asyncio.Task] = []
         self.running = False
 
+        # Initialize repositories
         self.task_repo = TaskRepository()
         self.task_log_repo = TaskLogRepository()
         self.doc_repo = DocumentRepository()
         self.doc_chunk_repo = DocumentChunkRepository()
+
+        # Shared components - created once and reused
+        self.document_processor = create_document_processor(self.config)
+        self.chroma_manager = create_chroma_manager(self.config)
+        self.file_processor = create_file_processor(self.config)
+        self.web_crawler = create_simple_web_crawler(self.config)
+
+        # Initialize embeddings
+        embeddings_kwargs = self.config.get_openai_embeddings_kwargs()
+        self.embeddings = OpenAIEmbeddings(**embeddings_kwargs)
 
         logger.info("TaskService initialized successfully")
 
@@ -206,10 +219,7 @@ class TaskService:
         self.task_repo.mark_started(task_id)
 
         # Parse input parameters
-        try:
-            input_params = json.loads(task.input_params)
-        except json.JSONDecodeError:
-            input_params = {}
+        input_params = json.loads(task.input_params)
 
         # Route to appropriate handler
         assert task.collection_id
@@ -221,26 +231,6 @@ class TaskService:
             error_msg = f"Unknown task type: {task.type}"
             logger.error(error_msg)
             self.task_repo.mark_completed(task_id, False, error_msg)
-
-    async def _initialize_ingestion_components(self, collection_id: str) -> tuple[DocumentProcessor, ChromaManager, OpenAIEmbeddings]:
-        """Initialize common components for ingestion tasks"""
-        from langchain_openai import OpenAIEmbeddings
-
-        from data_processing.text_splitter import create_document_processor
-        from vector_store.chroma_client import create_chroma_manager
-
-        # Initialize components
-        document_processor = create_document_processor(self.config)
-        chroma_manager = create_chroma_manager(self.config)
-
-        # Initialize embeddings
-        embeddings_kwargs = self.config.get_openai_embeddings_kwargs()
-        embeddings = OpenAIEmbeddings(**embeddings_kwargs)
-
-        # Ensure collection exists in ChromaDB
-        await chroma_manager.ensure_collection(collection_id)
-
-        return document_processor, chroma_manager, embeddings
 
     async def _check_document_exists(self, collection_id: str, doc_hash: str) -> bool:
         """Check if document already exists and handle duplication logic"""
@@ -277,8 +267,7 @@ class TaskService:
 
     async def _store_document_chunks(
         self, task_id: str, doc_id: str, collection_id: str,
-        chunks, embeddings, chroma_manager: ChromaManager,
-        source_name: str, extra_metadata: Optional[dict] = None
+        chunks, embeddings, source_name: str, extra_metadata: Optional[dict] = None
     ):
         """Store document chunks in database and vector store"""
         import hashlib
@@ -330,7 +319,7 @@ class TaskService:
 
         # Store vectors in ChromaDB
         try:
-            collection = await chroma_manager.get_collection(collection_id)
+            collection = await self.chroma_manager.get_collection(collection_id)
             if collection:
                 ids = [v["id"] for v in vector_data]
                 embeddings_list = [v["embedding"] for v in vector_data]
@@ -385,12 +374,6 @@ class TaskService:
         # Import necessary modules for file processing
         from pathlib import Path
 
-        from data_processing.file_processor import create_file_processor
-
-        # Initialize components
-        document_processor, chroma_manager, embeddings = await self._initialize_ingestion_components(collection_id)
-        file_processor = create_file_processor(self.config)
-
         # Collect all files to process
         all_files = []
         for file_path in file_paths:
@@ -419,60 +402,51 @@ class TaskService:
             files_skipped=0
         ))
 
-        try:
-            for file_path in all_files:
-                try:
-                    chunk_count = await self._process_single_file(
-                        task_id, collection_id, file_path, file_processor,
-                        document_processor, embeddings, chroma_manager
-                    )
+        for file_path in all_files:
+            try:
+                chunk_count = await self._process_single_file(task_id, collection_id, file_path)
 
-                    if chunk_count is None:  # Skipped file
-                        skipped_files += 1
-                    elif chunk_count > 0:  # Successfully processed
-                        indexed_chunks += chunk_count
-                        total_chunks += chunk_count
+                if chunk_count is None:  # Skipped file
+                    skipped_files += 1
+                elif chunk_count > 0:  # Successfully processed
+                    indexed_chunks += chunk_count
+                    total_chunks += chunk_count
 
-                    processed_files += 1
+                processed_files += 1
 
-                    # Update progress
-                    progress = int((processed_files / total_files) * 100)
-                    await self.update_task_progress(task_id, progress, FileTaskProgressBody(
-                        files_processed=processed_files,
-                        files_total=total_files,
-                        chunks_created=total_chunks,
-                        chunks_indexed=indexed_chunks,
-                        files_skipped=skipped_files
-                    ))
+                # Update progress
+                progress = int((processed_files / total_files) * 100)
+                await self.update_task_progress(task_id, progress, FileTaskProgressBody(
+                    files_processed=processed_files,
+                    files_total=total_files,
+                    chunks_created=total_chunks,
+                    chunks_indexed=indexed_chunks,
+                    files_skipped=skipped_files
+                ))
 
-                except Exception as e:
-                    self.log_err_task(task_id, f"Error processing {file_path}: {str(e)}")
-                    processed_files += 1
-                    continue
+            except Exception as e:
+                self.log_err_task(task_id, f"Error processing {file_path}: {str(e)}")
+                processed_files += 1
+                continue
 
-            # Final status update
-            success = indexed_chunks > 0
-            await self.update_task_progress(task_id, 100, FileTaskProgressBody(
-                files_processed=processed_files,
-                files_total=total_files,
-                chunks_created=total_chunks,
-                chunks_indexed=indexed_chunks,
-                files_skipped=skipped_files
-            ))
+        # Final status update
+        success = indexed_chunks > 0
+        await self.update_task_progress(task_id, 100, FileTaskProgressBody(
+            files_processed=processed_files,
+            files_total=total_files,
+            chunks_created=total_chunks,
+            chunks_indexed=indexed_chunks,
+            files_skipped=skipped_files
+        ))
 
-            if success:
-                self.task_repo.mark_completed(task_id, True)
-                self.log_info_task(task_id, f"File ingestion completed: {indexed_chunks} chunks indexed from {processed_files} files")
-            else:
-                self.task_repo.mark_completed(task_id, False, "No files were successfully processed")
-                self.log_err_task(task_id, "File ingestion failed: No files were successfully processed")
+        if success:
+            self.task_repo.mark_completed(task_id, True)
+            self.log_info_task(task_id, f"File ingestion completed: {indexed_chunks} chunks indexed from {processed_files} files")
+        else:
+            self.task_repo.mark_completed(task_id, False, "No files were successfully processed")
+            self.log_err_task(task_id, "File ingestion failed: No files were successfully processed")
 
-        finally:
-            # Cleanup
-            chroma_manager.close()
-
-    async def _process_single_file(self, task_id: str, collection_id: str, file_path: str,
-                                   file_processor, document_processor, embeddings, chroma_manager):
+    async def _process_single_file(self, task_id: str, collection_id: str, file_path: str):
         """Process a single file and return chunk count (None if skipped)"""
         import hashlib
         import mimetypes
@@ -492,7 +466,7 @@ class TaskService:
             return None
 
         # Process file content
-        result = file_processor.process_file(file_path)
+        result = self.file_processor.process_file(file_path)
         if not result.success:
             self.log_err_task(task_id, f"Failed to process {file_path_obj.name}: {result.error}")
             return 0
@@ -508,7 +482,7 @@ class TaskService:
         )
 
         # Process text into chunks
-        chunks = document_processor.process_file_content(
+        chunks = self.document_processor.process_file_content(
             file_path=file_path,
             content=result.content,
             file_type=result.file_type
@@ -522,7 +496,7 @@ class TaskService:
         # Generate embeddings
         texts = [chunk.content for chunk in chunks]
         try:
-            chunk_embeddings = await embeddings.aembed_documents(texts)
+            chunk_embeddings = await self.embeddings.aembed_documents(texts)
         except Exception as e:
             self._mark_document_failed(doc_id, f"Embedding generation failed: {str(e)}")
             self.log_err_task(task_id, f"Embedding failed for {file_path_obj.name}: {str(e)}")
@@ -531,8 +505,7 @@ class TaskService:
         # Store chunks
         try:
             chunk_count = await self._store_document_chunks(
-                task_id, doc_id, collection_id, chunks, chunk_embeddings,
-                chroma_manager, file_path_obj.name
+                task_id, doc_id, collection_id, chunks, chunk_embeddings, file_path_obj.name
             )
             return chunk_count
         except Exception as e:
@@ -555,15 +528,6 @@ class TaskService:
         if not urls:
             raise ValueError("No URLs specified for ingestion")
 
-        # Import necessary modules for web crawling
-        from crawler.simple_web_crawler import create_simple_web_crawler
-
-        # Initialize components
-        document_processor, chroma_manager, embeddings = await self._initialize_ingestion_components(collection_id)
-
-        # Initialize web crawler with config
-        crawler = create_simple_web_crawler(self.config)
-
         total_urls = len(urls)
         processed_urls = 0
         total_pages = 0
@@ -578,83 +542,74 @@ class TaskService:
             pages_skipped=0
         ))
 
-        try:
-            for url in urls:
-                try:
-                    self.log_info_task(task_id, f"Crawling URL: {url}")
+        for url in urls:
+            try:
+                self.log_info_task(task_id, f"Crawling URL: {url}")
 
-                    # Crawl this url, tracking progress asynchronously
-                    def progress_callback(current_url, completed, total):
-                        self.log_info_task(task_id, f"Crawling page {completed + 1}/{total}: {current_url}")
+                # Crawl this url, tracking progress asynchronously
+                def progress_callback(current_url, completed, total):
+                    self.log_info_task(task_id, f"Crawling page {completed + 1}/{total}: {current_url}")
 
-                    crawl_results = crawler.crawl_recursive(url, progress_callback=progress_callback)
-                    successful_results = [r for r in crawl_results if r.success]
+                crawl_results = self.web_crawler.crawl_recursive(url, progress_callback=progress_callback)
+                successful_results = [r for r in crawl_results if r.success]
 
-                    self.log_info_task(task_id, f"Crawled {len(successful_results)}/{len(crawl_results)} pages successfully from {url}")
+                self.log_info_task(task_id, f"Crawled {len(successful_results)}/{len(crawl_results)} pages successfully from {url}")
 
-                    indexed_pages = 0
-                    skipped_pages = 0
-                    total_pages = 0
+                indexed_pages = 0
+                skipped_pages = 0
+                total_pages = 0
 
-                    # Process each crawled page
-                    for crawl_result in successful_results:
-                        try:
-                            page_result = await self._process_single_page(
-                                task_id, collection_id, crawl_result, override,
-                                document_processor, embeddings, chroma_manager
-                            )
+                # Process each crawled page
+                for crawl_result in successful_results:
+                    try:
+                        page_result = await self._process_single_page(
+                            task_id, collection_id, crawl_result, override,
+                        )
 
-                            total_pages += 1
-                            if page_result == "indexed":
-                                indexed_pages += 1
-                            elif page_result == "skipped":
-                                skipped_pages += 1
+                        total_pages += 1
+                        if page_result == "indexed":
+                            indexed_pages += 1
+                        elif page_result == "skipped":
+                            skipped_pages += 1
 
-                        except Exception as e:
-                            self.log_err_task(task_id, f"Error processing page {crawl_result.url}: {str(e)}")
-                            total_pages += 1
-                            continue
+                    except Exception as e:
+                        self.log_err_task(task_id, f"Error processing page {crawl_result.url}: {str(e)}")
+                        total_pages += 1
+                        continue
 
-                    # Update progress
-                    progress = int((processed_urls / total_urls) * 100)
-                    await self.update_task_progress(task_id, progress, UrlTaskProgressItem(
-                        urls_processed=processed_urls,
-                        urls_total=total_urls,
-                        pages_crawled=total_pages,
-                        pages_indexed=indexed_pages,
-                        pages_skipped=skipped_pages
-                    ))
+                # Update progress
+                progress = int((processed_urls / total_urls) * 100)
+                await self.update_task_progress(task_id, progress, UrlTaskProgressItem(
+                    urls_processed=processed_urls,
+                    urls_total=total_urls,
+                    pages_crawled=total_pages,
+                    pages_indexed=indexed_pages,
+                    pages_skipped=skipped_pages
+                ))
 
-                except Exception as e:
-                    self.log_err_task(task_id, f"Error crawling {url}: {str(e)}")
-                finally:
-                    processed_urls += 1
+            except Exception as e:
+                self.log_err_task(task_id, f"Error crawling {url}: {str(e)}")
+            finally:
+                processed_urls += 1
 
-            # Final status update
-            success = indexed_pages > 0
-            await self.update_task_progress(task_id, 100, UrlTaskProgressItem(
-                urls_processed=processed_urls,
-                urls_total=total_urls,
-                pages_crawled=total_pages,
-                pages_indexed=indexed_pages,
-                pages_skipped=skipped_pages
-            ))
+        # Final status update
+        success = indexed_pages > 0
+        await self.update_task_progress(task_id, 100, UrlTaskProgressItem(
+            urls_processed=processed_urls,
+            urls_total=total_urls,
+            pages_crawled=total_pages,
+            pages_indexed=indexed_pages,
+            pages_skipped=skipped_pages
+        ))
 
-            if success:
-                self.task_repo.mark_completed(task_id, True)
-                self.log_info_task(task_id, f"URL ingestion completed: {indexed_pages} pages indexed from {processed_urls} URLs")
-            else:
-                self.task_repo.mark_completed(task_id, False, "No pages were successfully processed")
-                self.log_err_task(task_id, "URL ingestion failed: No pages were successfully processed")
+        if success:
+            self.task_repo.mark_completed(task_id, True)
+            self.log_info_task(task_id, f"URL ingestion completed: {indexed_pages} pages indexed from {processed_urls} URLs")
+        else:
+            self.task_repo.mark_completed(task_id, False, "No pages were successfully processed")
+            self.log_err_task(task_id, "URL ingestion failed: No pages were successfully processed")
 
-        finally:
-            # Cleanup
-            chroma_manager.close()
-
-    async def _process_single_page(
-        self, task_id: str, collection_id: str, crawl_result, override: bool,
-        document_processor: DocumentProcessor, embeddings: OpenAIEmbeddings, chroma_manager: ChromaManager
-    ) -> str:
+    async def _process_single_page(self, task_id: str, collection_id: str, crawl_result, override: bool) -> str:
         """Process a single crawled page and return status"""
         import hashlib
         from urllib.parse import urlparse
@@ -697,7 +652,7 @@ class TaskService:
             return "failed"
 
         # Create chunks from web content
-        chunks = document_processor.process_web_content(
+        chunks = self.document_processor.process_web_content(
             url=page_url,
             content=crawl_result.content,
             page_title=crawl_result.title
@@ -711,7 +666,7 @@ class TaskService:
         # Generate embeddings
         texts = [chunk.content for chunk in chunks]
         try:
-            chunk_embeddings = await embeddings.aembed_documents(texts)
+            chunk_embeddings = await self.embeddings.aembed_documents(texts)
         except Exception as e:
             self._mark_document_failed(doc_id, f"Embedding generation failed: {str(e)}")
             self.log_err_task(task_id, f"Embedding failed for {page_url}: {str(e)}")
@@ -726,8 +681,7 @@ class TaskService:
         # Store chunks
         try:
             await self._store_document_chunks(
-                task_id, doc_id, collection_id, chunks, chunk_embeddings,
-                chroma_manager, page_url, extra_metadata
+                task_id, doc_id, collection_id, chunks, chunk_embeddings, page_url, extra_metadata
             )
             return "indexed"
         except Exception as e:
