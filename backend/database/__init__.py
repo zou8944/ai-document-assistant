@@ -6,19 +6,21 @@ from database.connection import (
     create_tables,
     drop_tables,
     engine,
-    get_db_session,
+    session_context,
+    transaction,
 )
+from database.initialization import initialize_database
 
 # Note: initialization functions are available but not imported here to avoid circular imports
 # Import them directly from database.initialization when needed
 
 __all__ = [
-    "get_db_session",
     "engine",
     "SessionLocal",
     "Base",
     "create_tables",
     "drop_tables",
     "initialize_database",
-    "ensure_database_initialized"
+    "session_context",
+    "transaction"
 ]

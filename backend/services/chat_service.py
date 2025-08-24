@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-from models.database.chat import Chat, ChatMessage
+from models.dto import ChatDTO, ChatMessageDTO
 from models.responses import ChatMessageResponse, ChatResponse, SourceReference
 from repository.chat import ChatMessageRepository, ChatRepository
 from vector_store.chroma_client import create_chroma_manager
@@ -41,7 +41,7 @@ class ChatService:
 
         logger.info("ChatService initialized successfully")
 
-    def _to_chat_response(self, chat: Chat) -> ChatResponse:
+    def _to_chat_response(self, chat: ChatDTO) -> ChatResponse:
         """Convert Chat model to response model"""
         try:
             collection_ids = json.loads(chat.collection_ids) if chat.collection_ids else []
@@ -49,15 +49,15 @@ class ChatService:
             collection_ids = []
 
         return ChatResponse(
-            chat_id=chat.id,
-            name=chat.name,
+            chat_id=chat.id or "",
+            name=chat.name or "",
             collection_ids=collection_ids,
-            message_count=chat.message_count,
-            created_at=chat.created_at.isoformat(),
+            message_count=chat.message_count or 0,
+            created_at=chat.created_at.isoformat() if chat.created_at else "",
             last_message_at=chat.last_message_at.isoformat() if chat.last_message_at else None
         )
 
-    def _to_message_response(self, message: ChatMessage) -> ChatMessageResponse:
+    def _to_message_response(self, message: ChatMessageDTO) -> ChatMessageResponse:
         """Convert ChatMessage model to response model"""
         try:
             sources = json.loads(message.sources) if message.sources else []
@@ -67,18 +67,18 @@ class ChatService:
             metadata = {}
 
         return ChatMessageResponse(
-            message_id=message.id,
-            chat_id=message.chat_id,
-            role=message.role,
-            content=message.content,
+            message_id=message.id or "" ,
+            chat_id=message.chat_id or "",
+            role=message.role or "",
+            content=message.content or "",
             sources=sources,
             metadata=metadata,
-            created_at=message.created_at.isoformat()
+            created_at=message.created_at.isoformat() if message.created_at else ""
         )
 
     async def create_chat(self, name: str, collection_ids: list[str]) -> Optional[ChatResponse]:
         """Create a new chat"""
-        chat = Chat(
+        chat = ChatDTO(
             name=name,
             collection_ids=json.dumps(collection_ids),
             message_count=0
@@ -111,7 +111,7 @@ class ChatService:
         collection_ids: Optional[list[str]] = None
     ) -> Optional[ChatResponse]:
         """Update chat information"""
-        updated_model = self.chat_repo.update_by_model(Chat(
+        updated_model = self.chat_repo.update_by_model(ChatDTO(
             id=chat_id,
             name=name,
             collection_ids=json.dumps(collection_ids) if collection_ids else None

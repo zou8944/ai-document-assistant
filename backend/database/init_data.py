@@ -2,10 +2,6 @@
 
 from typing import Any
 
-from sqlalchemy.orm import Session
-
-from repository.settings import SettingsRepository
-
 # Default settings data
 DEFAULT_SETTINGS: list[dict[str, Any]] = [
     # LLM settings
@@ -164,22 +160,19 @@ DEFAULT_SETTINGS: list[dict[str, Any]] = [
 ]
 
 
-def initialize_default_settings(session: Session) -> None:
-    """
-    Initialize default settings in the database.
+def initialize_default_settings() -> None:
+    from database.connection import session_context
+    from models.database.settings import Settings
 
-    Args:
-        session: Database session
-    """
-    settings_repo = SettingsRepository(session)
-    settings_repo.initialize_defaults(DEFAULT_SETTINGS)
+    with session_context() as session:
+        for setting_data in DEFAULT_SETTINGS:
+            key = setting_data["key"]
+
+            # Only create if not exists
+            if not session.query(Settings).filter(Settings.key == key).first():
+                setting = Settings(**setting_data)
+                session.add(setting)
 
 
 def get_default_settings() -> list[dict[str, Any]]:
-    """
-    Get the default settings list.
-
-    Returns:
-        list of default setting dictionaries
-    """
     return DEFAULT_SETTINGS.copy()

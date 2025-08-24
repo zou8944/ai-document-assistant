@@ -71,18 +71,15 @@ def session_context() -> Generator[Session, None, None]:
         _current_session.set(None)
         session.close()
 
-
-def get_session() -> Session:
-    session = _current_session.get()
-    if not session:
-        session = SessionLocal()
-        _current_session.set(session)
-    return session
-
 class transaction:
     """事务上下文管理器，用于启动一个长事务"""
     def __init__(self):
-        self.session = get_session()
+        session = _current_session.get()
+        if session:
+            self.session = session
+        else:
+            self.session = SessionLocal()
+            _current_session.set(self.session)
 
     async def __aenter__(self):
         _current_session.set(self.session)
@@ -94,6 +91,7 @@ class transaction:
             self.session.rollback()
         else:
             self.session.commit()
+        self.session.expunge_all()
         self.session.close()
         _current_session.set(None)
 

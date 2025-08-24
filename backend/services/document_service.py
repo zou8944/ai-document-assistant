@@ -16,7 +16,7 @@ from config import get_config
 from crawler import create_simple_web_crawler
 from data_processing.file_processor import create_file_processor
 from data_processing.text_splitter import create_document_processor
-from models.database.document import Document
+from models.dto import DocumentDTO
 from models.responses import DocumentResponse, ListDocumentsResponse
 from repository.document import DocumentChunkRepository, DocumentRepository
 from vector_store.chroma_client import create_chroma_manager
@@ -88,18 +88,18 @@ class DocumentService:
 
         logger.info("DocumentService initialized successfully")
 
-    def _to_response(self, document: Document) -> DocumentResponse:
+    def _to_response(self, document: DocumentDTO) -> DocumentResponse:
         """Convert Document model to response model"""
         return DocumentResponse(
-            id=document.id,
-            name=document.name,
-            uri=document.uri,
-            size_bytes=document.size_bytes,
-            mime_type=document.mime_type,
-            chunk_count=document.chunk_count,
-            status=document.status,
-            created_at=document.created_at.isoformat(),
-            updated_at=document.updated_at.isoformat()
+            id=document.id or "",
+            name=document.name or "",
+            uri=document.uri or "",
+            size_bytes=document.size_bytes or 0,
+            mime_type=document.mime_type or "",
+            chunk_count=document.chunk_count or 0,
+            status=document.status or "",
+            created_at=document.created_at.isoformat() if document.created_at else "",
+            updated_at=document.updated_at.isoformat() if document.updated_at else ""
         )
 
     async def list_documents(

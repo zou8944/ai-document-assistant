@@ -69,5 +69,5 @@ if __name__ == "__main__":
             access_log=True
         )
     except Exception as e:
-        logger.error(f"Failed to start API server: {e}")
+        logger.error(f"Failed to start API server: {e}", exc_info=True)
         sys.exit(1)

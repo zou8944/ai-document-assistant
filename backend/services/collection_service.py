@@ -5,7 +5,7 @@ Collection management service.
 import logging
 from typing import Optional
 
-from models.database.collection import Collection
+from models.dto import CollectionDTO
 from models.responses import CollectionResponse
 from repository.collection import CollectionRepository
 
@@ -27,16 +27,16 @@ class CollectionService:
 
         logger.info("CollectionService initialized successfully")
 
-    def _to_response(self, collection: Collection) -> CollectionResponse:
+    def _to_response(self, collection: CollectionDTO) -> CollectionResponse:
         """Convert Collection model to response model"""
         return CollectionResponse(
-            id=collection.id,
-            name=collection.name,
-            description=collection.description,
-            document_count=collection.document_count,
-            vector_count=collection.vector_count,
-            created_at=collection.created_at.isoformat(),
-            updated_at=collection.updated_at.isoformat()
+            id=collection.id or "",
+            name=collection.name or "",
+            description=collection.description or "",
+            document_count=collection.document_count or 0,
+            vector_count=collection.vector_count or 0,
+            created_at=collection.created_at.isoformat() if collection.created_at else "",
+            updated_at=collection.updated_at.isoformat() if collection.updated_at else ""
         )
 
     async def create_collection(self, collection_id: str, name: str, description: str = "") -> Optional[CollectionResponse]:
@@ -49,7 +49,7 @@ class CollectionService:
             return None
 
         # Create new collection
-        collection = Collection(
+        collection = CollectionDTO(
             id=collection_id,
             name=name,
             description=description
@@ -69,6 +69,7 @@ class CollectionService:
 
         # Update stats for each collection
         for collection in collections:
+            assert collection.id
             self.collection_repo.update_stats(collection.id)
 
         return [self._to_response(c) for c in collections]
@@ -84,7 +85,7 @@ class CollectionService:
 
     async def update_collection(self, collection_id: str, name: Optional[str] = None, description: Optional[str] = None) -> Optional[CollectionResponse]:
         """Update collection"""
-        updated_collection = self.collection_repo.update_by_model(Collection(
+        updated_collection = self.collection_repo.update_by_model(CollectionDTO(
             id=collection_id,
             name=name,
             description=description

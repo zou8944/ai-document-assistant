@@ -7,39 +7,43 @@ from sqlalchemy import func, select
 
 from database.connection import session_context
 from models.database.task import Task, TaskLog
+from models.dto import TaskDTO, TaskLogDTO
 from repository.base import BaseRepository
 
 
-class TaskRepository(BaseRepository[Task]):
+class TaskRepository(BaseRepository[Task, TaskDTO]):
     """Repository for Task operations."""
 
     def __init__(self):
-        super().__init__(Task)
+        super().__init__(Task, TaskDTO)
 
-    def get_by_status(self, status: str) -> list[Task]:
+    def get_by_status(self, status: str) -> list[TaskDTO]:
         with session_context() as session:
-            return list(session.scalars(
+            entities = session.scalars(
                 select(Task)
                 .where(Task.status == status)
                 .order_by(Task.created_at.desc())
-            ))
+            )
+            return [self.dto_class.from_orm(item) for item in entities]
 
-    def get_by_collection(self, collection_id: str) -> list[Task]:
+    def get_by_collection(self, collection_id: str) -> list[TaskDTO]:
         with session_context() as session:
-            return list(session.scalars(
+            entities = session.scalars(
                 select(Task)
                 .where(Task.collection_id == collection_id)
                 .order_by(Task.created_at.desc())
-            ))
+            )
+            return [self.dto_class.from_orm(item) for item in entities]
 
-    def get_by_type_and_status(self, task_type: str, status: str) -> list[Task]:
+    def get_by_type_and_status(self, task_type: str, status: str) -> list[TaskDTO]:
         with session_context() as session:
-            return list(session.scalars(
+            entities = session.scalars(
                 select(Task).where(
                     Task.type == task_type,
                     Task.status == status
                 ).order_by(Task.created_at.desc())
-            ))
+            )
+            return [self.dto_class.from_orm(item) for item in entities]
 
     def update_progress(self, task_id: str, progress: int, stats: Optional[str] = None) -> bool:
         with session_context() as session:
@@ -80,13 +84,14 @@ class TaskRepository(BaseRepository[Task]):
             session.flush()
             return True
 
-    def get_active_tasks(self) -> list[Task]:
+    def get_active_tasks(self) -> list[TaskDTO]:
         with session_context() as session:
-            return list(session.scalars(
+            entities = session.scalars(
                 select(Task).where(
                     Task.status.in_(["pending", "processing"])
                 ).order_by(Task.created_at.desc())
-            ))
+            )
+            return [self.dto_class.from_orm(item) for item in entities]
 
     def list_tasks_with_filters(
         self,
@@ -95,7 +100,7 @@ class TaskRepository(BaseRepository[Task]):
         collection_id: Optional[str] = None,
         offset: int = 0,
         limit: int = 50
-    ) -> list[Task]:
+    ) -> list[TaskDTO]:
         with session_context() as session:
             query = select(Task)
 
@@ -108,7 +113,7 @@ class TaskRepository(BaseRepository[Task]):
 
             query = query.order_by(Task.created_at.desc()).offset(offset).limit(limit)
 
-            return list(session.scalars(query))
+            return [self.dto_class.from_orm(item) for item in session.scalars(query)]
 
     def count_tasks_with_filters(
         self,
@@ -129,11 +134,11 @@ class TaskRepository(BaseRepository[Task]):
             return session.scalar(query) or 0
 
 
-class TaskLogRepository(BaseRepository[TaskLog]):
+class TaskLogRepository(BaseRepository[TaskLog, TaskLogDTO]):
     """Repository for TaskLog operations."""
 
     def __init__(self):
-        super().__init__(TaskLog)
+        super().__init__(TaskLog, TaskLogDTO)
 
     def get_by_task(
         self,
@@ -141,7 +146,7 @@ class TaskLogRepository(BaseRepository[TaskLog]):
         level: Optional[str] = None,
         offset: int = 0,
         limit: Optional[int] = None
-    ) -> list[TaskLog]:
+    ) -> list[TaskLogDTO]:
         with session_context() as session:
             query = select(TaskLog).where(TaskLog.task_id == task_id)
 
@@ -153,7 +158,7 @@ class TaskLogRepository(BaseRepository[TaskLog]):
             if limit:
                 query = query.limit(limit)
 
-            return list(session.scalars(query))
+            return [self.dto_class.from_orm(item) for item in session.scalars(query)]
 
     def add_log(
         self,
@@ -161,7 +166,7 @@ class TaskLogRepository(BaseRepository[TaskLog]):
         level: str,
         message: str,
         details: Optional[str] = None
-    ) -> TaskLog:
+    ) -> TaskLogDTO:
         with session_context() as session:
             log = TaskLog(
                 task_id=task_id,
@@ -174,7 +179,7 @@ class TaskLogRepository(BaseRepository[TaskLog]):
             session.flush()  # To get ID populated
             session.refresh(log)
 
-            return log
+            return self.dto_class.from_orm(log)
 
     def count_by_task(self, task_id: str, level: Optional[str] = None) -> int:
         with session_context() as session:

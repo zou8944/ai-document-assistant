@@ -13,8 +13,8 @@ from langchain_openai import OpenAIEmbeddings
 from crawler.simple_web_crawler import create_simple_web_crawler
 from data_processing.file_processor import create_file_processor
 from data_processing.text_splitter import create_document_processor
-from models.database.document import Document, DocumentChunk
-from models.database.task import Task
+from models.database.document import DocumentChunk
+from models.dto import DocumentDTO, TaskDTO
 from models.responses import TaskResponse
 from repository.document import DocumentChunkRepository, DocumentRepository
 from repository.task import TaskLogRepository, TaskRepository
@@ -71,7 +71,7 @@ class TaskService:
 
         logger.info("TaskService initialized successfully")
 
-    def _to_response(self, task: Task) -> TaskResponse:
+    def _to_response(self, task: TaskDTO) -> TaskResponse:
         """Convert Task model to response model"""
         try:
             progress = json.loads(task.stats) if task.stats else {}
@@ -81,14 +81,14 @@ class TaskService:
             stats = {}
 
         return TaskResponse(
-            task_id=task.id,
-            type=task.type,
-            status=task.status,
+            task_id=task.id or "",
+            type=task.type or "",
+            status=task.status or "",
             progress={"percentage": task.progress_percentage, **progress},
             stats=stats,
-            collection_id=task.collection_id,
-            created_at=task.created_at.isoformat(),
-            updated_at=task.updated_at.isoformat(),
+            collection_id=task.collection_id or "",
+            created_at=task.created_at.isoformat() if task.created_at else "",
+            updated_at=task.updated_at.isoformat() if task.updated_at else "",
             error=task.error_message
         )
 
@@ -107,7 +107,7 @@ class TaskService:
 
     async def create_task(self, task_type: str, collection_id: str, input_params: dict[str, Any]) -> TaskResponse:
         """Create a new task"""
-        created_task = self.task_repo.create_by_model(Task(
+        created_task = self.task_repo.create_by_model(TaskDTO(
             type=task_type,
             collection_id=collection_id,
             input_params=json.dumps(input_params),
@@ -219,6 +219,7 @@ class TaskService:
         self.task_repo.mark_started(task_id)
 
         # Parse input parameters
+        assert task.input_params
         input_params = json.loads(task.input_params)
 
         # Route to appropriate handler
@@ -244,7 +245,7 @@ class TaskService:
                                       size_bytes: int, mime_type: Optional[str], doc_hash: str):
         """Create a new document record in database"""
 
-        document = Document(
+        document = DocumentDTO(
             collection_id=collection_id,
             name=name,
             uri=uri,
@@ -259,7 +260,7 @@ class TaskService:
 
     def _mark_document_failed(self, doc_id: str, error_message: str):
         """Mark document as failed with error message"""
-        self.doc_repo.update_by_model(Document(
+        self.doc_repo.update_by_model(DocumentDTO(
             id=doc_id,
             status="failed",
             error_message=error_message,
@@ -339,7 +340,7 @@ class TaskService:
 
         except Exception as e:
             # Mark document as failed
-            self.doc_repo.update_by_model(Document(
+            self.doc_repo.update_by_model(DocumentDTO(
                 id=doc_id,
                 status="failed",
                 error_message=f"Vector storage failed: {str(e)}"
@@ -349,7 +350,7 @@ class TaskService:
             raise e
 
         # Mark document as successfully indexed
-        self.doc_repo.update_by_model(Document(
+        self.doc_repo.update_by_model(DocumentDTO(
             id=doc_id,
             status="indexed",
             chunk_count=len(chunk_records)
@@ -480,6 +481,7 @@ class TaskService:
         doc_id = await self._create_document_record(
             collection_id, file_path_obj.name, file_uri, file_size, mime_type, file_hash
         )
+        assert doc_id
 
         # Process text into chunks
         chunks = self.document_processor.process_file_content(
@@ -644,6 +646,7 @@ class TaskService:
             "text/html",
             doc_hash
         )
+        assert doc_id
 
         # Process content into chunks
         if not crawl_result.content.strip():

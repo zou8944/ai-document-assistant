@@ -6,14 +6,15 @@ from sqlalchemy import func, select
 
 from database.connection import session_context
 from models.database.document import Document, DocumentChunk
+from models.dto import DocumentChunkDTO, DocumentDTO
 from repository.base import BaseRepository
 
 
-class DocumentRepository(BaseRepository[Document]):
+class DocumentRepository(BaseRepository[Document, DocumentDTO]):
     """Repository for Document operations."""
 
     def __init__(self):
-        super().__init__(Document)
+        super().__init__(Document, DocumentDTO)
 
     def get_by_collection(
         self,
@@ -22,7 +23,7 @@ class DocumentRepository(BaseRepository[Document]):
         search: Optional[str] = None,
         offset: int = 0,
         limit: Optional[int] = None
-    ) -> list[Document]:
+    ) -> list[DocumentDTO]:
         with session_context() as session:
             query = select(Document).where(Document.collection_id == collection_id)
 
@@ -37,7 +38,7 @@ class DocumentRepository(BaseRepository[Document]):
             if limit:
                 query = query.limit(limit)
 
-            return list(session.scalars(query))
+            return [self.dto_class.from_orm(item) for item in session.scalars(query)]
 
     def count_by_collection(
         self,
@@ -54,62 +55,58 @@ class DocumentRepository(BaseRepository[Document]):
 
             return session.scalar(query) or 0
 
-    def find_by_uri(self, collection_id: str, uri: str) -> Optional[Document]:
+    def find_by_uri(self, collection_id: str, uri: str) -> Optional[DocumentDTO]:
         with session_context() as session:
-            return session.scalar(
+            entity = session.scalar(
                 select(Document).where(
                     Document.collection_id == collection_id,
                     Document.uri == uri
                 )
             )
+            return self.dto_class.from_orm(entity) if entity else None
 
-    def find_by_hash(self, collection_id: str, hash_md5: str) -> Optional[Document]:
+    def find_by_hash(self, collection_id: str, hash_md5: str) -> Optional[DocumentDTO]:
         with session_context() as session:
-            return session.scalar(
+            entity = session.scalar(
                 select(Document).where(
                     Document.collection_id == collection_id,
                     Document.hash_md5 == hash_md5
                 )
             )
+            return self.dto_class.from_orm(entity) if entity else None
 
-    def get_by_status(self, status: str) -> list[Document]:
+    def get_by_status(self, status: str) -> list[DocumentDTO]:
         with session_context() as session:
-            return list(session.scalars(
-                select(Document).where(Document.status == status)
-            ))
+            sql = select(Document).where(Document.status == status)
+            return [self.dto_class.from_orm(item) for item in session.scalars(sql)]
 
 
-class DocumentChunkRepository(BaseRepository[DocumentChunk]):
+class DocumentChunkRepository(BaseRepository[DocumentChunk, DocumentChunkDTO]):
     """Repository for DocumentChunk operations."""
 
     def __init__(self):
-        super().__init__(DocumentChunk)
+        super().__init__(DocumentChunk, DocumentChunkDTO)
 
-    def get_by_document(self, document_id: str) -> list[DocumentChunk]:
+    def get_by_document(self, document_id: str) -> list[DocumentChunkDTO]:
         with session_context() as session:
-            return list(session.scalars(
-                select(DocumentChunk)
-                .where(DocumentChunk.document_id == document_id)
-                .order_by(DocumentChunk.chunk_index)
-            ))
+            sql = select(DocumentChunk).where(DocumentChunk.document_id == document_id)
+            return [self.dto_class.from_orm(item) for item in session.scalars(sql)]
 
-    def get_by_collection(self, collection_id: str) -> list[DocumentChunk]:
+    def get_by_collection(self, collection_id: str) -> list[DocumentChunkDTO]:
         with session_context() as session:
-            return list(session.scalars(
-                select(DocumentChunk).where(DocumentChunk.collection_id == collection_id)
-            ))
+            sql = select(DocumentChunk).where(DocumentChunk.collection_id == collection_id)
+            return [self.dto_class.from_orm(item) for item in session.scalars(sql)]
 
-    def get_by_vector_id(self, vector_id: str) -> Optional[DocumentChunk]:
+    def get_by_vector_id(self, vector_id: str) -> Optional[DocumentChunkDTO]:
         with session_context() as session:
-            return session.scalar(
-                select(DocumentChunk).where(DocumentChunk.vector_id == vector_id)
-            )
+            sql = select(DocumentChunk).where(DocumentChunk.vector_id == vector_id)
+            entity = session.scalar(sql)
+            return self.dto_class.from_orm(entity) if entity else None
 
-    def get_by_vector_ids(self, vector_ids: list[str]) -> list[DocumentChunk]:
+    def get_by_vector_ids(self, vector_ids: list[str]) -> list[DocumentChunkDTO]:
         with session_context() as session:
-            return list(session.scalars(
-                select(DocumentChunk).where(DocumentChunk.vector_id.in_(vector_ids))
-            ))
+            sql = select(DocumentChunk).where(DocumentChunk.vector_id.in_(vector_ids))
+            return [self.dto_class.from_orm(item) for item in session.scalars(sql)]
 
     def count_by_document(self, document_id: str) -> int:
         with session_context() as session:

@@ -7,14 +7,15 @@ from sqlalchemy import select
 
 from database.connection import session_context
 from models.database.settings import Settings
+from models.dto import SettingsDTO
 from repository.base import BaseRepository
 
 
-class SettingsRepository(BaseRepository[Settings]):
+class SettingsRepository(BaseRepository[Settings, SettingsDTO]):
     """Repository for Settings operations."""
 
     def __init__(self):
-        super().__init__(Settings)
+        super().__init__(Settings, SettingsDTO)
 
     def exists(self, entity_id: str) -> bool:
         from sqlalchemy import func, select
@@ -22,13 +23,14 @@ class SettingsRepository(BaseRepository[Settings]):
             query = select(func.count(Settings.key)).where(Settings.key == entity_id)
             return (session.scalar(query) or 0) > 0
 
-    def get_by_category(self, category: str) -> list[Settings]:
+    def get_by_category(self, category: str) -> list[SettingsDTO]:
         with session_context() as session:
-            return list(session.scalars(
+            entities = session.scalars(
                 select(Settings)
                 .where(Settings.category == category)
                 .order_by(Settings.key)
-            ))
+            )
+            return [self.dto_class.from_orm(item) for item in entities]
 
     def get_value(self, key: str, default: Any = None) -> Any:
         setting = self.get_by_id(key)
@@ -51,7 +53,7 @@ class SettingsRepository(BaseRepository[Settings]):
         else:
             return setting.value
 
-    def set_value(self, key: str, value: Any, value_type: str = "string") -> Settings:
+    def set_value(self, key: str, value: Any, value_type: str = "string") -> SettingsDTO:
         # Convert value to string
         if value_type == "json":
             str_value = json.dumps(value)
@@ -62,7 +64,7 @@ class SettingsRepository(BaseRepository[Settings]):
 
         with session_context() as session:
             # Get existing setting or create new one
-            setting = self.get_by_id(key)
+            setting = session.get(self.model, key)
             if setting:
                 setting.value = str_value
                 setting.value_type = value_type
@@ -78,13 +80,12 @@ class SettingsRepository(BaseRepository[Settings]):
                 session.flush()
                 session.refresh(setting)
 
-        return setting
+        return self.dto_class.from_orm(setting)
 
-    def get_sensitive_settings(self) -> list[Settings]:
+    def get_sensitive_settings(self) -> list[SettingsDTO]:
         with session_context() as session:
-            return list(session.scalars(
-                select(Settings).where(Settings.is_sensitive == True)
-            ))
+            sql = select(Settings).where(Settings.is_sensitive == True)
+            return [self.dto_class.from_orm(item) for item in session.scalars(sql)]
 
     def get_masked_settings(self) -> dict[str, dict[str, Any]]:
         all_settings = self.get_all()
@@ -117,7 +118,7 @@ class SettingsRepository(BaseRepository[Settings]):
 
         return result
 
-    def update_multiple(self, updates: dict[str, Any]) -> list[Settings]:
+    def update_multiple(self, updates: dict[str, Any]) -> list[SettingsDTO]:
         updated_settings = []
 
         for key, value in updates.items():

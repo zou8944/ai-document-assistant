@@ -6,35 +6,49 @@ from sqlalchemy import delete, func, select, update
 
 from database.base import Base
 from database.connection import session_context
+from models.dto import DTOConvertible
 
 T = TypeVar("T", bound=Base)
+D = TypeVar("D", bound=DTOConvertible)
 
 
-class BaseRepository(Generic[T]):
+class BaseRepository(Generic[T, D]):
     """Base repository class with common CRUD operations."""
 
-    def __init__(self, model: type[T]):
+    def __init__(self, model: type[T], dto_class: type[D]):
         self.model = model
+        self.dto_class = dto_class
 
-    def create_by_field(self, **kwargs) -> T:
+    def create_by_field(self, **kwargs) -> D:
         entity = self.model(**kwargs)
+
         with session_context() as session:
             session.add(entity)
             session.flush()
             session.refresh(entity)
-        return entity
 
-    def create_by_model(self, entity: T) -> T:
+        return self.dto_class.from_orm(entity)
+
+    def create_by_model(self, dto: D) -> D:
+        entity = dto.to_orm(self.model)
+
         with session_context() as session:
             session.add(entity)
             session.flush()
-            return entity
+            session.refresh(entity)
 
-    def get_by_id(self, entity_id: Any) -> Optional[T]:
+        return self.dto_class.from_orm(entity)
+
+    def get_by_id(self, entity_id: Any) -> Optional[D]:
         with session_context() as session:
-            return session.get(self.model, entity_id)
+            entity = session.get(self.model, entity_id)
+            if entity is None:
+                return None
+            return self.dto_class.from_orm(entity)
 
-    def get_all(self, offset: int = 0, limit: Optional[int] = None, order_by: Optional[str] = None) -> list[T]:
+    def get_all(
+        self, offset: int = 0, limit: Optional[int] = None, order_by: Optional[str] = None
+    ) -> list[D]:
         with session_context() as session:
             query = select(self.model).offset(offset)
 
@@ -45,11 +59,11 @@ class BaseRepository(Generic[T]):
                 if hasattr(self.model, order_by):
                     query = query.order_by(getattr(self.model, order_by))
 
-            return list(session.scalars(query))
+            return [self.dto_class.from_orm(item) for item in session.scalars(query)]
 
-    def update(self, entity_id: Any, **kwargs) -> Optional[T]:
+    def update(self, entity_id: Any, **kwargs) -> Optional[D]:
         with session_context() as session:
-            stmt = update(self.model).where(self.model.id == entity_id).values(**kwargs) # type: ignore
+            stmt = update(self.model).where(self.model.id == entity_id).values(**kwargs)  # type: ignore
             result = session.execute(stmt)
 
         if result.rowcount == 0:
@@ -57,7 +71,7 @@ class BaseRepository(Generic[T]):
 
         return self.get_by_id(entity_id)
 
-    def update_by_model(self, entity: T) -> Optional[T]:
+    def update_by_model(self, entity: D) -> Optional[D]:
         # 获取主键值
         entity_id = getattr(entity, "id", None)
         if entity_id is None:
@@ -98,7 +112,7 @@ class BaseRepository(Generic[T]):
             query = select(func.count(self.model.id)).where(self.model.id == entity_id)  # type: ignore
             return (session.scalar(query) or 0) > 0
 
-    def find_by(self, **filters) -> list[T]:
+    def find_by(self, **filters) -> list[D]:
         with session_context() as session:
             query = select(self.model)
 
@@ -106,9 +120,9 @@ class BaseRepository(Generic[T]):
                 if hasattr(self.model, field):
                     query = query.where(getattr(self.model, field) == value)
 
-        return list(session.scalars(query))
+            return [self.dto_class.from_orm(item) for item in session.scalars(query)]
 
-    def find_one_by(self, **filters) -> Optional[T]:
+    def find_one_by(self, **filters) -> Optional[D]:
         with session_context() as session:
             query = select(self.model)
 
@@ -116,4 +130,7 @@ class BaseRepository(Generic[T]):
                 if hasattr(self.model, field):
                     query = query.where(getattr(self.model, field) == value)
 
-        return session.scalar(query)
+            entity = session.scalar(query)
+            if entity is None:
+                return None
+            return self.dto_class.from_orm(entity)
