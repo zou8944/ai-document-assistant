@@ -170,6 +170,9 @@ class DocumentProcessor:
         Returns:
             list of DocumentChunk objects
         """
+        if content.strip() == "":
+            return []
+
         metadata = {
             "url": url,
             "page_title": page_title,

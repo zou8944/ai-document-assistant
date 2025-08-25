@@ -71,7 +71,7 @@ class Config:
             # Web Crawling Configuration
             crawler_max_depth=int(os.getenv("CRAWLER_MAX_DEPTH", "3")),
             crawler_delay=float(os.getenv("CRAWLER_DELAY", "1.0")),
-            crawler_max_pages=int(os.getenv("CRAWLER_MAX_PAGES", "50")),
+            crawler_max_pages=int(os.getenv("CRAWLER_MAX_PAGES", "3")),
 
             # Application Configuration
             log_level=os.getenv("LOG_LEVEL", "INFO"),

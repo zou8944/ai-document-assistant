@@ -57,6 +57,7 @@ def session_context() -> Generator[Session, None, None]:
     session = _current_session.get()
     if session:
         yield session
+        return
 
     # 没有 session 则创建新的，同时存储上下文，并在后面全部执行完成后关闭 session
     session = SessionLocal()

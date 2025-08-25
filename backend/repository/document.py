@@ -65,15 +65,23 @@ class DocumentRepository(BaseRepository[Document, DocumentDTO]):
             )
             return self.dto_class.from_orm(entity) if entity else None
 
-    def find_by_hash(self, collection_id: str, hash_md5: str) -> Optional[DocumentDTO]:
+    def list_by_uri(self, collection_id: str, uris: list[str]) -> list[DocumentDTO]:
         with session_context() as session:
-            entity = session.scalar(
-                select(Document).where(
-                    Document.collection_id == collection_id,
-                    Document.hash_md5 == hash_md5
-                )
+            sql = select(Document).where(
+                Document.collection_id == collection_id,
+                Document.uri.in_(uris)
             )
-            return self.dto_class.from_orm(entity) if entity else None
+            return [self.dto_class.from_orm(item) for item in session.scalars(sql)]
+
+    def delete_by_id(self, id: str) -> int:
+        from sqlalchemy import delete
+
+        with session_context() as session:
+            stmt = delete(Document).where(Document.id == id)
+            result = session.execute(stmt)
+            session.flush()
+
+        return result.rowcount or 0
 
     def get_by_status(self, status: str) -> list[DocumentDTO]:
         with session_context() as session:
