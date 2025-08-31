@@ -18,6 +18,7 @@ from crawler.simple_web_crawler import SimpleCrawlResult, create_simple_web_craw
 from data_processing.file_processor import create_file_processor
 from data_processing.text_splitter import create_document_processor
 from database.connection import transaction
+from exception import NotFoundException
 from models.dto import DocumentChunkDTO, DocumentDTO, TaskDTO, TaskLogDTO
 from models.responses import TaskResponse
 from repository.document import DocumentChunkRepository, DocumentRepository
@@ -121,22 +122,95 @@ class TaskService:
 
         return self._to_response(created_task)
 
-    async def get_task(self, task_id: str) -> Optional[TaskDTO]:
-        return self.task_repo.get_by_id(task_id)
-
-    async def get_task_response(self, task_id: str) -> Optional[TaskResponse]:
+    async def get_task(self, task_id: str) -> TaskDTO:
         task = self.task_repo.get_by_id(task_id)
-        return self._to_response(task) if task else None
+        if not task:
+            raise NotFoundException(f"Task {task_id} not found")
+
+        return task
+
+    async def get_task_response(self, task_id: str) -> TaskResponse:
+        task = await self.get_task(task_id)
+        return self._to_response(task)
 
     async def list_task_responses(self, collection_id: str) -> list[TaskResponse]:
         tasks = self.task_repo.list_tasks_with_filters(collection_id=collection_id, limit=200)
         return [self._to_response(task) for task in tasks]
 
     async def get_task_logs(self, task_id: str, limit: int, offset: int = 0) -> list[TaskLogDTO]:
-        return self.task_log_repo.get_by_task(task_id=task_id, limit=limit, offset=offset)
+        return self.task_log_repo.list_by_task(task_id=task_id, limit=limit, offset=offset)
 
     async def cancel_task(self, task_id: str) -> bool:
         return self.task_repo.mark_cancelled(task_id)
+
+    async def get_task_stream_generator(self, task_id: str):
+        task = self.task_repo.get_by_id(task_id)
+        if not task:
+            raise NotFoundException(f"Task {task_id} not found")
+
+        # Send initial metadata
+        yield {
+            "event": "metadata",
+            "data": json.dumps({
+                "task_id": task_id,
+                "type": task.type,
+                "collection_id": task.collection_id
+            })
+        }
+
+        last_progress = -1
+        offset = 0
+        while True:
+            # Get current task status
+            current_task = self.task_repo.get_by_id(task_id)
+            task_logs = self.task_log_repo.list_by_task(task_id, limit=100, offset=offset)
+            assert current_task
+
+            # Send progress update if changed
+            current_progress = current_task.progress_percentage or 0
+            if current_progress != last_progress:
+                yield {
+                    "event": "progress",
+                    "data": json.dumps({
+                        "percentage": current_progress,
+                        "stats": current_task.stats
+                    })
+                }
+                last_progress = current_progress
+
+            # send task logs
+            for log in task_logs:
+                yield {
+                    "event": "log",
+                    "data": json.dumps({
+                        "level": log.level,
+                        "message": log.message,
+                        "timestamp": log.timestamp.isoformat() if log.timestamp else None,
+                        "details": json.loads(log.details) if log.details else {}
+                    })
+                }
+            offset += len(task_logs)
+
+            # check if task is completed
+            if current_task.status == "success":
+                yield {
+                    "event": "done",
+                    "data": json.dumps({
+                        "duration_ms": None  # Could calculate if needed
+                    })
+                }
+                break
+            elif current_task.status == "failed":
+                yield {
+                    "event": "error",
+                    "data": json.dumps({
+                        "message": current_task.error_message
+                    })
+                }
+                break
+
+            # Wait before next check
+            await asyncio.sleep(1.0)
 
     async def update_file_task_progress(self, task_id: str, stats: FileTaskStats) -> bool:
         stats_json = json.dumps(asdict(stats))

@@ -153,7 +153,7 @@ class TaskLogRepository(BaseRepository[TaskLog, TaskLogDTO]):
     def __init__(self):
         super().__init__(TaskLog, TaskLogDTO)
 
-    def get_by_task(
+    def list_by_task(
         self,
         task_id: str,
         level: Optional[str] = None,
