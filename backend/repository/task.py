@@ -84,6 +84,19 @@ class TaskRepository(BaseRepository[Task, TaskDTO]):
             session.flush()
             return True
 
+    def mark_cancelled(self, task_id: str) -> bool:
+        with session_context() as session:
+            task = session.get(Task, task_id)
+            if not task:
+                return False
+
+            if task.status not in ["pending", "processing"]:
+                return False
+
+            task.status = "cancelled"
+            session.flush()
+            return True
+
     def get_active_tasks(self) -> list[TaskDTO]:
         with session_context() as session:
             entities = session.scalars(
@@ -153,7 +166,7 @@ class TaskLogRepository(BaseRepository[TaskLog, TaskLogDTO]):
             if level:
                 query = query.where(TaskLog.level == level)
 
-            query = query.order_by(TaskLog.timestamp.desc()).offset(offset)
+            query = query.order_by(TaskLog.timestamp).offset(offset)
 
             if limit:
                 query = query.limit(limit)

@@ -18,7 +18,7 @@ from crawler.simple_web_crawler import SimpleCrawlResult, create_simple_web_craw
 from data_processing.file_processor import create_file_processor
 from data_processing.text_splitter import create_document_processor
 from database.connection import transaction
-from models.dto import DocumentChunkDTO, DocumentDTO, TaskDTO
+from models.dto import DocumentChunkDTO, DocumentDTO, TaskDTO, TaskLogDTO
 from models.responses import TaskResponse
 from repository.document import DocumentChunkRepository, DocumentRepository
 from repository.task import TaskLogRepository, TaskRepository
@@ -121,13 +121,22 @@ class TaskService:
 
         return self._to_response(created_task)
 
-    async def get_task(self, task_id: str) -> Optional[TaskResponse]:
+    async def get_task(self, task_id: str) -> Optional[TaskDTO]:
+        return self.task_repo.get_by_id(task_id)
+
+    async def get_task_response(self, task_id: str) -> Optional[TaskResponse]:
         task = self.task_repo.get_by_id(task_id)
+        return self._to_response(task) if task else None
 
-        if not task:
-            return None
+    async def list_task_responses(self, collection_id: str) -> list[TaskResponse]:
+        tasks = self.task_repo.list_tasks_with_filters(collection_id=collection_id, limit=200)
+        return [self._to_response(task) for task in tasks]
 
-        return self._to_response(task)
+    async def get_task_logs(self, task_id: str, limit: int, offset: int = 0) -> list[TaskLogDTO]:
+        return self.task_log_repo.get_by_task(task_id=task_id, limit=limit, offset=offset)
+
+    async def cancel_task(self, task_id: str) -> bool:
+        return self.task_repo.mark_cancelled(task_id)
 
     async def update_file_task_progress(self, task_id: str, stats: FileTaskStats) -> bool:
         stats_json = json.dumps(asdict(stats))
