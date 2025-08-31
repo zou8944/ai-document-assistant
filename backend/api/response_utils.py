@@ -2,17 +2,15 @@
 Utility functions for creating unified API responses.
 """
 
-from typing import Any, TypeVar
+from typing import Any
 
 from fastapi import HTTPException, status
 from fastapi.responses import JSONResponse
 
 from models.api_response import ApiResponse, ResponseCode
 
-T = TypeVar('T')
 
-
-def success_response(data: T = None, message: str = "") -> dict:
+def success_response(data: Any | None = None, message: str = "") -> dict:
     """
     Create a successful response.
 

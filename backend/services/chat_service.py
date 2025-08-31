@@ -8,6 +8,7 @@ from typing import Any, Optional
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
+from exception import NotFoundException
 from models.dto import ChatDTO, ChatMessageDTO
 from models.responses import ChatMessageResponse, ChatResponse, SourceReference
 from repository.chat import ChatMessageRepository, ChatRepository
@@ -43,15 +44,12 @@ class ChatService:
 
     def _to_chat_response(self, chat: ChatDTO) -> ChatResponse:
         """Convert Chat model to response model"""
-        try:
-            collection_ids = json.loads(chat.collection_ids) if chat.collection_ids else []
-        except json.JSONDecodeError:
-            collection_ids = []
-
+        assert chat.id
+        assert chat.name
         return ChatResponse(
-            chat_id=chat.id or "",
-            name=chat.name or "",
-            collection_ids=collection_ids,
+            chat_id=chat.id,
+            name=chat.name,
+            collection_ids=json.loads(chat.collection_ids) if chat.collection_ids else [],
             message_count=chat.message_count or 0,
             created_at=chat.created_at.isoformat() if chat.created_at else "",
             last_message_at=chat.last_message_at.isoformat() if chat.last_message_at else None
@@ -76,15 +74,13 @@ class ChatService:
             created_at=message.created_at.isoformat() if message.created_at else ""
         )
 
-    async def create_chat(self, name: str, collection_ids: list[str]) -> Optional[ChatResponse]:
+    async def create_chat(self, name: str, collection_ids: list[str]) -> ChatResponse:
         """Create a new chat"""
-        chat = ChatDTO(
+        created_chat = self.chat_repo.create_by_model(ChatDTO(
             name=name,
             collection_ids=json.dumps(collection_ids),
             message_count=0
-        )
-
-        created_chat = self.chat_repo.create_by_model(chat)
+        ))
         logger.info(f"Created chat {created_chat.id} with name '{name}'")
 
         return self._to_chat_response(created_chat)
@@ -114,7 +110,7 @@ class ChatService:
         updated_model = self.chat_repo.update_by_model(ChatDTO(
             id=chat_id,
             name=name,
-            collection_ids=json.dumps(collection_ids) if collection_ids else None
+            collection_ids=json.dumps(collection_ids) if collection_ids else "[]"
         ))
         if not updated_model:
             return None
@@ -124,8 +120,7 @@ class ChatService:
     async def delete_chat(self, chat_id: str) -> bool:
         """Delete chat and all its messages"""
         self.chat_message_repo.delete_by_chat(chat_id)
-        success = self.chat_repo.delete(chat_id)
-        return success
+        return self.chat_repo.delete(chat_id)
 
     async def get_chat_messages(
         self,
@@ -137,11 +132,15 @@ class ChatService:
         messages = self.chat_message_repo.get_by_chat(chat_id, offset=offset, limit=limit)
         return [self._to_message_response(message) for message in messages]
 
+    async def count_chat_messages(self, chat_id: str) -> int:
+        """Count total chat messages"""
+        return self.chat_message_repo.count_by_chat(chat_id)
+
     async def _retrieve_from_multiple_collections(
         self,
         query: str,
         collection_ids: list[str],
-        top_k_per_collection: int = 3
+        top_k_per_collection: int = 5
     ) -> list[dict[str, Any]]:
         """Retrieve documents from multiple collections"""
         all_results = []
@@ -205,16 +204,12 @@ class ChatService:
 
         return "\n\n".join(context_parts)
 
-    async def send_message(
-        self,
-        chat_id: str,
-        user_message: str
-    ) -> Optional[ChatMessageResponse]:
+    async def chat(self, chat_id: str, user_message: str) -> Optional[ChatMessageResponse]:
         """Send a message and get AI response"""
         # Get chat information
         chat = await self.get_chat(chat_id)
         if not chat:
-            raise ValueError(f"Chat '{chat_id}' not found")
+            raise NotFoundException(detail=f"Chat '{chat_id}' not found")
 
         # Save user message
         self.chat_message_repo.add_message(
@@ -226,8 +221,7 @@ class ChatService:
         # Retrieve relevant documents from multiple collections
         relevant_docs = await self._retrieve_from_multiple_collections(
             user_message,
-            chat.collection_ids,
-            top_k_per_collection=3
+            chat.collection_ids
         )
 
         # Format context and sources
@@ -268,7 +262,7 @@ class ChatService:
             chat_id=chat_id,
             role="assistant",
             content=ai_response,
-            sources=json.dumps([source.dict() for source in sources]),
+            sources=json.dumps([source.model_dump() for source in sources]),
             metadata=json.dumps({
                 "model": self.config.openai_chat_model,
                 "sources_count": len(sources),
@@ -279,6 +273,108 @@ class ChatService:
         logger.info(f"Generated AI response for chat {chat_id} with {len(sources)} sources")
 
         return self._to_message_response(ai_msg)
+
+    async def chat_stream_generator(self, chat_id: str, user_message: str):
+        # Get chat information
+        chat = await self.get_chat(chat_id)
+        if not chat:
+            raise NotFoundException(detail=f"Chat '{chat_id}' not found")
+
+        # Save user message
+        self.chat_message_repo.add_message(
+            chat_id=chat_id,
+            role="user",
+            content=user_message
+        )
+
+        # Retrieve relevant documents
+        yield {
+            "event": "status",
+            "data": json.dumps({"status": "retrieving_documents"})
+        }
+        relevant_docs = await self._retrieve_from_multiple_collections(
+            user_message,
+            chat.collection_ids
+        )
+
+        # Send sources found
+        sources = self._format_sources(relevant_docs)
+        yield {
+            "event": "sources",
+            "data": json.dumps({
+                "sources": [source.model_dump() for source in sources],
+                "count": len(sources)
+            })
+        }
+
+        # Generate AI response
+        yield {
+            "event": "status",
+            "data": json.dumps({"status": "generating_response"})
+        }
+
+        # Format context and get conversation history
+        context = self._format_context(relevant_docs)
+        history = self.chat_message_repo.get_conversation_history(chat_id, max_messages=10)
+
+        # Format conversation history
+        conversation_context = ""
+        if len(history) > 1:  # More than just the current message
+            conversation_context = "\n对话历史:\n"
+            for msg in history[:-1]:  # Exclude the current message
+                conversation_context += f"{msg.role}: {msg.content}\n"
+
+        # Prepare the full context
+        full_context = context
+        if conversation_context:
+            full_context = conversation_context + "\n\n当前文档上下文:\n" + context
+
+        # Generate AI response using RAG
+        from rag.prompt_templates import get_rag_prompt
+
+        prompt = get_rag_prompt()
+
+        # Create streaming chain
+        chain = prompt | self.llm
+
+        # Stream response chunks
+        full_response = ""
+        async for chunk in chain.astream({
+            "context": full_context,
+            "question": user_message
+        }):
+            content = chunk.content if hasattr(chunk, 'content') else str(chunk)
+            if content:
+                full_response += str(content)
+                yield {
+                    "event": "content",
+                    "data": json.dumps({"content": content})
+                }
+
+        # Save complete AI response
+        ai_msg = self.chat_message_repo.add_message(
+            chat_id=chat_id,
+            role="assistant",
+            content=full_response,
+            sources=json.dumps([source.model_dump() for source in sources]),
+            metadata=json.dumps({
+                "model": self.config.openai_chat_model,
+                "sources_count": len(sources),
+                "collections_searched": chat.collection_ids
+            })
+        )
+
+        # Send completion event
+        yield {
+            "event": "done",
+            "data": json.dumps({
+                "message_id": ai_msg.id,
+                "sources_count": len(sources),
+                "total_content_length": len(full_response)
+            })
+        }
+
+        logger.info(f"Generated AI response for chat {chat_id} with {len(sources)} sources")
 
     def close(self):
         self.chroma_manager.close()
