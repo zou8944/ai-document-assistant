@@ -84,6 +84,14 @@ class Document(Base):
         doc="Error message if processing failed"
     )
 
+    # Content
+    content: Mapped[str] = mapped_column(
+        Text,
+        default="",
+        server_default="",
+        doc="Document content"
+    )
+
     # Content hash for deduplication
     hash_md5: Mapped[Optional[str]] = mapped_column(
         String(32),

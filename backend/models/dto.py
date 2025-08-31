@@ -76,6 +76,7 @@ class DocumentDTO(DTOConvertible[Document, "DocumentDTO"]):
     id: str | None = None
     collection_id: str | None = None
     name: str | None = None
+    content: str | None = None
     uri: str | None = None
     size_bytes: int | None = None
     mime_type: str | None = None

@@ -5,10 +5,9 @@ Document management routes.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Query, Request
 
 from api.response_utils import (
-    raise_internal_error,
     raise_not_found,
     success_response,
 )
@@ -37,24 +36,17 @@ async def list_documents(
         search: Optional search term for document names
         status: Optional status filter (pending, processing, indexed, failed)
     """
-    try:
-        app_state = get_app_state(request)
+    document_service = get_app_state(request).document_service
 
-        document_service = app_state.document_service
+    result = await document_service.list_documents(
+        collection_id=collection_id,
+        page=page,
+        page_size=page_size,
+        search=search,
+        status=status
+    )
 
-        result = await document_service.list_documents(
-            collection_id=collection_id,
-            page=page,
-            page_size=page_size,
-            search=search,
-            status=status
-        )
-
-        return success_response(data=result.dict())
-
-    except Exception as e:
-        logger.error(f"Failed to list documents: {e}")
-        raise_internal_error(f"Failed to list documents: {str(e)}")
+    return success_response(data=result)
 
 
 @router.get("/collections/{collection_id}/documents/{document_id}")
@@ -64,21 +56,14 @@ async def get_document(
     request: Request
 ):
     """Get a specific document"""
-    try:
-        app_state = get_app_state(request)
+    document_service = get_app_state(request).document_service
 
-        document_service = app_state.document_service
+    document = await document_service.get_document(collection_id, document_id)
 
-        document = await document_service.get_document(collection_id, document_id)
+    if not document:
+        raise_not_found(f"Document '{document_id}' not found in collection '{collection_id}'")
 
-        if not document:
-            raise_not_found(f"Document '{document_id}' not found in collection '{collection_id}'")
-
-        return success_response(data=document)
-
-    except Exception as e:
-        logger.error(f"Failed to get document: {e}")
-        raise_internal_error(f"Failed to get document: {str(e)}")
+    return success_response(data=document)
 
 
 @router.delete("/collections/{collection_id}/documents/{document_id}")
@@ -88,21 +73,14 @@ async def delete_document(
     request: Request
 ):
     """Delete a document and its associated chunks/vectors"""
-    try:
-        app_state = get_app_state(request)
+    document_service = get_app_state(request).document_service
 
-        document_service = app_state.document_service
+    success = await document_service.delete_document(collection_id, document_id)
 
-        success = await document_service.delete_document(collection_id, document_id)
+    if not success:
+        raise_not_found(f"Document '{document_id}' not found in collection '{collection_id}'")
 
-        if not success:
-            raise_not_found(f"Document '{document_id}' not found in collection '{collection_id}'")
-
-        return success_response(data={"document_id": document_id, "deleted": True})
-
-    except Exception as e:
-        logger.error(f"Failed to delete document: {e}")
-        raise_internal_error(f"Failed to delete document: {str(e)}")
+    return success_response(data={"document_id": document_id, "deleted": True})
 
 
 @router.get("/collections/{collection_id}/documents/{document_id}/download")
@@ -113,29 +91,12 @@ async def download_document(
 ):
     """
     Download a document file (only for local files)
-
-    Args:
-        collection_id: Collection ID
-        document_id: Document ID
-
-    Returns:
-        File download response or error
     """
-    try:
-        app_state = get_app_state(request)
+    document_service = get_app_state(request).document_service
 
-        document_service = app_state.document_service
+    file_response = await document_service.download_document(collection_id, document_id)
 
-        file_response = await document_service.download_document(collection_id, document_id)
+    if not file_response:
+        raise_not_found(f"Document '{document_id}' not found in collection '{collection_id}'")
 
-        if not file_response:
-            raise_not_found(f"Document '{document_id}' not found in collection '{collection_id}'")
-
-        return file_response
-
-    except HTTPException:
-        # Re-raise HTTP exceptions (like 400, 404) from service
-        raise
-    except Exception as e:
-        logger.error(f"Failed to download document: {e}")
-        raise_internal_error(f"Failed to download document: {str(e)}")
+    return file_response

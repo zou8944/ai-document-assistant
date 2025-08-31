@@ -43,7 +43,8 @@ class DocumentRepository(BaseRepository[Document, DocumentDTO]):
     def count_by_collection(
         self,
         collection_id: str,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        search: Optional[str] = None
     ) -> int:
         with session_context() as session:
             query = select(func.count(Document.id)).where(
@@ -52,6 +53,9 @@ class DocumentRepository(BaseRepository[Document, DocumentDTO]):
 
             if status:
                 query = query.where(Document.status == status)
+
+            if search:
+                query = query.where(Document.name.ilike(f"%{search}%"))
 
             return session.scalar(query) or 0
 

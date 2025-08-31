@@ -31,7 +31,7 @@ def error_response(
     code: ResponseCode,
     message: str,
     data: Any = None,
-    status_code: int = None
+    status_code: int = 500
 ) -> JSONResponse:
     """
     Create an error response with appropriate HTTP status code.
