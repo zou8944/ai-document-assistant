@@ -16,7 +16,6 @@ from api.response_utils import (
 from api.state import get_app_state
 from models.requests import (
     CreateCollectionRequest,
-    DeleteCollectionRequest,
     UpdateCollectionRequest,
 )
 from models.responses import ListCollectionsResponseV1
@@ -129,29 +128,3 @@ async def delete_collection(collection_id: str, request: Request):
         raise_not_found(f"Collection '{collection_id}' not found")
 
     return success_response(data={})
-
-
-# Legacy endpoints for backward compatibility
-@router.delete("/collections")
-async def delete_collection_legacy(
-    request_data: DeleteCollectionRequest,
-    request: Request
-):
-    """Delete a collection (legacy endpoint)"""
-    app_state = get_app_state(request)
-
-    collection_service = app_state.collection_service
-
-    success = await collection_service.delete_collection(request_data.collection_name)
-
-    if success:
-        response_data = {
-            "collection_name": request_data.collection_name,
-            "deleted": True
-        }
-        return success_response(
-            data=response_data,
-            message=f"Collection '{request_data.collection_name}' deleted successfully"
-        )
-    else:
-        raise_not_found(f"Collection '{request_data.collection_name}' not found")

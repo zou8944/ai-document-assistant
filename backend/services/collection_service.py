@@ -5,9 +5,11 @@ Collection management service.
 import logging
 from typing import Optional
 
+from database.connection import transaction
 from models.dto import CollectionDTO
 from models.responses import CollectionResponse
 from repository.collection import CollectionRepository
+from repository.document import DocumentChunkRepository, DocumentRepository
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +26,8 @@ class CollectionService:
         self.chroma_manager = create_chroma_manager(self.config)
 
         self.collection_repo = CollectionRepository()
+        self.doc_repo = DocumentRepository()
+        self.doc_chunk_repo = DocumentChunkRepository()
 
         logger.info("CollectionService initialized successfully")
 
@@ -97,18 +101,14 @@ class CollectionService:
 
     async def delete_collection(self, collection_id: str):
         """Delete a collection"""
-        # Delete from ChromaDB first
-        chroma_success = await self.chroma_manager.delete_collection(collection_id)
-        if not chroma_success:
-            logger.warning(f"Failed to delete ChromaDB collection '{collection_id}', but continuing with database deletion")
+        # delete collection, document, document_chunk; delete chroma collection
+        async with transaction():
+            self.collection_repo.delete(collection_id)
+            self.doc_repo.delete_by_collection(collection_id)
+            self.doc_chunk_repo.delete_by_collection(collection_id)
+            await self.chroma_manager.delete_collection(collection_id)
 
-        # Delete from database (cascade will handle related records)
-        success = self.collection_repo.delete(collection_id)
-
-        if success:
-            logger.info(f"Deleted collection '{collection_id}'")
-
-        return True
+        logger.info(f"Deleted collection '{collection_id}'")
 
     def close(self):
         """Close connections and cleanup resources"""

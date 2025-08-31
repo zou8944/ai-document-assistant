@@ -87,6 +87,16 @@ class DocumentRepository(BaseRepository[Document, DocumentDTO]):
 
         return result.rowcount or 0
 
+    def delete_by_collection(self, id: str) -> int:
+        from sqlalchemy import delete
+
+        with session_context() as session:
+            stmt = delete(Document).where(Document.collection_id == id)
+            result = session.execute(stmt)
+            session.flush()
+
+        return result.rowcount or 0
+
     def get_by_status(self, status: str) -> list[DocumentDTO]:
         with session_context() as session:
             sql = select(Document).where(Document.status == status)
@@ -141,6 +151,16 @@ class DocumentChunkRepository(BaseRepository[DocumentChunk, DocumentChunkDTO]):
 
         with session_context() as session:
             stmt = delete(DocumentChunk).where(DocumentChunk.document_id == document_id)
+            result = session.execute(stmt)
+            session.flush()
+
+        return result.rowcount or 0
+
+    def delete_by_collection(self, collection_id: str) -> int:
+        from sqlalchemy import delete
+
+        with session_context() as session:
+            stmt = delete(DocumentChunk).where(DocumentChunk.collection_id == collection_id)
             result = session.execute(stmt)
             session.flush()
 
