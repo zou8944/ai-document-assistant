@@ -18,7 +18,7 @@ from crawler.simple_web_crawler import SimpleCrawlResult, create_simple_web_craw
 from data_processing.file_processor import create_file_processor
 from data_processing.text_splitter import create_document_processor
 from database.connection import transaction
-from exception import NotFoundException
+from exception import HTTPNotFoundException
 from models.dto import DocumentChunkDTO, DocumentDTO, TaskDTO, TaskLogDTO
 from models.responses import TaskResponse
 from repository.document import DocumentChunkRepository, DocumentRepository
@@ -125,7 +125,7 @@ class TaskService:
     async def get_task(self, task_id: str) -> TaskDTO:
         task = self.task_repo.get_by_id(task_id)
         if not task:
-            raise NotFoundException(f"Task {task_id} not found")
+            raise HTTPNotFoundException(f"Task {task_id} not found")
 
         return task
 
@@ -146,7 +146,7 @@ class TaskService:
     async def get_task_stream_generator(self, task_id: str):
         task = self.task_repo.get_by_id(task_id)
         if not task:
-            raise NotFoundException(f"Task {task_id} not found")
+            raise HTTPNotFoundException(f"Task {task_id} not found")
 
         # Send initial metadata
         yield {

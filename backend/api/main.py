@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.middleware import UnifiedResponseMiddleware, setup_exception_handlers
+from api.middleware import UnifiedResponseMiddleware
 from api.routes import chats, collections, documents, enhanced_chat, health, ingest, settings, tasks
 from api.state import AppState, set_app_state
 from config import get_config
@@ -129,10 +129,6 @@ app.add_middleware(
 
 # Add unified response middleware
 app.add_middleware(UnifiedResponseMiddleware)
-
-# Setup exception handlers
-setup_exception_handlers(app)
-
 
 
 # Include routers with versioned API prefix

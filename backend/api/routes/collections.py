@@ -7,13 +7,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Request, status
 
-from api.response_utils import (
-    raise_bad_request,
-    raise_conflict,
-    raise_not_found,
-    success_response,
-)
 from api.state import get_app_state
+from exception import HTTPBadRequestException, HTTPConflictException, HTTPNotFoundException
 from models.requests import (
     CreateCollectionRequest,
     UpdateCollectionRequest,
@@ -46,9 +41,9 @@ async def create_collection(
     )
 
     if not collection:
-        raise_conflict(f"Collection with id '{request_data.id}' already exists")
+        raise HTTPConflictException(f"Collection with id '{request_data.id}' already exists")
 
-    return success_response(data=collection)
+    return collection
 
 
 @router.get("/collections")
@@ -70,7 +65,7 @@ async def list_collections(request: Request, search: Optional[str] = None):
         total=len(collections)
     )
 
-    return success_response(data=response_data)
+    return response_data
 
 
 @router.get("/collections/{collection_id}")
@@ -83,9 +78,9 @@ async def get_collection(collection_id: str, request: Request):
     collection = await collection_service.get_collection(collection_id)
 
     if not collection:
-        raise_not_found(f"Collection '{collection_id}' not found")
+        raise HTTPNotFoundException(f"Collection '{collection_id}' not found")
 
-    return success_response(data=collection)
+    return collection
 
 
 @router.patch("/collections/{collection_id}")
@@ -101,7 +96,7 @@ async def update_collection(
 
     # Validate at least one field is provided
     if request_data.name is None and request_data.description is None:
-        raise_bad_request("At least one field (name or description) must be provided")
+        raise HTTPBadRequestException("At least one field (name or description) must be provided")
 
     collection = await collection_service.update_collection(
         collection_id=collection_id,
@@ -110,9 +105,9 @@ async def update_collection(
     )
 
     if not collection:
-        raise_not_found(f"Collection '{collection_id}' not found")
+        raise HTTPNotFoundException(f"Collection '{collection_id}' not found")
 
-    return success_response(data=collection)
+    return collection
 
 
 @router.delete("/collections/{collection_id}")
@@ -125,6 +120,6 @@ async def delete_collection(collection_id: str, request: Request):
     success = await collection_service.delete_collection(collection_id)
 
     if not success:
-        raise_not_found(f"Collection '{collection_id}' not found")
+        raise HTTPNotFoundException(f"Collection '{collection_id}' not found")
 
-    return success_response(data={})
+    return {}

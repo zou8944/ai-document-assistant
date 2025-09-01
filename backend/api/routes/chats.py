@@ -7,13 +7,12 @@ import logging
 from fastapi import APIRouter, Request, status
 from sse_starlette.sse import EventSourceResponse
 
-from api.response_utils import (
-    raise_bad_request,
-    raise_internal_error,
-    raise_not_found,
-    success_response,
-)
 from api.state import get_app_state
+from exception import (
+    HTTPBadRequestException,
+    HTTPInternalServerErrorException,
+    HTTPNotFoundException,
+)
 from models.requests import ChatMessageRequest, CreateChatRequest, UpdateChatRequest
 
 logger = logging.getLogger(__name__)
@@ -32,7 +31,7 @@ async def create_chat(request_data: CreateChatRequest, request: Request):
     for collection_id in request_data.collection_ids:
         collection = await collection_service.get_collection(collection_id)
         if not collection:
-            raise_bad_request(f"Collection '{collection_id}' not found")
+            raise HTTPBadRequestException(f"Collection '{collection_id}' not found")
 
     # Create chat
     chat = await chat_service.create_chat(
@@ -42,7 +41,7 @@ async def create_chat(request_data: CreateChatRequest, request: Request):
 
     logger.info(f"Created chat {chat.chat_id} with name '{chat.name}'")
 
-    return success_response(data=chat)
+    return chat
 
 
 @router.get("/chats")
@@ -58,12 +57,12 @@ async def list_chats(
 
     chats = await chat_service.list_chats(offset=offset, limit=limit)
 
-    return success_response(data={
+    return {
         "chats": [chat.model_dump() for chat in chats],
         "offset": offset,
         "limit": limit,
         "total": len(chats)  # Could implement proper count if needed
-    })
+    }
 
 
 @router.get("/chats/{chat_id}")
@@ -76,10 +75,9 @@ async def get_chat(chat_id: str, request: Request):
     chat = await chat_service.get_chat(chat_id)
 
     if not chat:
-        raise_not_found(f"Chat '{chat_id}' not found")
+        raise HTTPNotFoundException(f"Chat '{chat_id}' not found")
 
-    assert chat
-    return success_response(data=chat.model_dump())
+    return chat
 
 
 @router.put("/chats/{chat_id}")
@@ -100,7 +98,7 @@ async def update_chat(
         for collection_id in request_data.collection_ids:
             collection = await collection_service.get_collection(collection_id)
             if not collection:
-                raise_bad_request(f"Collection '{collection_id}' not found")
+                raise HTTPBadRequestException(f"Collection '{collection_id}' not found")
 
     # Update chat
     chat = await chat_service.update_chat(
@@ -110,12 +108,11 @@ async def update_chat(
     )
 
     if not chat:
-        raise_not_found(f"Chat '{chat_id}' not found")
+        raise HTTPNotFoundException(f"Chat '{chat_id}' not found")
 
     logger.info(f"Updated chat {chat_id}")
 
-    assert chat
-    return success_response(data=chat.model_dump())
+    return chat
 
 
 @router.delete("/chats/{chat_id}")
@@ -128,14 +125,14 @@ async def delete_chat(chat_id: str, request: Request):
     success = await chat_service.delete_chat(chat_id)
 
     if not success:
-        raise_not_found(f"Chat '{chat_id}' not found")
+        raise HTTPNotFoundException(f"Chat '{chat_id}' not found")
 
     logger.info(f"Deleted chat {chat_id}")
 
-    return success_response(data={
+    return {
         "chat_id": chat_id,
         "deleted": True
-    })
+    }
 
 
 @router.get("/chats/{chat_id}/messages")
@@ -153,7 +150,7 @@ async def get_chat_messages(
     # Verify chat exists
     chat = await chat_service.get_chat(chat_id)
     if not chat:
-        raise_not_found(f"Chat '{chat_id}' not found")
+        raise HTTPNotFoundException(f"Chat '{chat_id}' not found")
 
     messages = await chat_service.get_chat_messages(
         chat_id=chat_id,
@@ -162,12 +159,12 @@ async def get_chat_messages(
     )
     total = await chat_service.count_chat_messages(chat_id)
 
-    return success_response(data={
+    return {
         "messages": [message.model_dump() for message in messages],
         "offset": offset,
         "limit": limit,
         "total": total
-    })
+    }
 
 
 @router.post("/chats/{chat_id}/chat")
@@ -188,12 +185,11 @@ async def send_message(
     )
 
     if not response_message:
-        raise_internal_error("Failed to generate AI response")
+        raise HTTPInternalServerErrorException("Failed to generate AI response")
 
     logger.info(f"Generated response for chat {chat_id}")
 
-    assert response_message
-    return success_response(data=response_message.model_dump())
+    return response_message
 
 
 @router.post("/chats/{chat_id}/chat/stream")

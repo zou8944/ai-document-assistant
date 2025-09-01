@@ -6,12 +6,8 @@ import logging
 
 from fastapi import APIRouter, Request, status
 
-from api.response_utils import (
-    raise_bad_request,
-    raise_not_found,
-    success_response,
-)
 from api.state import get_app_state
+from exception import HTTPBadRequestException, HTTPNotFoundException
 from models.requests import IngestFilesRequest, IngestUrlsRequest
 
 logger = logging.getLogger(__name__)
@@ -33,11 +29,11 @@ async def ingest_files(
 
     collection = await collection_service.get_collection(collection_id)
     if not collection:
-        raise_not_found(f"Collection '{collection_id}' not found")
+        raise HTTPNotFoundException(f"Collection '{collection_id}' not found")
 
     # Validate files list
     if not request_data.files:
-        raise_bad_request("Files list cannot be empty")
+        raise HTTPBadRequestException("Files list cannot be empty")
 
     # Create task
     task = await task_service.create_task(
@@ -48,10 +44,10 @@ async def ingest_files(
 
     logger.info(f"Created file ingestion task {task.task_id} for collection {collection_id}")
 
-    return success_response(data={
+    return {
         "task_id": task.task_id,
         "status": task.status
-    })
+    }
 
 
 @router.post("/collections/{collection_id}/ingest/urls", status_code=status.HTTP_202_ACCEPTED)
@@ -69,11 +65,11 @@ async def ingest_urls(
 
     collection = await collection_service.get_collection(collection_id)
     if not collection:
-        raise_not_found(f"Collection '{collection_id}' not found")
+        raise HTTPNotFoundException(f"Collection '{collection_id}' not found")
 
     # Validate URLs list
     if not request_data.urls:
-        raise_bad_request("URLs list cannot be empty")
+        raise HTTPBadRequestException("URLs list cannot be empty")
 
     # Create task
     task = await task_service.create_task(
@@ -88,7 +84,7 @@ async def ingest_urls(
 
     logger.info(f"Created URL ingestion task {task.task_id} for collection {collection_id}")
 
-    return success_response(data={
+    return {
         "task_id": task.task_id,
         "status": task.status
-    })
+    }

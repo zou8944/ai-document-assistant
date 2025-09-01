@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-from exception import NotFoundException
+from exception import HTTPNotFoundException
 from models.dto import ChatDTO, ChatMessageDTO
 from models.responses import ChatMessageResponse, ChatResponse, SourceReference
 from repository.chat import ChatMessageRepository, ChatRepository
@@ -209,7 +209,7 @@ class ChatService:
         # Get chat information
         chat = await self.get_chat(chat_id)
         if not chat:
-            raise NotFoundException(detail=f"Chat '{chat_id}' not found")
+            raise HTTPNotFoundException(detail=f"Chat '{chat_id}' not found")
 
         # Save user message
         self.chat_message_repo.add_message(
@@ -278,7 +278,7 @@ class ChatService:
         # Get chat information
         chat = await self.get_chat(chat_id)
         if not chat:
-            raise NotFoundException(detail=f"Chat '{chat_id}' not found")
+            raise HTTPNotFoundException(detail=f"Chat '{chat_id}' not found")
 
         # Save user message
         self.chat_message_repo.add_message(
