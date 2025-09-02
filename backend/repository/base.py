@@ -27,7 +27,7 @@ class BaseRepository(Generic[T, D]):
             session.flush()
             session.refresh(entity)
 
-        return self.dto_class.from_orm(entity)
+            return self.dto_class.from_orm(entity)
 
     def create_by_model(self, dto: D) -> D:
         entity = dto.to_orm(self.model)
@@ -37,7 +37,7 @@ class BaseRepository(Generic[T, D]):
             session.flush()
             session.refresh(entity)
 
-        return self.dto_class.from_orm(entity)
+            return self.dto_class.from_orm(entity)
 
     def get_by_id(self, entity_id: Any) -> Optional[D]:
         with session_context() as session:

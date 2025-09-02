@@ -80,7 +80,7 @@ class CollectionService:
 
     async def get_collection(self, collection_id: str) -> Optional[CollectionResponse]:
         """Get collection by ID with updated stats"""
-        collection = self.collection_repo.get_with_stats(collection_id)
+        collection = self.collection_repo.get_by_id(collection_id)
 
         if not collection:
             return None

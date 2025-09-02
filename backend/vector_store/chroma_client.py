@@ -171,8 +171,7 @@ class ChromaManager:
                         "content": documents[i] if i < len(documents) else "",
                         "source": metadata.get("source", ""),
                         "start_index": metadata.get("start_index", 0),
-                        "metadata": {k: v for k, v in metadata.items()
-                                    if k not in ["source", "start_index"]}
+                        "metadata": {k: v for k, v in metadata.items() if k not in ["source", "start_index"]}
                     })
 
         logger.info(f"Found {len(formatted_results)} similar documents")

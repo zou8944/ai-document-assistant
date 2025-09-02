@@ -54,7 +54,7 @@ class CollectionRepository(BaseRepository[Collection, CollectionDTO]):
                 session.flush()
                 session.refresh(collection)
 
-        return self.dto_class.from_orm(collection)
+            return self.dto_class.from_orm(collection)
 
     def update_stats(self, collection_id: str) -> bool:
         with session_context() as session:

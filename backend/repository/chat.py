@@ -127,11 +127,13 @@ class ChatMessageRepository(BaseRepository[ChatMessage, ChatMessageDTO]):
             session.flush()
             session.refresh(message)
 
+            message_dto = self.dto_class.from_orm(message)
+
         # Update chat statistics
         chat_repo = ChatRepository()
         chat_repo.update_message_count(chat_id)
 
-        return self.dto_class.from_orm(message)
+        return message_dto
 
     def get_conversation_history(
         self,
@@ -153,4 +155,4 @@ class ChatMessageRepository(BaseRepository[ChatMessage, ChatMessageDTO]):
             stmt = delete(ChatMessage).where(ChatMessage.chat_id == chat_id)
             result = session.execute(stmt)
 
-        return result.rowcount or 0
+            return result.rowcount or 0

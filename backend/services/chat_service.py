@@ -59,10 +59,8 @@ class ChatService:
         """Convert ChatMessage model to response model"""
         try:
             sources = json.loads(message.sources) if message.sources else []
-            metadata = json.loads(message.metadata) if message.metadata else {}  # type: ignore
         except json.JSONDecodeError:
             sources = []
-            metadata = {}
 
         return ChatMessageResponse(
             message_id=message.id or "" ,
@@ -70,7 +68,6 @@ class ChatService:
             role=message.role or "",
             content=message.content or "",
             sources=sources,
-            metadata=metadata,
             created_at=message.created_at.isoformat() if message.created_at else ""
         )
 
@@ -170,7 +167,7 @@ class ChatService:
 
         # Sort by relevance score and take top results
         all_results.sort(key=lambda x: x.get('score', 0), reverse=True)
-        return all_results[:top_k_per_collection * 2]  # Return top results across all collections
+        return all_results[:top_k_per_collection * 2]
 
     def _format_sources(self, documents: list[dict[str, Any]]) -> list[SourceReference]:
         """Format retrieved documents as source references"""
@@ -348,7 +345,7 @@ class ChatService:
                 full_response += str(content)
                 yield {
                     "event": "content",
-                    "data": json.dumps({"content": content})
+                    "data": json.dumps({"content": content}, ensure_ascii=False)
                 }
 
         # Save complete AI response

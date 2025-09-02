@@ -159,7 +159,6 @@ class ChatMessageResponse(BaseModel):
     role: str = Field(..., description="Message role (user/assistant)")
     content: str = Field(..., description="Message content")
     sources: list[dict] = Field(default=[], description="Source references")
-    metadata: dict = Field(default={}, description="Additional metadata")
     created_at: str = Field(..., description="Creation timestamp")
 
 
