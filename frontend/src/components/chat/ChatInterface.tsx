@@ -11,7 +11,14 @@ import {
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { useAppStore } from '../../store/appStore'
-import { useAPIClient, extractData, ChatMessage as APIChatMessage, SSEEvent } from '../../services/apiClient'
+import { 
+  useAPIClient, 
+  extractData, 
+  ChatMessage as APIChatMessage, 
+  SourceReference,
+  EnhancedChatRequest,
+  SSEEvent 
+} from '../../services/apiClient'
 import KnowledgeBaseSelector from './KnowledgeBaseSelector'
 
 interface Message {
@@ -19,33 +26,22 @@ interface Message {
   type: 'user' | 'assistant'
   content: string
   timestamp: string
-  sources?: Array<{
-    name: string
-    url?: string
-  }>
+  sources?: SourceReference[]
+  confidence?: number
+  intent_analysis?: any
+  retrieval_strategy?: string
+  cache_hit?: boolean
+  total_time_ms?: number
 }
 
 // Map API message to UI message
 const mapAPIMessageToUIMessage = (msg: APIChatMessage): Message => {
-  let sources: Array<{ name: string, url?: string }> = []
-  if (msg.sources) {
-    try {
-      const parsedSources = JSON.parse(msg.sources)
-      sources = parsedSources.map((s: any) => ({
-        name: s.document_name || s.name,
-        url: s.url
-      }))
-    } catch (e) {
-      console.error('Failed to parse sources:', e)
-    }
-  }
-  
   return {
-    id: msg.id,
+    id: msg.message_id,
     type: msg.role,
     content: msg.content,
     timestamp: msg.created_at,
-    sources
+    sources: msg.sources || []
   }
 }
 
@@ -60,6 +56,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
   const [showKnowledgeBaseSelector, setShowKnowledgeBaseSelector] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
+  const [useEnhanced, setUseEnhanced] = useState(true)
+  const [currentIntentAnalysis, setCurrentIntentAnalysis] = useState<any>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const apiClient = useAPIClient()
   
@@ -114,15 +112,35 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
     setIsLoading(true)
     setIsStreaming(true)
     setStreamingContent('')
+    setCurrentIntentAnalysis(null)
 
     try {
-      // Send message via streaming API
-      await apiClient.sendMessageStream(
-        currentChat.id,
-        { message: userMessageContent, include_sources: true },
-        handleStreamEvent,
-        handleStreamError
-      )
+      // Use enhanced chat features
+      if (useEnhanced) {
+        const enhancedRequest: EnhancedChatRequest = {
+          message: userMessageContent,
+          include_sources: true,
+          enable_intent_analysis: true,
+          enable_cache: true,
+          enable_summary_overview: true,
+          retrieval_strategy: 'auto'
+        }
+        
+        await apiClient.sendEnhancedMessageStream(
+          currentChat.id,
+          enhancedRequest,
+          handleStreamEvent,
+          handleStreamError
+        )
+      } else {
+        // Fallback to basic chat
+        await apiClient.sendMessageStream(
+          currentChat.id,
+          { message: userMessageContent, include_sources: true },
+          handleStreamEvent,
+          handleStreamError
+        )
+      }
     } catch (error) {
       console.error('发送消息失败:', error)
       setIsLoading(false)
@@ -168,15 +186,25 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
         setIsLoading(false)
         setIsStreaming(false)
         
-        // Add complete AI message
+        // Add complete AI message with enhanced features
         const aiMessage: Message = {
           id: event.data.message_id || `ai_${Date.now()}`,
           type: 'assistant',
           content: streamingContent,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          sources: event.data.sources || [],
+          confidence: event.data.confidence,
+          cache_hit: event.data.cache_hit,
+          total_time_ms: event.data.total_time_ms,
+          retrieval_strategy: event.data.retrieval_strategy
         }
         setMessages(prev => [...prev, aiMessage])
         setStreamingContent('')
+        
+        // Store intent analysis if available
+        if (event.data.intent_analysis) {
+          setCurrentIntentAnalysis(event.data.intent_analysis)
+        }
         
         // Update chat session
         if (currentChat) {
@@ -212,12 +240,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
     alert('生成回复失败: ' + error.message)
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey && !isLoading && !isStreaming) {
-      e.preventDefault()
-      handleSendMessage()
-    }
-  }
 
   const handleAddKnowledgeBase = (kbIds: string[]) => {
     if (currentChat) {
@@ -271,13 +293,26 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
             )}
           </div>
           
-          <button
-            onClick={() => setShowKnowledgeBaseSelector(true)}
-            className="flex items-center space-x-1 text-sm text-blue-500 hover:text-blue-600 transition-colors"
-          >
-            <PlusIcon className="w-4 h-4" />
-            <span>添加知识库</span>
-          </button>
+          <div className="flex items-center space-x-4">
+            {/* Enhanced features toggle */}
+            <label className="flex items-center space-x-2 text-sm">
+              <input
+                type="checkbox"
+                checked={useEnhanced}
+                onChange={(e) => setUseEnhanced(e.target.checked)}
+                className="rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+              />
+              <span className="text-gray-600">增强模式</span>
+            </label>
+            
+            <button
+              onClick={() => setShowKnowledgeBaseSelector(true)}
+              className="flex items-center space-x-1 text-sm text-blue-500 hover:text-blue-600 transition-colors"
+            >
+              <PlusIcon className="w-4 h-4" />
+              <span>添加知识库</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -330,21 +365,40 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                       <div className="space-y-1">
                         {msg.sources.map((source, index) => (
                           <div key={index} className="text-xs">
-                            {source.url ? (
-                              <a
-                                href={source.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-200 hover:text-blue-100 underline"
-                              >
-                                {source.name}
-                              </a>
-                            ) : (
-                              <span className="opacity-75">{source.name}</span>
+                            <div className="flex items-center justify-between">
+                              <span className="opacity-75">{source.document_name}</span>
+                              {source.relevance_score && (
+                                <span className="text-xs bg-gray-200 px-1 rounded">
+                                  {(source.relevance_score * 100).toFixed(0)}%
+                                </span>
+                              )}
+                            </div>
+                            {source.content_preview && (
+                              <div className="text-xs opacity-60 mt-1 truncate">
+                                {source.content_preview.substring(0, 100)}...
+                              </div>
                             )}
                           </div>
                         ))}
                       </div>
+                    </div>
+                  )}
+                  
+                  {/* Enhanced features metadata */}
+                  {msg.type === 'assistant' && (msg.confidence || msg.cache_hit || msg.total_time_ms) && (
+                    <div className="mt-2 pt-2 border-t border-gray-300/20 flex flex-wrap gap-2 text-xs opacity-60">
+                      {msg.confidence && (
+                        <span className="bg-green-100 px-1 rounded">置信度: {(msg.confidence * 100).toFixed(0)}%</span>
+                      )}
+                      {msg.cache_hit && (
+                        <span className="bg-blue-100 px-1 rounded">缓存命中</span>
+                      )}
+                      {msg.total_time_ms && (
+                        <span className="bg-gray-100 px-1 rounded">{msg.total_time_ms.toFixed(0)}ms</span>
+                      )}
+                      {msg.retrieval_strategy && (
+                        <span className="bg-purple-100 px-1 rounded">{msg.retrieval_strategy}</span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -407,7 +461,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey && !isLoading && !isStreaming) {
+                  e.preventDefault()
+                  handleSendMessage()
+                }
+              }}
               placeholder="输入您的问题..."
               disabled={isLoading || isStreaming}
               rows={1}

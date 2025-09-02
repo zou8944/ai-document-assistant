@@ -5,7 +5,6 @@
 import React, { useState, useEffect } from 'react'
 import {
   ArrowLeftIcon,
-  CloudArrowUpIcon,
   DocumentIcon,
   GlobeAltIcon,
   FolderIcon,
@@ -56,7 +55,16 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const [loading, setLoading] = useState(true)
   const [currentTask, setCurrentTask] = useState<Task | null>(null)
 
+  const handleBack = () => {
+    setActiveKnowledgeBase(null)
+  }
+
   const currentKb = getCurrentKnowledgeBase()
+
+  // Debug logging
+  console.log('KnowledgeBaseManagement - currentKb:', currentKb)
+  console.log('KnowledgeBaseManagement - activeKnowledgeBase:', useAppStore.getState().activeKnowledgeBase)
+  console.log('KnowledgeBaseManagement - knowledgeBases:', useAppStore.getState().knowledgeBases)
 
   if (!currentKb) {
     return (
@@ -64,13 +72,17 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
         <div className="text-center text-gray-500">
           <DocumentIcon className="w-16 h-16 mx-auto mb-4 opacity-50" />
           <p>找不到知识库</p>
+          <div className="mt-4">
+            <button
+              onClick={handleBack}
+              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
+            >
+              返回列表
+            </button>
+          </div>
         </div>
       </div>
     )
-  }
-
-  const handleBack = () => {
-    setActiveKnowledgeBase(null)
   }
 
   const handleFileUpload = async () => {

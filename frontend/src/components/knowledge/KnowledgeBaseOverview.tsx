@@ -34,9 +34,9 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
     knowledgeBases,
     setActiveKnowledgeBase,
     setActiveSidebarSection,
-    getChatsByKnowledgeBase,
     addChatSession,
-    setActiveChat
+    setActiveChat,
+    addKnowledgeBase
   } = useAppStore()
 
   // Filter collections based on search query
@@ -92,8 +92,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
       // Add to store if not exists
       const existingKb = knowledgeBases.find(k => k.id === collection.id)
       if (!existingKb) {
-        // This would need to be implemented in the store
-        console.log('Adding knowledge base to store:', kb)
+        addKnowledgeBase(kb)
       }
       
       setActiveKnowledgeBase(collectionId)

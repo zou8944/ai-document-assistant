@@ -18,6 +18,9 @@ export { default as KnowledgeBaseSelector } from './chat/KnowledgeBaseSelector'
 // Settings components
 export { default as SettingsPage } from './settings/SettingsPage'
 
+// Startup components
+export { default as StartupScreen } from './StartupScreen'
+
 // Legacy components (keeping for compatibility)
 export { default as FileUpload } from './FileUpload'
 export { default as URLInput } from './URLInput'

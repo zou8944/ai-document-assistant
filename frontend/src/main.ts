@@ -31,9 +31,9 @@ class DocumentAssistantApp {
   private setupApp() {
     // This method will be called when Electron has finished initialization
     app.whenReady().then(async () => {
+      this.setupIpcHandlers()
       this.createWindow()
       await this.startAPIServer()
-      this.setupIpcHandlers()
 
       app.on('activate', () => {
         // On macOS, re-create window when dock icon is clicked
@@ -157,13 +157,6 @@ class DocumentAssistantApp {
       } catch {
         // Directory might already exist
       }
-      
-      const stdoutLog = createWriteStream(pathJoin(logDir, 'api_server_stdout.log'))
-      const stderrLog = createWriteStream(pathJoin(logDir, 'api_server_stderr.log'))
-      
-      // Pipe output to log files and console
-      this.apiServerProcess.stdout?.pipe(stdoutLog)
-      this.apiServerProcess.stderr?.pipe(stderrLog)
       
       this.apiServerProcess.stdout?.on('data', (data) => {
         console.log('API Server stdout:', data.toString())
@@ -325,7 +318,7 @@ class DocumentAssistantApp {
   private async waitForServerReady(baseURL: string, maxAttempts: number = 30): Promise<void> {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const response = await fetch(`${baseURL}/api/health`)
+        const response = await fetch(`${baseURL}/api/v1/health`)
         if (response.ok) {
           console.log(`API server ready after ${attempt} attempts`)
           return
