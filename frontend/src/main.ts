@@ -4,12 +4,11 @@
  */
 
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
-import { join, dirname } from 'path'
+import { join } from 'path'
 import isDev from 'electron-is-dev'
 
 // API server subprocess management
 import { spawn, ChildProcess } from 'child_process'
-import { createWriteStream } from 'fs'
 import { join as pathJoin } from 'path'
 
 // Type definitions for API server management

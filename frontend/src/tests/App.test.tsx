@@ -25,18 +25,9 @@ const mockProcessManager = {
   dispose: vi.fn()
 }
 
-const mockHealthMonitor = {
-  onStatusChange: vi.fn(() => () => {}),
-  getStatus: vi.fn(() => ({ isHealthy: true, lastChecked: new Date() })),
-  start: vi.fn(),
-  stop: vi.fn(),
-  dispose: vi.fn()
-}
-
 vi.mock('../services', () => ({
   useAPIClient: () => mockAPIClient,
-  useProcessManager: () => mockProcessManager,
-  useHealthMonitor: () => mockHealthMonitor
+  useProcessManager: () => mockProcessManager
 }))
 
 // Mock Electron API
@@ -144,19 +135,17 @@ describe('App', () => {
   it('handles connection errors', async () => {
     render(<App />)
     
-    // Simulate health status change
-    const healthStatusHandler = mockHealthMonitor.onStatusChange.mock.calls[0]?.[0]
+    // Simulate server disconnection event
+    const serverDisconnectedHandler = mockProcessManager.on.mock.calls.find(
+      call => call[0] === 'server-disconnected'
+    )?.[1]
     
-    if (healthStatusHandler) {
-      healthStatusHandler({
-        isHealthy: false,
-        lastChecked: new Date(),
-        error: 'Connection failed'
-      })
+    if (serverDisconnectedHandler) {
+      serverDisconnectedHandler({ code: 1 })
     }
 
     await waitFor(() => {
-      expect(screen.getByText(/连接错误/)).toBeInTheDocument()
+      expect(screen.getByText(/连接中断/)).toBeInTheDocument()
     })
   })
 

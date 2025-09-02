@@ -27,7 +27,7 @@ except Exception as e:
 # Configure logging
 logging.basicConfig(
     level=getattr(logging, conf.log_level.upper()),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='%(asctime)s - %(name)s - %(levelname)s - [Thread-%(threadName)s] - %(message)s',
     handlers=[
         logging.FileHandler('api_server.log'),
         logging.StreamHandler(sys.stderr)

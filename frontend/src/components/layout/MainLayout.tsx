@@ -19,7 +19,6 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ className }) => {
   const { 
     activeSidebarSection, 
     activeKnowledgeBase,
-    activeChat,
     sidebarWidth,
     setSidebarWidth
   } = useAppStore()

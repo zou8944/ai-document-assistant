@@ -32,11 +32,9 @@ export interface Document {
   type: 'file' | 'website'
 }
 
-export interface ImportProgress {
+export interface ImportStatus {
   isActive: boolean
-  currentFile?: string
   progress: number
-  total: number
   message: string
 }
 

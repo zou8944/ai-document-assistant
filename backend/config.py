@@ -36,7 +36,7 @@ class Config:
 
     # Web Crawling Configuration
     crawler_cache_dir: str = "data/crawler_cache"
-    crawler_max_depth: int = 3
+    crawler_max_depth: int = 2
     crawler_delay: float = 1.0
     crawler_max_pages: int = 10
 
@@ -69,9 +69,9 @@ class Config:
             chunk_overlap=int(os.getenv("CHUNK_OVERLAP", "200")),
 
             # Web Crawling Configuration
-            crawler_max_depth=int(os.getenv("CRAWLER_MAX_DEPTH", "3")),
+            crawler_max_depth=int(os.getenv("CRAWLER_MAX_DEPTH", "2")),
             crawler_delay=float(os.getenv("CRAWLER_DELAY", "1.0")),
-            crawler_max_pages=int(os.getenv("CRAWLER_MAX_PAGES", "3")),
+            crawler_max_pages=int(os.getenv("CRAWLER_MAX_PAGES", "10")),
 
             # Application Configuration
             log_level=os.getenv("LOG_LEVEL", "INFO"),

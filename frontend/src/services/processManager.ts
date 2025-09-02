@@ -14,6 +14,7 @@ export interface ProcessManagerEvents {
   'server-ready': [APIServerInfo]
   'server-disconnected': [{ code: number }]
   'connection-status-changed': [boolean]
+  [key: string]: any[]
 }
 
 // Browser-compatible EventEmitter for process events

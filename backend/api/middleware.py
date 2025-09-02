@@ -30,6 +30,9 @@ class UnifiedResponseMiddleware(BaseHTTPMiddleware):
         try:
             # Process the request
             response = await call_next(request)
+            # skip /openapi.json
+            if "/openapi.json" in request.url.path:
+                return response
 
             # Skip SSE
             if getattr(response, "media_type", "") == "text/event-stream":

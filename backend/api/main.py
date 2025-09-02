@@ -68,7 +68,7 @@ async def lifespan(app: FastAPI):
 
         # Start task workers
         logger.info("Starting task workers...")
-        await task_service.start_workers(num_workers=2)
+        await task_service.start_workers()
 
         # Store services in typed app state for access in routes
         state = AppState(

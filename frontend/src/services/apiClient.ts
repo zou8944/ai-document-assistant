@@ -62,7 +62,7 @@ export interface Task {
   task_id: string
   task_type: string
   collection_id: string
-  status: 'pending' | 'running' | 'completed' | 'failed'
+  status: 'pending' | 'processing' | 'completed' | 'failed'
   progress?: number
   result?: any
   error_message?: string
@@ -394,6 +394,97 @@ export class DocumentAssistantAPI {
     
     const url = params.toString() ? `/api/v1/tasks?${params}` : '/api/v1/tasks'
     return this.request<APIResponse<{ tasks: Task[], total: number }>>(url)
+  }
+
+  /**
+   * Stream task progress using Server-Sent Events
+   */
+  async streamTaskProgress(
+    taskId: string,
+    onEvent: (event: SSEEvent) => void,
+    onError?: (error: Error) => void
+  ): Promise<void> {
+    this.abortController = new AbortController()
+    
+    try {
+      const response = await fetch(`${this.baseURL}/api/v1/tasks/${encodeURIComponent(taskId)}/stream`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'text/event-stream',
+        },
+        signal: this.abortController.signal,
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+
+      if (!reader) {
+        throw new Error('Response body is not readable')
+      }
+
+      try {
+        let buffer = ''
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          
+          // Keep the last incomplete line in the buffer
+          buffer = lines.pop() || ''
+
+          let currentEvent = 'data'
+          let currentData: any = null
+          
+          for (const line of lines) {
+            if (line.trim() === '') {
+              // Empty line indicates end of SSE message, emit event
+              if (currentData) {
+                onEvent({ event: currentEvent, data: currentData })
+                currentData = null
+              }
+              continue
+            }
+            
+            if (line.startsWith('event: ')) {
+              currentEvent = line.slice(7).trim()
+            } else if (line.startsWith('data: ')) {
+              const data = line.slice(6).trim()
+              if (data && data !== '[DONE]') {
+                try {
+                  currentData = JSON.parse(data)
+                } catch (e) {
+                  console.error('Failed to parse task SSE data:', e, 'Data:', data)
+                }
+              }
+            }
+          }
+          
+          // Handle case where buffer doesn't end with empty line
+          if (currentData) {
+            onEvent({ event: currentEvent, data: currentData })
+          }
+        }
+      } finally {
+        reader.releaseLock()
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return // Request was cancelled, don't treat as error
+      }
+      
+      const err = error instanceof Error ? error : new Error('Unknown error')
+      if (onError) {
+        onError(err)
+      } else {
+        throw err
+      }
+    }
   }
 
   // Chat Management

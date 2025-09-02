@@ -8,6 +8,7 @@ import json
 import logging
 import mimetypes
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Optional
@@ -50,8 +51,8 @@ class TaskService:
         self.config = config or get_config()
 
         # Task queue and workers
-        self.task_queue: asyncio.Queue = asyncio.Queue()
-        self.workers: list[asyncio.Task] = []
+        self.task_queue: asyncio.Queue = asyncio.Queue(maxsize=100)
+        self.executor = ThreadPoolExecutor(max_workers=5)
         self.running = False
 
         # Initialize repositories
@@ -235,7 +236,7 @@ class TaskService:
             await self.task_queue.put(task.id)
             logger.info(f"Re-queued processing task {task.id}")
 
-    async def start_workers(self, num_workers: int = 2):
+    async def start_workers(self):
         """Start background task workers"""
         if self.running:
             logger.warning("Workers already running")
@@ -245,11 +246,7 @@ class TaskService:
         await self.requeue_processing_task()
 
         self.running = True
-        logger.info(f"Starting {num_workers} task workers")
-
-        for i in range(num_workers):
-            worker = asyncio.create_task(self._worker(f"worker-{i}"))
-            self.workers.append(worker)
+        self.executor.submit(self._sync_worker, "Task_queue_worker")
 
     async def stop_workers(self):
         """Stop background task workers"""
@@ -260,14 +257,12 @@ class TaskService:
         self.running = False
 
         # Cancel all workers
-        for worker in self.workers:
-            worker.cancel()
-
-        # Wait for workers to finish
-        await asyncio.gather(*self.workers, return_exceptions=True)
-        self.workers.clear()
+        self.executor.shutdown(wait=True)
 
         logger.info("Task workers stopped")
+
+    def _sync_worker(self, worker_name: str):
+        asyncio.run(self._worker(worker_name))
 
     async def _worker(self, worker_name: str):
         """Background worker that processes tasks from queue"""
@@ -284,7 +279,7 @@ class TaskService:
                 logger.info(f"Worker {worker_name} processing task {task_id}")
 
                 # Process the task
-                await self._process_task(task_id)
+                await self._process_task_with_exception(task_id)
 
                 # Mark task as done in queue
                 self.task_queue.task_done()
@@ -301,6 +296,13 @@ class TaskService:
                 continue
 
         logger.info(f"Task worker {worker_name} stopped")
+
+    async def _process_task_with_exception(self, task_id: str):
+        try:
+            await self._process_task(task_id)
+        except Exception as e:
+            logger.error(f"Error processing task {task_id}: {e}", exc_info=True)
+            self.task_repo.mark_completed(task_id, success=False, error_message=str(e))
 
     async def _process_task(self, task_id: str):
         """Process a single task"""
@@ -391,6 +393,7 @@ class TaskService:
             collection_id=collection_id,
             name=doc_title or f"Page from {doc_page_uri}",
             uri=doc_page_uri,
+            content=doc_content,
             size_bytes=len(doc_content.encode()),
             mime_type=doc_mime_type,
             status=doc_status,
