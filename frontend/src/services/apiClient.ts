@@ -84,6 +84,11 @@ export interface CreateChatRequest {
   collection_ids: string[]
 }
 
+export interface UpdateChatRequest {
+  name?: string
+  collection_ids?: string[]
+}
+
 export interface ChatMessage {
   message_id: string
   chat_id: string
@@ -114,42 +119,6 @@ export interface SourceInfo {
   relevance_score: number
 }
 
-// Enhanced Chat Types
-export interface EnhancedChatResponse {
-  message_id: string
-  chat_id: string
-  content: string
-  sources: SourceReference[]
-  metadata: Record<string, any>
-  confidence: number
-  intent_analysis?: IntentAnalysis
-  retrieval_strategy: string
-  cache_hit: boolean
-  retrieval_time_ms?: number
-  generation_time_ms?: number
-  total_time_ms?: number
-  collections_searched: string[]
-  documents_retrieved: number
-  sources_count: number
-}
-
-export interface IntentAnalysis {
-  intent: string
-  confidence: string
-  confidence_score: number
-  keyword_scores: Record<string, number>
-  description: string
-  analysis_method: string
-}
-
-export interface EnhancedChatRequest {
-  message: string
-  include_sources?: boolean
-  enable_intent_analysis?: boolean
-  enable_cache?: boolean
-  enable_summary_overview?: boolean
-  retrieval_strategy?: 'auto' | 'semantic' | 'hybrid'
-}
 
 // Health check
 export interface HealthResponse {
@@ -515,6 +484,16 @@ export class DocumentAssistantAPI {
   }
 
   /**
+   * Update a chat
+   */
+  async updateChat(chatId: string, request: UpdateChatRequest): Promise<APIResponse<Chat>> {
+    return this.request<APIResponse<Chat>>(`/api/v1/chats/${encodeURIComponent(chatId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(request),
+    })
+  }
+
+  /**
    * Delete a chat
    */
   async deleteChat(chatId: string): Promise<APIResponse<{ chat_id: string, deleted: boolean }>> {
@@ -625,166 +604,6 @@ export class DocumentAssistantAPI {
     }
   }
 
-  // Enhanced Chat Methods
-  /**
-   * Send enhanced message with advanced features (synchronous)
-   */
-  async sendEnhancedMessage(
-    chatId: string, 
-    request: EnhancedChatRequest
-  ): Promise<APIResponse<EnhancedChatResponse>> {
-    const params = new URLSearchParams()
-    if (request.enable_intent_analysis !== undefined) {
-      params.append('enable_intent_analysis', request.enable_intent_analysis.toString())
-    }
-    if (request.enable_cache !== undefined) {
-      params.append('enable_cache', request.enable_cache.toString())
-    }
-    if (request.enable_summary_overview !== undefined) {
-      params.append('enable_summary_overview', request.enable_summary_overview.toString())
-    }
-    if (request.retrieval_strategy) {
-      params.append('retrieval_strategy', request.retrieval_strategy)
-    }
-
-    const url = `/api/v1/chats/${encodeURIComponent(chatId)}/chat/enhanced?${params}`
-    return this.request<APIResponse<EnhancedChatResponse>>(url, {
-      method: 'POST',
-      body: JSON.stringify({
-        message: request.message,
-        include_sources: request.include_sources
-      }),
-    })
-  }
-
-  /**
-   * Send enhanced message with streaming response
-   */
-  async sendEnhancedMessageStream(
-    chatId: string,
-    request: EnhancedChatRequest,
-    onEvent: (event: SSEEvent) => void,
-    onError?: (error: Error) => void
-  ): Promise<void> {
-    this.abortController = new AbortController()
-
-    const params = new URLSearchParams()
-    if (request.enable_intent_analysis !== undefined) {
-      params.append('enable_intent_analysis', request.enable_intent_analysis.toString())
-    }
-    if (request.enable_cache !== undefined) {
-      params.append('enable_cache', request.enable_cache.toString())
-    }
-    if (request.enable_summary_overview !== undefined) {
-      params.append('enable_summary_overview', request.enable_summary_overview.toString())
-    }
-    if (request.retrieval_strategy) {
-      params.append('retrieval_strategy', request.retrieval_strategy)
-    }
-
-    try {
-      const response = await fetch(`${this.baseURL}/api/v1/chats/${encodeURIComponent(chatId)}/chat/enhanced/stream?${params}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
-        },
-        body: JSON.stringify({
-          message: request.message,
-          include_sources: request.include_sources
-        }),
-        signal: this.abortController.signal,
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder()
-
-      if (!reader) {
-        throw new Error('Response body is not readable')
-      }
-
-      try {
-        let buffer = ''
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split('\n')
-          
-          buffer = lines.pop() || ''
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6).trim()
-              if (data && data !== '[DONE]') {
-                try {
-                  const parsed = JSON.parse(data)
-                  onEvent({ event: 'data', data: parsed })
-                } catch (e) {
-                  console.error('Failed to parse enhanced SSE data:', e, 'Data:', data)
-                }
-              }
-            } else if (line.startsWith('event: ')) {
-              const eventType = line.slice(7).trim()
-              onEvent({ event: eventType, data: null })
-            }
-          }
-        }
-      } finally {
-        reader.releaseLock()
-      }
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        return
-      }
-      
-      const err = error instanceof Error ? error : new Error('Unknown error')
-      if (onError) {
-        onError(err)
-      } else {
-        throw err
-      }
-    }
-  }
-
-  /**
-   * Analyze message intent
-   */
-  async analyzeMessageIntent(
-    chatId: string, 
-    message: string
-  ): Promise<APIResponse<IntentAnalysis>> {
-    return this.request<APIResponse<IntentAnalysis>>(
-      `/api/v1/chats/${encodeURIComponent(chatId)}/intent-analysis?message=${encodeURIComponent(message)}`
-    )
-  }
-
-  /**
-   * Get cache statistics for a chat
-   */
-  async getCacheStats(chatId: string): Promise<APIResponse<any>> {
-    return this.request<APIResponse<any>>(`/api/v1/chats/${encodeURIComponent(chatId)}/cache-stats`)
-  }
-
-  /**
-   * Clear cache for a chat
-   */
-  async clearCache(
-    chatId: string, 
-    cacheType?: 'query_results' | 'intent' | 'embeddings'
-  ): Promise<APIResponse<{ cleared_count: number, cache_type: string }>> {
-    const url = cacheType 
-      ? `/api/v1/chats/${encodeURIComponent(chatId)}/cache?cache_type=${encodeURIComponent(cacheType)}`
-      : `/api/v1/chats/${encodeURIComponent(chatId)}/cache`
-    return this.request<APIResponse<{ cleared_count: number, cache_type: string }>>(url, {
-      method: 'DELETE'
-    })
-  }
 
   // Settings
   /**

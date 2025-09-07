@@ -10,22 +10,27 @@ interface KnowledgeBaseSelectorProps {
   isOpen: boolean
   onClose: () => void
   onSelect: (kbIds: string[]) => void
-  excludeIds?: string[]
+  selectedIds?: string[]
 }
 
 export const KnowledgeBaseSelector: React.FC<KnowledgeBaseSelectorProps> = ({
   isOpen,
   onClose,
   onSelect,
-  excludeIds = []
+  selectedIds: initialSelectedIds = []
 }) => {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const { knowledgeBases } = useAppStore()
 
-  // Filter out already included knowledge bases
-  const availableKnowledgeBases = knowledgeBases.filter(
-    kb => !excludeIds.includes(kb.id)
-  )
+  // Reset selection when modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      setSelectedIds([...initialSelectedIds])
+    }
+  }, [isOpen, initialSelectedIds])
+
+  // Show all knowledge bases
+  const availableKnowledgeBases = knowledgeBases
 
   const handleToggleSelection = (kbId: string) => {
     setSelectedIds(prev => 
@@ -36,10 +41,7 @@ export const KnowledgeBaseSelector: React.FC<KnowledgeBaseSelectorProps> = ({
   }
 
   const handleConfirm = () => {
-    if (selectedIds.length > 0) {
-      onSelect(selectedIds)
-    }
-    setSelectedIds([])
+    onSelect(selectedIds)
     onClose()
   }
 
@@ -80,16 +82,16 @@ export const KnowledgeBaseSelector: React.FC<KnowledgeBaseSelectorProps> = ({
           <div className="sm:flex sm:items-start">
             <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
               <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">
-                添加知识库到当前对话
+                管理对话知识库
               </h3>
 
               <div className="max-h-64 overflow-y-auto">
                 {availableKnowledgeBases.length === 0 ? (
                   <div className="text-center text-gray-500 py-8">
                     <BookOpenIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>没有可添加的知识库</p>
+                    <p>暂无知识库</p>
                     <p className="text-sm mt-1">
-                      {excludeIds.length > 0 ? '所有知识库都已添加到此对话中' : '请先创建知识库'}
+                      请先创建知识库
                     </p>
                   </div>
                 ) : (
@@ -97,7 +99,9 @@ export const KnowledgeBaseSelector: React.FC<KnowledgeBaseSelectorProps> = ({
                     {availableKnowledgeBases.map((kb) => (
                       <label
                         key={kb.id}
-                        className="flex items-start space-x-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                        className={`flex items-start space-x-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors ${
+                          selectedIds.includes(kb.id) ? 'bg-blue-50 ring-1 ring-blue-200' : ''
+                        }`}
                       >
                         <input
                           type="checkbox"
@@ -131,10 +135,9 @@ export const KnowledgeBaseSelector: React.FC<KnowledgeBaseSelectorProps> = ({
                   <button
                     type="button"
                     onClick={handleConfirm}
-                    disabled={selectedIds.length === 0}
-                    className="w-full inline-flex justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed sm:ml-3 sm:w-auto sm:text-sm"
+                    className="w-full inline-flex justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm"
                   >
-                    添加 ({selectedIds.length})
+                    确认 ({selectedIds.length} 个已选择)
                   </button>
                   <button
                     type="button"

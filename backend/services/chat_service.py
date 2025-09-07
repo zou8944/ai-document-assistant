@@ -107,7 +107,7 @@ class ChatService:
         updated_model = self.chat_repo.update_by_model(ChatDTO(
             id=chat_id,
             name=name,
-            collection_ids=json.dumps(collection_ids) if collection_ids else "[]"
+            collection_ids=json.dumps(collection_ids) if collection_ids else None
         ))
         if not updated_model:
             return None
@@ -178,7 +178,7 @@ class ChatService:
                 document_name=doc.get('source', 'Unknown Document'),
                 document_id=doc.get('document_id', ''),
                 chunk_index=doc.get('chunk_index', 0),
-                content_preview=doc.get('content', '')[:200] + "..." if len(doc.get('content', '')) > 200 else doc.get('content', ''),
+                content_preview=doc.get('content', '')[:100] + "..." if len(doc.get('content', '')) > 100 else doc.get('content', ''),
                 relevance_score=doc.get('score', 0.0)
             )
             sources.append(source_ref)

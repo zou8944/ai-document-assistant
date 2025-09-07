@@ -82,5 +82,3 @@ class UpdateChatRequest(BaseModel):
 class ChatMessageRequest(BaseModel):
     """Request model for sending a chat message"""
     message: str = Field(..., description="User message", min_length=1)
-    stream: bool = Field(default=False, description="Whether to use streaming response")
-    include_sources: bool = Field(default=True, description="Whether to include source references in response")

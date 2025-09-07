@@ -80,7 +80,7 @@ async def get_chat(chat_id: str, request: Request):
     return chat
 
 
-@router.put("/chats/{chat_id}")
+@router.patch("/chats/{chat_id}")
 async def update_chat(
     chat_id: str,
     request_data: UpdateChatRequest,

@@ -36,7 +36,8 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
     setActiveSidebarSection,
     addChatSession,
     setActiveChat,
-    addKnowledgeBase
+    addKnowledgeBase,
+    updateKnowledgeBase
   } = useAppStore()
 
   // Filter collections based on search query
@@ -52,6 +53,31 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
       const response = await apiClient.listCollections(searchQuery || undefined)
       const data = extractData(response)
       setCollections(data.collections)
+      
+      // Sync collections to store as knowledge bases
+      data.collections.forEach(collection => {
+        const kb = {
+          id: collection.id,
+          name: collection.name,
+          description: collection.description || '',
+          documentCount: collection.document_count,
+          createdAt: collection.created_at,
+          sourceType: 'mixed' as const
+        }
+        
+        // Add to store if not exists, or update if exists
+        const existingKb = knowledgeBases.find(k => k.id === collection.id)
+        if (!existingKb) {
+          addKnowledgeBase(kb)
+        } else {
+          // Update existing knowledge base with latest data
+          updateKnowledgeBase(collection.id, {
+            name: kb.name,
+            description: kb.description,
+            documentCount: kb.documentCount
+          })
+        }
+      })
     } catch (error) {
       console.error('加载知识库失败:', error)
     } finally {

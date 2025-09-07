@@ -7,19 +7,108 @@ import {
   PlusIcon,
   PaperAirplaneIcon,
   UserIcon,
-  CpuChipIcon
+  CpuChipIcon,
+  ChevronDownIcon,
+  ChevronUpIcon
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkBreaks from 'remark-breaks'
 import { useAppStore } from '../../store/appStore'
 import { 
   useAPIClient, 
   extractData, 
   ChatMessage as APIChatMessage, 
   SourceReference,
-  EnhancedChatRequest,
-  SSEEvent 
+  SSEEvent,
+  UpdateChatRequest
 } from '../../services/apiClient'
 import KnowledgeBaseSelector from './KnowledgeBaseSelector'
+
+// Markdown content component with custom styling
+const MarkdownContent: React.FC<{ content: string; isUser?: boolean }> = ({ content, isUser = false }) => {
+  if (isUser) {
+    // User messages don't need markdown rendering
+    return <p className="whitespace-pre-wrap">{content}</p>
+  }
+
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm, remarkBreaks]}
+      components={{
+        // Custom styling for different markdown elements
+        h1: ({ children }) => <h1 className="text-lg font-bold mb-2 text-gray-900">{children}</h1>,
+        h2: ({ children }) => <h2 className="text-base font-semibold mb-2 text-gray-900">{children}</h2>,
+        h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 text-gray-900">{children}</h3>,
+        p: ({ children }) => <p className="mb-2 last:mb-0 text-gray-900 leading-relaxed">{children}</p>,
+        ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1 text-gray-900">{children}</ul>,
+        ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1 text-gray-900">{children}</ol>,
+        li: ({ children }) => <li className="text-gray-900">{children}</li>,
+        blockquote: ({ children }) => (
+          <blockquote className="border-l-4 border-gray-300 pl-4 py-2 mb-2 bg-gray-50 text-gray-700 italic">
+            {children}
+          </blockquote>
+        ),
+        code: ({ inline, className, children, ...props }) => {
+          if (inline) {
+            return (
+              <code
+                className="bg-gray-100 text-gray-800 px-1 py-0.5 rounded text-xs font-mono"
+                {...props}
+              >
+                {children}
+              </code>
+            )
+          }
+          return (
+            <div className="my-2">
+              <pre className="bg-gray-900 text-gray-100 p-3 rounded-lg overflow-x-auto text-xs">
+                <code className={className} {...props}>
+                  {children}
+                </code>
+              </pre>
+            </div>
+          )
+        },
+        table: ({ children }) => (
+          <div className="overflow-x-auto mb-2">
+            <table className="min-w-full border border-gray-300 text-xs">
+              {children}
+            </table>
+          </div>
+        ),
+        thead: ({ children }) => <thead className="bg-gray-50">{children}</thead>,
+        tbody: ({ children }) => <tbody>{children}</tbody>,
+        tr: ({ children }) => <tr className="border-b border-gray-200">{children}</tr>,
+        th: ({ children }) => (
+          <th className="border border-gray-300 px-2 py-1 text-left font-semibold text-gray-900">
+            {children}
+          </th>
+        ),
+        td: ({ children }) => (
+          <td className="border border-gray-300 px-2 py-1 text-gray-900">
+            {children}
+          </td>
+        ),
+        strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+        em: ({ children }) => <em className="italic text-gray-900">{children}</em>,
+        a: ({ href, children }) => (
+          <a
+            href={href}
+            className="text-blue-600 hover:text-blue-800 underline"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {children}
+          </a>
+        ),
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  )
+}
 
 interface Message {
   id: string
@@ -27,11 +116,53 @@ interface Message {
   content: string
   timestamp: string
   sources?: SourceReference[]
-  confidence?: number
-  intent_analysis?: any
-  retrieval_strategy?: string
-  cache_hit?: boolean
-  total_time_ms?: number
+}
+
+// Component for collapsible source references
+const SourceReferences: React.FC<{ sources: SourceReference[] }> = ({ sources }) => {
+  const [isExpanded, setIsExpanded] = useState(false)
+  
+  if (!sources || sources.length === 0) return null
+  
+  return (
+    <div className="mt-3 pt-3 border-t border-gray-300/50">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center justify-between w-full text-left text-xs opacity-75 mb-2 hover:opacity-100 transition-opacity"
+      >
+        <span>参考来源 ({sources.length})</span>
+        {isExpanded ? (
+          <ChevronUpIcon className="w-3 h-3" />
+        ) : (
+          <ChevronDownIcon className="w-3 h-3" />
+        )}
+      </button>
+      
+      <div className={`overflow-hidden transition-all duration-300 ${
+        isExpanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'
+      }`}>
+        <div className="space-y-2 mt-2 max-h-[600px] overflow-y-auto">
+          {sources.map((source, index) => (
+            <div key={index} className="text-xs bg-gray-50/50 rounded p-2 border border-gray-200/30">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-medium text-gray-700 truncate flex-1">{source.document_name}</span>
+                {source.relevance_score && (
+                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full ml-2 flex-shrink-0">
+                    {(source.relevance_score * 100).toFixed(0)}%
+                  </span>
+                )}
+              </div>
+              {source.content_preview && (
+                <div className="text-xs text-gray-600 leading-relaxed line-clamp-3">
+                  {source.content_preview.substring(0, 200)}...
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // Map API message to UI message
@@ -56,8 +187,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
   const [showKnowledgeBaseSelector, setShowKnowledgeBaseSelector] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
-  const [useEnhanced, setUseEnhanced] = useState(true)
-  const [currentIntentAnalysis, setCurrentIntentAnalysis] = useState<any>(null)
+  const [currentStreamingSources, setCurrentStreamingSources] = useState<SourceReference[]>([])  
+  const [currentStreamingMessageId, setCurrentStreamingMessageId] = useState<string | null>(null)
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const apiClient = useAPIClient()
   
@@ -69,14 +201,24 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
 
   const currentChat = getCurrentChat()
 
-  // Scroll to bottom when new messages arrive
+  // Scroll to bottom when new messages arrive or streaming content updates
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    if (messagesEndRef.current) {
+      if (isInitialLoad) {
+        // On initial load, scroll immediately without animation
+        messagesEndRef.current.scrollIntoView({ behavior: 'instant' })
+        setIsInitialLoad(false)
+      } else {
+        // For new messages or streaming content, use smooth scroll
+        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
+      }
+    }
+  }, [messages, streamingContent, isInitialLoad])
 
   // Load chat messages from API
   useEffect(() => {
     if (currentChat) {
+      setIsInitialLoad(true) // Reset initial load flag when switching chats
       loadChatMessages()
     }
   }, [currentChat])
@@ -112,35 +254,16 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
     setIsLoading(true)
     setIsStreaming(true)
     setStreamingContent('')
-    setCurrentIntentAnalysis(null)
+    setCurrentStreamingSources([])
+    setCurrentStreamingMessageId(null)
 
     try {
-      // Use enhanced chat features
-      if (useEnhanced) {
-        const enhancedRequest: EnhancedChatRequest = {
-          message: userMessageContent,
-          include_sources: true,
-          enable_intent_analysis: true,
-          enable_cache: true,
-          enable_summary_overview: true,
-          retrieval_strategy: 'auto'
-        }
-        
-        await apiClient.sendEnhancedMessageStream(
-          currentChat.id,
-          enhancedRequest,
-          handleStreamEvent,
-          handleStreamError
-        )
-      } else {
-        // Fallback to basic chat
-        await apiClient.sendMessageStream(
-          currentChat.id,
-          { message: userMessageContent, include_sources: true },
-          handleStreamEvent,
-          handleStreamError
-        )
-      }
+      await apiClient.sendMessageStream(
+        currentChat.id,
+        { message: userMessageContent, include_sources: true },
+        (event) => handleStreamEvent(event, userMessageContent),
+        handleStreamError
+      )
     } catch (error) {
       console.error('发送消息失败:', error)
       setIsLoading(false)
@@ -149,7 +272,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
     }
   }
   
-  const handleStreamEvent = (event: SSEEvent) => {
+  const handleStreamEvent = (event: SSEEvent, userMessageContent?: string) => {
     console.log('Stream event:', event)
     
     switch (event.event) {
@@ -158,7 +281,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
         const userMessage: Message = {
           id: `user_${Date.now()}`,
           type: 'user',
-          content: event.data.user_message,
+          content: event.data?.user_message || userMessageContent || '用户消息',
           timestamp: new Date().toISOString()
         }
         setMessages(prev => [...prev, userMessage])
@@ -173,38 +296,47 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
         break
         
       case 'sources':
-        // Sources found - could show in UI if needed
+        // Store sources for final message
+        if (event.data && Array.isArray(event.data)) {
+          setCurrentStreamingSources(event.data)
+        }
         break
         
       case 'content':
         // Streaming content
-        setStreamingContent(prev => prev + event.data.content)
+        if (event.data && event.data.content) {
+          setStreamingContent(prev => prev + event.data.content)
+        }
         break
         
       case 'done':
-        // Response complete
+        // Response complete - use the accumulated streaming content
         setIsLoading(false)
         setIsStreaming(false)
         
-        // Add complete AI message with enhanced features
-        const aiMessage: Message = {
-          id: event.data.message_id || `ai_${Date.now()}`,
-          type: 'assistant',
-          content: streamingContent,
-          timestamp: new Date().toISOString(),
-          sources: event.data.sources || [],
-          confidence: event.data.confidence,
-          cache_hit: event.data.cache_hit,
-          total_time_ms: event.data.total_time_ms,
-          retrieval_strategy: event.data.retrieval_strategy
-        }
-        setMessages(prev => [...prev, aiMessage])
-        setStreamingContent('')
+        // Use a functional update to get the latest streaming content
+        setStreamingContent(currentContent => {
+          const finalContent = event.data?.content || currentContent
+          const finalSources = event.data?.sources || currentStreamingSources
+          
+          // Only add the AI message if we have content
+          if (finalContent) {
+            const aiMessage: Message = {
+              id: event.data?.message_id || currentStreamingMessageId || `ai_${Date.now()}`,
+              type: 'assistant',
+              content: finalContent,
+              timestamp: new Date().toISOString(),
+              sources: finalSources
+            }
+            setMessages(prev => [...prev, aiMessage])
+          }
+          
+          return '' // Reset streaming content
+        })
         
-        // Store intent analysis if available
-        if (event.data.intent_analysis) {
-          setCurrentIntentAnalysis(event.data.intent_analysis)
-        }
+        // Reset other streaming state
+        setCurrentStreamingSources([])
+        setCurrentStreamingMessageId(null)
         
         // Update chat session
         if (currentChat) {
@@ -220,13 +352,24 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
         setIsLoading(false)
         setIsStreaming(false)
         setStreamingContent('')
-        alert('生成回复失败: ' + event.data.message)
+        setCurrentStreamingSources([])
+        setCurrentStreamingMessageId(null)
+        alert('生成回复失败: ' + (event.data?.message || '未知错误'))
         break
         
       default:
-        if (event.event === 'data') {
-          // Handle generic data events
-          console.log('Data event:', event.data)
+        // Handle generic data events from basic streaming
+        if (event.event === 'data' && event.data) {
+          // This might be the basic streaming format
+          if (event.data.content) {
+            setStreamingContent(prev => prev + event.data.content)
+          }
+          if (event.data.message_id && !currentStreamingMessageId) {
+            setCurrentStreamingMessageId(event.data.message_id)
+          }
+          if (event.data.sources) {
+            setCurrentStreamingSources(event.data.sources)
+          }
         }
         break
     }
@@ -237,16 +380,33 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
     setIsLoading(false)
     setIsStreaming(false)
     setStreamingContent('')
+    setCurrentStreamingSources([])
+    setCurrentStreamingMessageId(null)
     alert('生成回复失败: ' + error.message)
   }
 
 
-  const handleAddKnowledgeBase = (kbIds: string[]) => {
-    if (currentChat) {
-      const updatedKbIds = [...new Set([...currentChat.knowledgeBaseIds, ...kbIds])]
+  const handleUpdateKnowledgeBases = async (selectedKbIds: string[]) => {
+    if (!currentChat) return
+    
+    try {
+      // Update the chat with new knowledge base collection IDs via API
+      const updateRequest: UpdateChatRequest = {
+        collection_ids: selectedKbIds
+      }
+      
+      const response = await apiClient.updateChat(currentChat.id, updateRequest)
+      const updatedChat = extractData(response)
+      
+      // Update local state with the response from API
       updateChatSession(currentChat.id, {
-        knowledgeBaseIds: updatedKbIds
+        knowledgeBaseIds: updatedChat.collection_ids
       })
+      
+      console.log('Knowledge bases updated successfully:', selectedKbIds)
+    } catch (error) {
+      console.error('Failed to update knowledge bases:', error)
+      alert('更新知识库失败: ' + (error as Error).message)
     }
   }
 
@@ -283,10 +443,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
       <div className="flex-shrink-0 p-4 bg-gradient-to-r from-white/90 to-white/70 backdrop-blur-sm border-b border-gray-200/50">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2 text-sm">
-            <span className="text-gray-500">📚</span>
+            <span className="text-gray-500">当前知识库: </span>
             {kbNames.length > 0 ? (
               <span className="text-gray-900 font-medium">
-                {kbNames.join(' > ')}
+                {kbNames.join(' + ')}
               </span>
             ) : (
               <span className="text-gray-500">暂无知识库</span>
@@ -294,23 +454,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
           </div>
           
           <div className="flex items-center space-x-4">
-            {/* Enhanced features toggle */}
-            <label className="flex items-center space-x-2 text-sm">
-              <input
-                type="checkbox"
-                checked={useEnhanced}
-                onChange={(e) => setUseEnhanced(e.target.checked)}
-                className="rounded border-gray-300 text-blue-500 focus:ring-blue-500"
-              />
-              <span className="text-gray-600">增强模式</span>
-            </label>
-            
             <button
               onClick={() => setShowKnowledgeBaseSelector(true)}
               className="flex items-center space-x-1 text-sm text-blue-500 hover:text-blue-600 transition-colors"
             >
               <PlusIcon className="w-4 h-4" />
-              <span>添加知识库</span>
+              <span>管理知识库</span>
             </button>
           </div>
         </div>
@@ -356,51 +505,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                       : 'bg-white/80 backdrop-blur-sm border border-gray-200/50 text-gray-900'
                   )}
                 >
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                  <MarkdownContent content={msg.content} isUser={msg.type === 'user'} />
                   
                   {/* Sources */}
-                  {msg.sources && msg.sources.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-300/50">
-                      <p className="text-xs opacity-75 mb-2">参考来源:</p>
-                      <div className="space-y-1">
-                        {msg.sources.map((source, index) => (
-                          <div key={index} className="text-xs">
-                            <div className="flex items-center justify-between">
-                              <span className="opacity-75">{source.document_name}</span>
-                              {source.relevance_score && (
-                                <span className="text-xs bg-gray-200 px-1 rounded">
-                                  {(source.relevance_score * 100).toFixed(0)}%
-                                </span>
-                              )}
-                            </div>
-                            {source.content_preview && (
-                              <div className="text-xs opacity-60 mt-1 truncate">
-                                {source.content_preview.substring(0, 100)}...
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Enhanced features metadata */}
-                  {msg.type === 'assistant' && (msg.confidence || msg.cache_hit || msg.total_time_ms) && (
-                    <div className="mt-2 pt-2 border-t border-gray-300/20 flex flex-wrap gap-2 text-xs opacity-60">
-                      {msg.confidence && (
-                        <span className="bg-green-100 px-1 rounded">置信度: {(msg.confidence * 100).toFixed(0)}%</span>
-                      )}
-                      {msg.cache_hit && (
-                        <span className="bg-blue-100 px-1 rounded">缓存命中</span>
-                      )}
-                      {msg.total_time_ms && (
-                        <span className="bg-gray-100 px-1 rounded">{msg.total_time_ms.toFixed(0)}ms</span>
-                      )}
-                      {msg.retrieval_strategy && (
-                        <span className="bg-purple-100 px-1 rounded">{msg.retrieval_strategy}</span>
-                      )}
-                    </div>
-                  )}
+                  <SourceReferences sources={msg.sources || []} />
                 </div>
                 
                 <div className={clsx(
@@ -415,7 +523,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
         ))}
 
         {/* Streaming content */}
-        {isStreaming && streamingContent && (
+        {isStreaming && (
           <div className="flex justify-start">
             <div className="flex max-w-3xl space-x-3">
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center">
@@ -423,16 +531,26 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="px-4 py-3 rounded-2xl bg-white/80 backdrop-blur-sm border border-gray-200/50 text-gray-900">
-                  <p className="whitespace-pre-wrap">{streamingContent}</p>
-                  <div className="mt-2 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                  {streamingContent ? (
+                    <>
+                      <MarkdownContent content={streamingContent} />
+                      <div className="mt-2 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                    </>
+                  ) : (
+                    <div className="flex space-x-1">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           </div>
         )}
         
-        {/* Loading indicator */}
-        {isLoading && !streamingContent && (
+        {/* Loading indicator - only show when not streaming */}
+        {isLoading && !isStreaming && (
           <div className="flex justify-start">
             <div className="flex max-w-3xl space-x-3">
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center">
@@ -488,8 +606,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
       <KnowledgeBaseSelector
         isOpen={showKnowledgeBaseSelector}
         onClose={() => setShowKnowledgeBaseSelector(false)}
-        onSelect={handleAddKnowledgeBase}
-        excludeIds={currentChat.knowledgeBaseIds}
+        onSelect={handleUpdateKnowledgeBases}
+        selectedIds={currentChat.knowledgeBaseIds}
       />
     </div>
   )

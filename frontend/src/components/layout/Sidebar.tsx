@@ -36,7 +36,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
 
   const handleSectionClick = (section: SidebarSection) => {
     setActiveSidebarSection(section)
-    if (section === 'chat' && chatSessions.length > 0 && !activeChat) {
+    
+    if (section === 'knowledge' || section === 'settings') {
+      // 当切换到知识库或设置时，清除当前聊天选中状态
+      setActiveChat(null)
+    } else if (section === 'chat' && chatSessions.length > 0 && !activeChat) {
+      // 当切换到聊天且没有选中的聊天时，选择第一个聊天
       setActiveChat(chatSessions[0].id)
     }
   }
