@@ -29,10 +29,9 @@ export interface UpdateCollectionRequest {
 export interface Document {
   id: string
   name: string
-  file_path?: string
-  url?: string
-  content_type: string
-  file_size?: number
+  uri: string
+  mime_type: string
+  size_bytes: number
   status: 'pending' | 'processing' | 'indexed' | 'failed'
   created_at: string
   updated_at: string
@@ -316,6 +315,57 @@ export class DocumentAssistantAPI {
       `/api/v1/collections/${encodeURIComponent(collectionId)}/documents/${encodeURIComponent(documentId)}`,
       { method: 'DELETE' }
     )
+  }
+
+  /**
+   * Download a document
+   */
+  async downloadDocument(collectionId: string, documentId: string): Promise<{ blob: Blob, filename: string }> {
+    this.abortController = new AbortController()
+    
+    const url = `${this.baseURL}/api/v1/collections/${encodeURIComponent(collectionId)}/documents/${encodeURIComponent(documentId)}/download`
+    const config: RequestInit = {
+      method: 'GET',
+      signal: this.abortController.signal,
+    }
+
+    try {
+      const response = await fetch(url, config)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`
+        
+        try {
+          const errorJson = JSON.parse(errorText)
+          errorMessage = errorJson.detail || errorMessage
+        } catch {
+          if (errorText) {
+            errorMessage = errorText
+          }
+        }
+        
+        throw new Error(errorMessage)
+      }
+
+      // Extract filename from Content-Disposition header
+      let filename = 'download'
+      const contentDisposition = response.headers.get('content-disposition')
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '')
+        }
+      }
+
+      const blob = await response.blob()
+      return { blob, filename }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('Request was cancelled')
+      }
+      throw error
+    }
   }
 
   // Ingestion

@@ -396,6 +396,7 @@ class TaskService:
             content=doc_content,
             size_bytes=len(doc_content.encode()),
             mime_type=doc_mime_type,
+            chunk_count=len(chunks),
             status=doc_status,
             error_message=doc_error_message,
             hash_md5=hashlib.md5(f"{doc_page_uri}:{doc_title}:{doc_content}".encode()).hexdigest()
@@ -674,7 +675,7 @@ class TaskService:
                 doc_page_uri=page_url,
                 doc_title=crawl_result.title,
                 doc_content=crawl_result.content,
-                doc_mime_type="text/html",
+                doc_mime_type="text/markdown",
                 doc_status=doc_status,
                 doc_error_message=error_message,
                 chunks=chunks,

@@ -3,6 +3,7 @@ Document processing service for handling files and web content.
 """
 
 import logging
+import mimetypes
 from typing import Any, Optional
 
 from fastapi import Response
@@ -77,6 +78,8 @@ class DocumentService:
 
         # Batch processing settings
         self.max_embedding_batch_size = getattr(self.config, "embedding_batch_size", 64)
+
+        mimetypes.add_type("text/markdown", ".md")
 
         logger.info("DocumentService initialized successfully")
 
@@ -160,12 +163,18 @@ class DocumentService:
         if not document or document.collection_id != collection_id:
             return None
 
+        # 需要检查 filename 是否有后缀，如果没有，根据 mime_type 添加
+        filename = document.name or ""
+        suffix = mimetypes.guess_extension(document.mime_type or 'text/plain')
+        if suffix:
+            filename += suffix
+
         # wrap the document content as FileResponse
         return Response(
             content=document.content.encode('utf-8') if document.content else b'',
             media_type=document.mime_type or 'text/plain',
             headers={
-                'Content-Disposition': f'attachment; filename="{document.name}"'
+                'Content-Disposition': f'attachment; filename="{filename}"'
             }
         )
 

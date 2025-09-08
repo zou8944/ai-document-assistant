@@ -25,11 +25,9 @@ interface KnowledgeBaseManagementProps {
 const mapAPIDocumentToUIDocument = (doc: APIDocument) => ({
   id: doc.id,
   name: doc.name,
-  source: doc.url ? doc.url : '本地文件',
-  url: doc.url,
+  url: doc.uri,
   createdAt: doc.created_at,
-  size: doc.file_size ? formatFileSize(doc.file_size) : '-',
-  type: doc.url ? 'website' as const : 'file' as const,
+  size: doc.size_bytes ? formatFileSize(doc.size_bytes) : '-',
   status: doc.status
 })
 
@@ -182,13 +180,27 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   }
 
   const handleDownload = async (doc: any) => {
-    if (!currentKb || doc.type === 'website') return
+    if (!currentKb) return
     
     try {
-      // For local files, we could implement download functionality
-      // This would need to be implemented in the backend
-      console.log('下载文档:', doc.name)
-      alert('下载功能暂未实现')
+      // Download the document from API
+      const { blob, filename } = await apiClient.downloadDocument(currentKb.id, doc.id)
+      
+      // Create a download link
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      
+      // Append to body, click and remove
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      // Clean up the URL object
+      window.URL.revokeObjectURL(url)
+      
+      console.log('文档下载成功:', filename)
     } catch (error) {
       console.error('下载失败:', error)
       alert('下载失败: ' + (error as Error).message)
@@ -521,21 +533,15 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             <div className="max-w-xs">
-                              {doc.url ? (
-                                <a
-                                  href={doc.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-500 hover:text-blue-600 underline truncate block"
-                                  title={doc.source}
-                                >
-                                  {doc.source}
-                                </a>
-                              ) : (
-                                <span className="truncate block" title={doc.source}>
-                                  {doc.source}
-                                </span>
-                              )}
+                              <a
+                                href={doc.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-500 hover:text-blue-600 underline truncate block"
+                                title={doc.name}
+                              >
+                                {doc.url}
+                              </a>
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -563,15 +569,13 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex items-center justify-end space-x-2">
-                              {doc.type === 'file' && (
-                                <button
-                                  onClick={() => handleDownload(doc)}
-                                  className="p-1 hover:bg-gray-100 rounded transition-colors"
-                                  title="下载"
-                                >
-                                  <ArrowDownTrayIcon className="w-4 h-4 text-gray-400 hover:text-blue-500" />
-                                </button>
-                              )}
+                              <button
+                                onClick={() => handleDownload(doc)}
+                                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                                title="下载"
+                              >
+                                <ArrowDownTrayIcon className="w-4 h-4 text-gray-400 hover:text-blue-500" />
+                              </button>
                               <button
                                 onClick={() => handleDelete(doc)}
                                 className="p-1 hover:bg-gray-100 rounded transition-colors"
