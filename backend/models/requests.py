@@ -63,8 +63,10 @@ class IngestFilesRequest(BaseModel):
 class IngestUrlsRequest(BaseModel):
     """Request model for URL ingestion"""
     urls: list[str] = Field(..., description="List of URLs to crawl")
-    max_depth: int = Field(default=2, description="Maximum crawling depth")
-    override: bool = Field(default=False, description="Whether to override existing URLs")
+    exclude_urls: list[str] = Field(..., description="List of URLs to exclude")
+    max_depth: int = Field(default=0, description="Maximum recursive crawling depth. if zero, no recursion")
+    recursive_prefix: str = Field(default="", description="Recursive prefix for crawling")
+    override: bool = Field(default=True, description="Whether to override existing URLs")
 
 
 class CreateChatRequest(BaseModel):

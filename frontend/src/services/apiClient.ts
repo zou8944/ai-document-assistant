@@ -52,7 +52,9 @@ export interface IngestFilesRequest {
 
 export interface IngestUrlsRequest {
   urls: string[]
-  max_depth?: number
+  exclude_urls: string[]
+  max_depth: number
+  recursive_prefix: string
   override?: boolean
 }
 

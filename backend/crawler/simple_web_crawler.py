@@ -169,17 +169,18 @@ class SimpleWebCrawler:
         return self._fetch_page_with_cache(url, force_crawl)
 
     def crawl_recursive(
-        self, start_url: str, force_crawl: bool = False,
+        self,
+        urls: list[str], exclude_urls: list[str] = [],
+        recursive_prefix: str = "",
+        max_depth: int = 1,
+        force_crawl: bool = False,
         progress_callback: Optional[Callable[[str, int, int], None]] = None
     ) -> list[SimpleCrawlResult]:
         """Crawl multiple pages within the same domain with improved queue management"""
         results = []
-        to_crawl = [(start_url, 0)]  # (url, depth)
+        to_crawl = [(url, 0) for url in urls]  # (url, depth)
         crawled_urls = set()
         failed_urls = set()
-
-        # Normalize start URL
-        start_url = self._clean_url(start_url)
 
         while to_crawl and len(results) < self.max_pages:
             url, depth = to_crawl.pop(0)
@@ -189,7 +190,7 @@ class SimpleWebCrawler:
                 continue
 
             # Skip if exceed max depth
-            if depth > self.max_depth:
+            if depth > max_depth:
                 continue
 
             crawled_urls.add(url)
@@ -214,6 +215,12 @@ class SimpleWebCrawler:
             for link in result.links:
                 # If the link is already crawled or failed, skip it
                 if link in crawled_urls or link in failed_urls:
+                    continue
+                # If the link is in the exclude list, skip it
+                if link in exclude_urls:
+                    continue
+                # If the link does not start with the recursive prefix, skip it
+                if not link.startswith(recursive_prefix):
                     continue
                 # If the link is already in the crawl queue, skip it
                 if any(existing_url == link for existing_url, _ in to_crawl):
@@ -256,18 +263,22 @@ def create_simple_web_crawler(config: Config) -> SimpleWebCrawler:
 if __name__ == "__main__":
 
     def main():
-        crawler = create_simple_web_crawler(Config(crawler_max_pages=3))
-        results = crawler.crawl_recursive("https://docs.crawl4ai.com/core/page-interaction/")
+        crawler = create_simple_web_crawler(Config(crawler_max_pages=10))
+        results = crawler.crawl_recursive(
+            urls=["https://docs.crawl4ai.com/core/page-interaction/"],
+            recursive_prefix="https://docs.crawl4ai.com/core/",
+            max_depth=2,
+            force_crawl=True,
+        )
         for result in results:
             print("-----")
             print(result.url)
             print(result.title)
-            print(result.content)
             print("success:", result.success)
             print("error:", result.error)
             print("Links:")
-            for link in result.links:
-                print(link)
+            # for link in result.links:
+            #     print(link)
 
     main()
 

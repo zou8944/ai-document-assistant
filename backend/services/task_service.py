@@ -582,8 +582,11 @@ class TaskService:
         self._log_info_task(task_id, "Starting URL ingestion")
 
         # Get parameters from input
-        urls = input_params.get("urls", [])
-        override = input_params.get("override", True)
+        urls = input_params["urls"]
+        exclude_urls = input_params["exclude_urls"]
+        recursive_prefix = input_params["recursive_prefix"]
+        max_depth = input_params["max_depth"]
+        override = input_params["override"]
 
         if not urls:
             raise ValueError("No URLs specified for ingestion")
@@ -593,28 +596,23 @@ class TaskService:
 
         self.update_url_task_progress(task_id, stats)
 
-        for url in urls:
-            self._log_info_task(task_id, f"Crawling URL: {url}")
+        # Crawl this url, tracking progress asynchronously
+        def progress_callback(current_url, completed, total):
+            stats.urls_crawled = completed
+            stats.urls_crawl_total = total
+            self.update_url_task_progress(task_id, stats)
+            self._log_info_task(task_id, f"Crawling page {completed + 1}/{total}: {current_url}")
 
-            # Crawl this url, tracking progress asynchronously
-            def progress_callback(current_url, completed, total):
-                stats.urls_crawled = completed
-                stats.urls_crawl_total = total
-                self.update_url_task_progress(task_id, stats)
-                self._log_info_task(task_id, f"Crawling page {completed + 1}/{total}: {current_url}")
+        crawl_results = self.web_crawler.crawl_recursive(
+            urls, exclude_urls, recursive_prefix, max_depth, progress_callback=progress_callback
+        )
+        successful_results = [r for r in crawl_results if r.success]
 
-            crawl_results = self.web_crawler.crawl_recursive(url, progress_callback=progress_callback)
-            successful_results = [r for r in crawl_results if r.success]
-
-            self._log_info_task(task_id, f"Crawled {len(successful_results)}/{len(crawl_results)} pages successfully from {url}")
-
-            stats.pages_total = len(successful_results)
-
-            # Process each crawled page
-            for crawl_result in successful_results:
-                await self._process_single_page(task_id, collection_id, crawl_result, override)
-                stats.pages_total += 1
-                self.update_url_task_progress(task_id, stats)
+        # Process each crawled page
+        for crawl_result in successful_results:
+            await self._process_single_page(task_id, collection_id, crawl_result, override)
+            stats.pages_total += 1
+            self.update_url_task_progress(task_id, stats)
 
         self.task_repo.mark_completed(task_id, True)
         self._log_info_task(task_id, "URL ingestion completed")

@@ -14,7 +14,7 @@ import clsx from 'clsx'
 import { useAppStore } from '../../store/appStore'
 import { Document as APIDocument, useAPIClient, extractData, SSEEvent } from '../../services/apiClient'
 import { ImportStatus } from '../../types/app'
-import InputDialog from '../InputDialog'
+import { UrlInputDialog } from '../InputDialog'
 import FileUploadModal from '../FileUploadModal'
 
 interface KnowledgeBaseManagementProps {
@@ -46,17 +46,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const apiClient = useAPIClient()
   const [documents, setDocuments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [dialogState, setDialogState] = useState<{
-    isOpen: boolean
-    type: 'url' | 'file'
-    title: string
-    placeholder: string
-  }>({
-    isOpen: false,
-    type: 'url',
-    title: '',
-    placeholder: ''
-  })
+  const [showUrlDialog, setShowUrlDialog] = useState(false)
   const [showFileUpload, setShowFileUpload] = useState(false)
   
   // Import task progress tracking
@@ -100,44 +90,35 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   }
 
   const handleUrlImport = async () => {
-    setDialogState({
-      isOpen: true,
-      type: 'url',
-      title: '导入URL',
-      placeholder: '请输入完整的URL地址，例如: https://example.com'
-    })
+    setShowUrlDialog(true)
   }
 
-  const handleDialogConfirm = async (inputValue: string) => {
-    setDialogState(prev => ({ ...prev, isOpen: false }))
+  const handleUrlDialogConfirm = async (config: {
+    urls: string[]
+    excludeUrls: string[]
+    maxDepth: number
+    recursivePrefix: string
+  }) => {
+    setShowUrlDialog(false)
     
-    if (!currentKb || !inputValue.trim()) return
+    if (!currentKb || config.urls.length === 0) return
     
     try {
-      // Only handle URL import here, files are handled by FileUpload component
-      if (dialogState.type === 'url') {
-        // Validate URL format
-        try {
-          new URL(inputValue)
-        } catch {
-          alert('请输入有效的URL地址')
-          return
-        }
-        
-        const response = await apiClient.ingestUrls(currentKb.id, {
-          urls: [inputValue],
-          max_depth: 1
-        })
-        const taskData = extractData(response)
-        
-        // Initialize new task: clear previous state and start processing
-        setImportStatus({ isActive: true, progress: 0, message: "" })
-        setTaskStatus('processing')
-        setTaskLogs([])
-        streamTaskProgress(taskData.task_id)
+      const response = await apiClient.ingestUrls(currentKb.id, {
+        urls: config.urls,
+        exclude_urls: config.excludeUrls,
+        max_depth: config.maxDepth,
+        recursive_prefix: config.recursivePrefix
+      })
+      const taskData = extractData(response)
+      
+      // Initialize new task: clear previous state and start processing
+      setImportStatus({ isActive: true, progress: 0, message: "" })
+      setTaskStatus('processing')
+      setTaskLogs([])
+      streamTaskProgress(taskData.task_id)
 
-        console.log("import status", importStatus.isActive)
-      }
+      console.log("import status", importStatus.isActive)
       
     } catch (error) {
       console.error('导入失败:', error)
@@ -146,8 +127,8 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     }
   }
 
-  const handleDialogCancel = () => {
-    setDialogState(prev => ({ ...prev, isOpen: false }))
+  const handleUrlDialogCancel = () => {
+    setShowUrlDialog(false)
   }
 
   const handleFileUploadModalClose = () => {
@@ -596,13 +577,11 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
         </div>
       </div>
       
-      {/* Input Dialog */}
-      <InputDialog
-        isOpen={dialogState.isOpen}
-        title={dialogState.title}
-        placeholder={dialogState.placeholder}
-        onConfirm={handleDialogConfirm}
-        onCancel={handleDialogCancel}
+      {/* URL Input Dialog */}
+      <UrlInputDialog
+        isOpen={showUrlDialog}
+        onConfirm={handleUrlDialogConfirm}
+        onCancel={handleUrlDialogCancel}
       />
 
       {/* File Upload Modal */}

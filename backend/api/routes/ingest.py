@@ -77,6 +77,8 @@ async def ingest_urls(
         collection_id=collection_id,
         input_params={
             "urls": request_data.urls,
+            "exclude_urls": request_data.exclude_urls,
+            "recursive_prefix": request_data.recursive_prefix,
             "max_depth": request_data.max_depth,
             "override": request_data.override
         }
