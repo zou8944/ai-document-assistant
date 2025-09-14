@@ -201,7 +201,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
 
   const currentChat = getCurrentChat()
 
-  // Scroll to bottom when new messages arrive or streaming content updates
+  // Scroll to bottom when new messages arrive, streaming content updates, or loading state changes
   useEffect(() => {
     if (messagesEndRef.current) {
       if (isInitialLoad) {
@@ -209,11 +209,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
         messagesEndRef.current.scrollIntoView({ behavior: 'instant' })
         setIsInitialLoad(false)
       } else {
-        // For new messages or streaming content, use smooth scroll
+        // For new messages, streaming content, or loading changes, use smooth scroll
         messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
       }
     }
-  }, [messages, streamingContent, isInitialLoad])
+  }, [messages, streamingContent, isLoading, isStreaming, isInitialLoad])
 
   // Load chat messages from API
   useEffect(() => {
