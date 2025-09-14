@@ -222,12 +222,32 @@ COMPARISON_PROMPT_TEMPLATE = ChatPromptTemplate.from_messages([
 ])
 
 
+# 非文档查询的提示词模板
+NON_DOCUMENT_PROMPT_TEMPLATE = ChatPromptTemplate.from_messages([
+    ("system", """你是一个友好的AI文档助手。你主要专注于帮助用户分析文档内容，但也可以进行一般性对话。
+
+对于问候、感谢等社交性对话，请友好回应。
+对于询问你的身份和功能的问题，请说明你是一个AI文档助手，可以帮助分析和查找文档内容。
+对于其他一般性问题，如果不涉及文档分析，请礼貌地说明你主要专注于文档相关任务，并引导用户提出文档相关问题。
+
+请保持回答简洁、友好、有帮助。"""),
+    ("human", "{context}当前问题: {question}")
+])
+
+
 def get_prompt_by_intent(intent: QueryIntent) -> ChatPromptTemplate:
     """根据意图返回相应的提示词模板"""
     prompt_map = {
         QueryIntent.OVERVIEW: OVERVIEW_PROMPT_TEMPLATE,
         QueryIntent.HOW_TO: HOW_TO_PROMPT_TEMPLATE,
         QueryIntent.COMPARISON: COMPARISON_PROMPT_TEMPLATE,
-        QueryIntent.FACTUAL: RAG_PROMPT_TEMPLATE  # 保持现有的事实查询模板
+        QueryIntent.FACTUAL: RAG_PROMPT_TEMPLATE,  # 保持现有的事实查询模板
+        QueryIntent.GREETING: NON_DOCUMENT_PROMPT_TEMPLATE,
+        QueryIntent.GENERAL: NON_DOCUMENT_PROMPT_TEMPLATE
     }
     return prompt_map.get(intent, RAG_PROMPT_TEMPLATE)
+
+
+def get_non_document_prompt() -> ChatPromptTemplate:
+    """获取非文档查询的提示词模板"""
+    return NON_DOCUMENT_PROMPT_TEMPLATE

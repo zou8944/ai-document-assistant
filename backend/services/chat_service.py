@@ -12,6 +12,7 @@ from exception import HTTPNotFoundException
 from models.dto import ChatDTO, ChatMessageDTO
 from models.responses import ChatMessageResponse, ChatResponse, SourceReference
 from rag.intent_analyzer import IntentAnalyzer, QueryIntent
+from rag.prompt_templates import get_non_document_prompt, get_prompt_by_intent
 from repository.chat import ChatMessageRepository, ChatRepository
 from repository.collection import CollectionRepository
 from vector_store.chroma_client import create_chroma_manager
@@ -242,73 +243,6 @@ class ChatService:
 
         return "\n\n".join(context_parts)
 
-    def _generate_non_document_response(self, user_message: str, intent: QueryIntent) -> str:
-        """
-        Generate response for queries that don't need document retrieval
-
-        Args:
-            user_message: User's message
-            intent: Detected intent
-
-        Returns:
-            Appropriate response for the intent
-        """
-        if intent == QueryIntent.GREETING:
-            # Handle greetings
-            greetings_map = {
-                "你好": "您好！我是您的AI文档助手，可以帮您查找和分析文档内容。有什么问题需要我协助的吗？",
-                "您好": "您好！我是您的AI文档助手，可以帮您查找和分析文档内容。有什么问题需要我协助的吗？",
-                "hi": "Hello! I'm your AI document assistant. How can I help you today?",
-                "hello": "Hello! I'm your AI document assistant. How can I help you today?",
-                "谢谢": "不客气！很高兴能帮助您。如果还有其他问题，请随时告诉我。",
-                "thank": "You're welcome! Feel free to ask if you have any other questions.",
-                "再见": "再见！期待下次为您提供帮助。",
-                "bye": "Goodbye! Looking forward to helping you again.",
-            }
-
-            message_lower = user_message.lower().strip()
-            for key, response in greetings_map.items():
-                if key in message_lower:
-                    return response
-
-            return "您好！我是您的AI文档助手。如果您有任何关于文档的问题，请随时告诉我！"
-
-        elif intent == QueryIntent.GENERAL:
-            # Handle general queries
-            if any(keyword in user_message.lower() for keyword in ["你是谁", "你叫什么", "who are you", "your name"]):
-                return "我是您的AI文档助手，专门帮助您查找、分析和理解文档内容。我可以回答关于已加载文档的各种问题，包括概述、操作指南、具体事实查询等。"
-
-            elif any(keyword in user_message.lower() for keyword in ["能做什么", "功能", "capabilities", "what can you do"]):
-                return """我可以为您提供以下服务：
-
-📋 **文档分析功能：**
-• 文档内容概述和总结
-• 操作步骤指导
-• 具体事实查询
-• 不同选项的对比分析
-
-🔍 **智能检索：**
-• 根据您的问题类型调整搜索策略
-• 提供相关来源引用
-• 多文档综合分析
-
-💡 **使用建议：**
-• 询问"给我概述一下..."获取整体介绍
-• 询问"如何..."获取操作指南
-• 询问具体问题获取准确答案
-• 询问"A和B的区别"进行对比分析
-
-请告诉我您想了解什么内容！"""
-
-            elif any(keyword in user_message.lower() for keyword in ["时间", "几点", "日期", "time", "date"]):
-                return "抱歉，我是文档助手，无法提供实时时间信息。我主要专注于帮助您分析和查找文档内容。有什么关于文档的问题需要我协助吗？"
-
-            else:
-                return "我主要专注于帮助您分析文档内容。如果您有关于已加载文档的问题，请告诉我，我会尽力为您解答！"
-
-        else:
-            # Fallback for other non-document intents
-            return "我是您的AI文档助手，主要帮助您查找和分析文档内容。请告诉我您想了解文档中的什么信息！"
 
     async def chat(self, chat_id: str, user_message: str) -> Optional[ChatMessageResponse]:
         """Send a message and get AI response with intent-based processing"""
@@ -327,15 +261,56 @@ class ChatService:
         # Analyze user intent
         intent_info = self.intent_analyzer.analyze_with_confidence(user_message)
         intent = intent_info["intent"]
-        intent_confidence = intent_info["confidence"]
-
-        logger.info(f"Detected intent: {intent.value} (confidence: {intent_confidence}) - {intent_info['description']}")
+        logger.info(f"Detected intent: {intent.value} (confidence: {intent_info['confidence']}) - {intent_info['description']}")
 
         # Check if document retrieval is needed based on intent
         needs_documents = self.intent_analyzer.requires_document_retrieval(intent)
 
-        if needs_documents:
-            pass
+        if not needs_documents:
+            # Handle non-document queries directly with LLM
+            logger.info(f"Intent {intent.value} does not require document retrieval")
+
+            # Get conversation history for context
+            history = self.chat_message_repo.get_conversation_history(chat_id, max_messages=10)
+
+            # Format conversation history
+            conversation_context = ""
+            if len(history) > 1:  # More than just the current message
+                conversation_context = "对话历史:\n"
+                for msg in history[:-1]:  # Exclude the current message
+                    conversation_context += f"{msg.role}: {msg.content}\n"
+                conversation_context += "\n"
+
+            # Use non-document prompt template
+            from rag.prompt_templates import get_non_document_prompt
+
+            prompt = get_non_document_prompt()
+
+            # Generate response using LLM
+            from langchain_core.output_parsers import StrOutputParser
+            chain = prompt | self.llm | StrOutputParser()
+
+            ai_response = await chain.ainvoke({
+                "context": conversation_context,
+                "question": user_message
+            })
+
+            # Save AI response without sources
+            ai_msg = self.chat_message_repo.add_message(
+                chat_id=chat_id,
+                role="assistant",
+                content=ai_response,
+                sources=json.dumps([]),
+                metadata=json.dumps({
+                    "model": self.config.openai_chat_model,
+                    "sources_count": 0,
+                    "collections_searched": [],
+                    "document_retrieval": False
+                })
+            )
+
+            logger.info(f"Generated non-document response for chat {chat_id}")
+            return self._to_message_response(ai_msg)
 
         # Retrieve relevant documents from multiple collections with intent-based strategy
         logger.info(f"Intent {intent.value} requires document retrieval")
@@ -360,8 +335,6 @@ class ChatService:
                 conversation_context += f"{msg.role}: {msg.content}\n"
 
         # Generate AI response using intent-specific RAG
-        from rag.prompt_templates import get_prompt_by_intent
-
         prompt = get_prompt_by_intent(intent)
 
         logger.debug(f"Using intent-specific prompt template for {intent.value}")
@@ -419,15 +392,13 @@ class ChatService:
 
         intent_info = self.intent_analyzer.analyze_with_confidence(user_message)
         intent = intent_info["intent"]
-        intent_confidence = intent_info["confidence"]
-
-        logger.info(f"Detected intent: {intent.value} (confidence: {intent_confidence})")
+        logger.info(f"Detected intent: {intent.value} (confidence: {intent_info['confidence']})")
 
         # Check if document retrieval is needed based on intent
         needs_documents = self.intent_analyzer.requires_document_retrieval(intent)
 
         if not needs_documents:
-            # Handle non-document queries directly
+            # Handle non-document queries directly with LLM
             logger.info(f"Intent {intent.value} does not require document retrieval")
 
             yield {
@@ -435,19 +406,41 @@ class ChatService:
                 "data": json.dumps({"status": "generating_direct_response"})
             }
 
-            ai_response = self._generate_non_document_response(user_message, intent)
+            # Get conversation history for context
+            history = self.chat_message_repo.get_conversation_history(chat_id, max_messages=10)
 
-            # Send the direct response as streaming content
-            yield {
-                "event": "content",
-                "data": json.dumps({"content": ai_response}, ensure_ascii=False)
-            }
+            # Format conversation history
+            conversation_context = ""
+            if len(history) > 1:  # More than just the current message
+                conversation_context = "对话历史:\n"
+                for msg in history[:-1]:  # Exclude the current message
+                    conversation_context += f"{msg.role}: {msg.content}\n"
+                conversation_context += "\n"
+
+            # Use non-document prompt template
+            non_document_prompt = get_non_document_prompt()
+
+            # Stream response using LLM
+            chain = non_document_prompt | self.llm
+
+            full_response = ""
+            async for chunk in chain.astream({
+                "context": conversation_context,
+                "question": user_message
+            }):
+                content = chunk.content if hasattr(chunk, 'content') else str(chunk)
+                if content:
+                    full_response += str(content)
+                    yield {
+                        "event": "content",
+                        "data": json.dumps({"content": content}, ensure_ascii=False)
+                    }
 
             # Save AI response without sources
             ai_msg = self.chat_message_repo.add_message(
                 chat_id=chat_id,
                 role="assistant",
-                content=ai_response,
+                content=full_response,
                 sources=json.dumps([]),
                 metadata=json.dumps({
                     "model": self.config.openai_chat_model,
@@ -463,7 +456,7 @@ class ChatService:
                 "data": json.dumps({
                     "message_id": ai_msg.id,
                     "sources_count": 0,
-                    "total_content_length": len(ai_response),
+                    "total_content_length": len(full_response),
                     "document_retrieval": False
                 })
             }
@@ -516,8 +509,6 @@ class ChatService:
             full_context = conversation_context + "\n\n当前文档上下文:\n" + context
 
         # Generate AI response using intent-specific RAG
-        from rag.prompt_templates import get_prompt_by_intent
-
         prompt = get_prompt_by_intent(intent)
 
         # Create streaming chain
