@@ -174,10 +174,10 @@ class DocumentProcessor:
             return []
 
         metadata = {
-            "url": url,
-            "page_title": page_title,
+            "document_uri": url,
+            "document_name": page_title,
             "content_type": "web_page",
-            "processing_timestamp": "2024"  # Could use datetime.now().isoformat()
+            "processing_timestamp": datetime.now().isoformat()
         }
 
         return self.process_text(

@@ -12,6 +12,7 @@ from exception import HTTPNotFoundException
 from models.dto import ChatDTO, ChatMessageDTO
 from models.responses import ChatMessageResponse, ChatResponse, SourceReference
 from repository.chat import ChatMessageRepository, ChatRepository
+from repository.collection import CollectionRepository
 from vector_store.chroma_client import create_chroma_manager
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,7 @@ class ChatService:
         # Initialize repository instance
         self.chat_repo = ChatRepository()
         self.chat_message_repo = ChatMessageRepository()
+        self.collection_repo = CollectionRepository()
 
         # Initialize components that will be reused
         self.chroma_manager = create_chroma_manager(self.config)
@@ -175,8 +177,9 @@ class ChatService:
 
         for doc in documents:
             source_ref = SourceReference(
-                document_name=doc.get('source', 'Unknown Document'),
                 document_id=doc.get('document_id', ''),
+                document_name=doc.get('document_name', 'Unknown Document'),
+                document_uri=doc.get('document_uri', ''),
                 chunk_index=doc.get('chunk_index', 0),
                 content_preview=doc.get('content', '')[:100] + "..." if len(doc.get('content', '')) > 100 else doc.get('content', ''),
                 relevance_score=doc.get('score', 0.0)
@@ -190,13 +193,23 @@ class ChatService:
         if not documents:
             return "未找到相关文档。"
 
+        # Cache collection names to avoid repeated queries
+        collection_names = {}
+
         context_parts = []
         for i, doc in enumerate(documents, 1):
-            source = doc.get('source', 'Unknown')
+            doc_name = doc.get('document_name', 'Unknown')
             content = doc.get('content', '')
             collection_id = doc.get('collection_id', 'unknown')
 
-            context_part = f"[文档 {i}] 来源: {source} (知识库: {collection_id})\n内容: {content}"
+            # Get collection name
+            collection_name = collection_names.get(collection_id)
+            if collection_name is None:
+                collection = self.collection_repo.get_by_id(collection_id)
+                collection_name = collection.name if collection else collection_id
+                collection_names[collection_id] = collection_name
+
+            context_part = f"[文档 {i}] 来源: '{doc_name}' (来自知识库: {collection_name})\n内容: {content}"
             context_parts.append(context_part)
 
         return "\n\n".join(context_parts)

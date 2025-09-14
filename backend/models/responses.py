@@ -164,8 +164,9 @@ class ChatMessageResponse(BaseModel):
 
 class SourceReference(BaseModel):
     """Response model for source references"""
-    document_name: str = Field(..., description="Source document name")
     document_id: str = Field(..., description="Document ID")
+    document_name: str = Field(..., description="Source document name")
+    document_uri: str = Field(..., description="Document URI")
     chunk_index: int = Field(..., description="Chunk index within document")
     content_preview: str = Field(..., description="Preview of relevant content")
     relevance_score: float = Field(..., description="Relevance score")

@@ -145,7 +145,14 @@ const SourceReferences: React.FC<{ sources: SourceReference[] }> = ({ sources })
           {sources.map((source, index) => (
             <div key={index} className="text-xs bg-gray-50/50 rounded p-2 border border-gray-200/30">
               <div className="flex items-center justify-between mb-1">
-                <span className="font-medium text-gray-700 truncate flex-1">{source.document_name}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-gray-700 truncate">{source.document_name}</div>
+                  {source.document_uri && (
+                    <div className="text-xs text-blue-600 truncate mt-0.5">
+                      {source.document_uri}
+                    </div>
+                  )}
+                </div>
                 {source.relevance_score && (
                   <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full ml-2 flex-shrink-0">
                     {(source.relevance_score * 100).toFixed(0)}%

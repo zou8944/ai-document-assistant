@@ -100,8 +100,9 @@ export interface ChatMessage {
 }
 
 export interface SourceReference {
-  document_name: string
   document_id: string
+  document_name: string
+  document_uri: string
   chunk_index: number
   content_preview: string
   relevance_score: number

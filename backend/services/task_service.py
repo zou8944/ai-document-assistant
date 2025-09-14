@@ -428,10 +428,10 @@ class TaskService:
             embedding_list.append(embedding)
             metadatas.append({
                 "document_id": doc_id,
+                "document_name": doc_title,
+                "document_uri": doc_page_uri,
                 "collection_id": collection_id,
                 "chunk_index": i,
-                "source": f"{doc_id}#chunk_{i}",
-                "content_preview": chunk.content[:200] if chunk.content else ""
             })
             documents.append(chunk.content)
 

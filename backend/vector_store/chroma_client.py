@@ -4,7 +4,6 @@ Following 2024 best practices for LangChain integration.
 """
 
 import logging
-import uuid
 from typing import Any, Optional
 
 import chromadb
@@ -73,58 +72,6 @@ class ChromaManager:
 
         logger.info(f"Created collection '{collection_name}'")
 
-
-    async def index_documents(self, collection_name: str, chunks: list[DocumentChunk],
-                            embeddings: list[list[float]]) -> dict[str, Any]:
-        """
-        Index document chunks with their embeddings.
-
-        Args:
-            collection_name: Target collection name
-            chunks: list of document chunks
-            embeddings: Corresponding embeddings for each chunk
-
-        Returns:
-            Status dictionary with success/error information
-        """
-        if len(chunks) != len(embeddings):
-            raise ValueError("Number of chunks must match number of embeddings")
-
-        collection = self.client.get_collection(name=collection_name)
-
-        # Prepare data for insertion
-        ids = []
-        documents = []
-        metadatas = []
-        embeddings_list = []
-
-        for chunk, embedding in zip(chunks, embeddings):
-            chunk_id = chunk.id or str(uuid.uuid4())
-            ids.append(chunk_id)
-            documents.append(chunk.content)
-            metadatas.append({
-                "source": chunk.source,
-                "start_index": chunk.start_index,
-                **chunk.metadata
-            })
-            embeddings_list.append(embedding)
-
-        # Upsert documents (add or update)
-        collection.upsert(
-            ids=ids,
-            documents=documents,
-            metadatas=metadatas,
-            embeddings=embeddings_list
-        )
-
-        logger.info(f"Indexed {len(chunks)} documents in collection '{collection_name}'")
-
-        return {
-            "status": "success",
-            "indexed_count": len(chunks),
-            "collection_name": collection_name
-        }
-
     async def search_similar(self, collection_name: str, query_embedding: list[float],
                            limit: int = 5, score_threshold: float = 0.5) -> list[dict[str, Any]]:
         """
@@ -167,11 +114,13 @@ class ChromaManager:
                     metadata = metadatas[i] if i < len(metadatas) else {}
                     formatted_results.append({
                         "id": doc_id,
+                        "document_id": metadata.get("document_id", ""),
+                        "document_uri": metadata.get("document_uri", ""),
+                        "document_name": metadata.get("document_name", ""),
+                        "collection_id": metadata.get("collection_id", ""),
                         "score": score,
                         "content": documents[i] if i < len(documents) else "",
-                        "source": metadata.get("source", ""),
-                        "start_index": metadata.get("start_index", 0),
-                        "metadata": {k: v for k, v in metadata.items() if k not in ["source", "start_index"]}
+                        "metadata": metadata
                     })
 
         logger.info(f"Found {len(formatted_results)} similar documents")
