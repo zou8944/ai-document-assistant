@@ -258,6 +258,16 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
 
     const userMessageContent = message.trim()
     setMessage('')
+    
+    // Add user message to UI immediately
+    const userMessage: Message = {
+      id: `user_${Date.now()}`,
+      type: 'user',
+      content: userMessageContent,
+      timestamp: new Date().toISOString()
+    }
+    setMessages(prev => [...prev, userMessage])
+    
     setIsLoading(true)
     setIsStreaming(true)
     setStreamingContent('')
@@ -268,7 +278,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
       await apiClient.sendMessageStream(
         currentChat.id,
         { message: userMessageContent, include_sources: true },
-        (event) => handleStreamEvent(event, userMessageContent),
+        (event) => handleStreamEvent(event),
         handleStreamError
       )
     } catch (error) {
@@ -279,19 +289,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
     }
   }
   
-  const handleStreamEvent = (event: SSEEvent, userMessageContent?: string) => {
+  const handleStreamEvent = (event: SSEEvent) => {
     console.log('Stream event:', event)
     
     switch (event.event) {
       case 'metadata':
-        // Add user message to UI immediately
-        const userMessage: Message = {
-          id: `user_${Date.now()}`,
-          type: 'user',
-          content: event.data?.user_message || userMessageContent || '用户消息',
-          timestamp: new Date().toISOString()
-        }
-        setMessages(prev => [...prev, userMessage])
+        // User message already added in handleSendMessage, no need to add again
         break
         
       case 'user_message':
@@ -537,7 +540,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                 <CpuChipIcon className="w-4 h-4" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="px-4 py-3 rounded-2xl bg-white/80 backdrop-blur-sm border border-gray-200/50 text-gray-900">
+                <div className="px-4 py-3 rounded-2xl bg-white/80 backdrop-blur-sm border border-gray-200/50 text-gray-900 text-sm">
                   {streamingContent ? (
                     <>
                       <MarkdownContent content={streamingContent} />

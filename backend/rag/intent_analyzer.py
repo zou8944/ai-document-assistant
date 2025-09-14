@@ -3,259 +3,183 @@
 基于关键词匹配和语义分析识别查询类型
 """
 
+import json
 import logging
-import re
+from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
+from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
+from markdown_it import MarkdownIt
 
 logger = logging.getLogger(__name__)
 
+INTENT_ANALYSIS_PROMPT = PromptTemplate.from_template("""
+你是一个意图识别助手，任务是根据用户问题，判断其意图类别，并给出适合 RAG 系统的处理策略和检索 query。
+
+意图类别一共 15 种：
+1. 定义/解释
+2. 特点/属性
+3. 分类/类型
+4. 实例/例子
+5. 对比/区别
+6. 优缺点/利弊
+7. 推荐/选择
+8. 操作/方法
+9. 步骤/流程
+10. 错误排查/问题解决
+11. 优化/改进
+12. 原因/解释现象
+13. 影响/结果/后果
+14. 总结/归纳
+15. 生成/改写/创意
+16. 元认知（关于AI助手本身的功能、使用等问题）
+17. 其它（不属于上面的所有问题）
+
+输出格式要求（JSON 格式）：
+{{
+  "intent": "意图类别",
+  "reason": "为什么判定为该意图类别",
+  "strategy": "RAG 的处理策略，说明是否需要 query 重写，以及如何检索",
+  "queries": ["具体的检索 query 1", "具体的检索 query 2", "..."]
+}}
+
+示例 1：
+用户问题: "Redis 和 Memcached 有什么区别？"
+
+输出:
+{{
+  "intent": "对比/区别",
+  "reason": "问题包含 '有什么区别'，明确是对比两个对象",
+  "strategy": "需要 query 重写，分别检索两者特点，再由 LLM 总结差异",
+  "queries": ["Redis 的特点和应用场景", "Memcached 的特点和应用场景"]
+}}
+
+示例 2：
+用户问题: "如何在 Linux 上安装 PostgreSQL？"
+
+输出:
+{{
+  "intent": "操作/方法",
+  "reason": "问题是 '如何安装'，属于操作步骤问题",
+  "strategy": "直接检索安装方法相关内容",
+  "queries": ["在 Linux 系统上安装 PostgreSQL 的方法", "PostgreSQL Linux 安装步骤"]
+}}
+------
+用户问题: {query}
+""")
 
 class QueryIntent(Enum):
     """查询意图枚举"""
-    OVERVIEW = "overview"      # 概述类：总结、概览、整体介绍
-    HOW_TO = "how_to"         # 操作指南类：如何做、步骤、教程
-    FACTUAL = "factual"       # 事实查询类：具体问题、定义、细节
-    COMPARISON = "comparison"  # 比较类：对比、区别、优缺点
+    DEFINITION = "定义/解释"
+    FEATURES = "特点/属性"
+    CLASSIFICATION = "分类/类型"
+    EXAMPLES = "实例/例子"
+    COMPARISON = "对比/区别"
+    PROS_CONS = "优缺点/利弊"
+    RECOMMENDATION = "推荐/选择"
+    HOW_TO = "操作/方法"
+    STEPS = "步骤/流程"
+    TROUBLESHOOTING = "错误排查/问题解决"
+    OPTIMIZATION = "优化/改进"
+    CAUSES = "原因/解释现象"
+    IMPACT = "影响/结果/后果"
+    SUMMARY = "总结/归纳"
+    GENERATION = "生成/改写/创意"
+    META_COGNITION = "元认知"
+    OTHER = "其它"
+
+
+@dataclass
+class AnalysisResult:
+    intent: QueryIntent
+    reason: str
+    strategy: str
+    queries: list[str]
+
+    @staticmethod
+    def from_dict(data: dict) -> "AnalysisResult":
+        return AnalysisResult(
+            intent=QueryIntent(data["intent"]),
+            reason=data["reason"],
+            strategy=data["strategy"],
+            queries=data["queries"],
+        )
 
 
 class IntentAnalyzer:
-    """用户查询意图分析器"""
 
-    def __init__(self, llm: Optional[ChatOpenAI] = None):
-        """
-        初始化意图分析器
-
-        Args:
-            llm: 可选的LLM实例，用于语义分析
-        """
+    def __init__(self, llm: ChatOpenAI):
         self.llm = llm
+        self.markdown_it = MarkdownIt()
+        self.fallback_intent = AnalysisResult(
+            intent=QueryIntent.OTHER,
+            reason="无法识别具体意图，归类为其它",
+            strategy="不进行 query 重写，直接使用原始查询",
+            queries=[],
+        )
 
-        # 关键词模式匹配（中英文混合）
-        self.keyword_patterns = {
-            QueryIntent.OVERVIEW: [
-                r'总体|整体|概述|概览|总结|主要内容|讲了什么|介绍了什么|都有什么|包含什么|涵盖了',
-                r'全面|综合|整个|所有|全部内容|主要讲|主题是什么|核心内容',
-                r'overall|summary|overview|introduction|what.*about|main.*content|comprehensive',
-                r'tell.*me.*about|give.*me.*overview|what.*does.*cover|what.*is.*about'
-            ],
-            QueryIntent.HOW_TO: [
-                r'如何|怎么|怎样|怎么做|如何做|怎样做|步骤|教程|操作|实现|配置|设置|安装',
-                r'方法|流程|过程|执行|运行|使用|部署|建立|创建|制作',
-                r'how\s+to|step.*step|tutorial|guide|implement|configure|setup|install',
-                r'how.*do|how.*can|process.*of|way.*to|method.*of|instructions'
-            ],
-            QueryIntent.COMPARISON: [
-                r'区别|差异|差别|对比|比较|优缺点|优劣|vs|versus|和.*的不同|与.*区别',
-                r'哪个好|哪种好|选择|更好|更适合|不同点|相同点|异同',
-                r'difference|compare|comparison|versus|vs|pros.*cons|better.*than',
-                r'which.*better|what.*difference|contrast.*with|similar.*different'
-            ]
-        }
+    def _extract_code_block(self, md_text, lang="json"):
+        tokens = self.markdown_it.parse(md_text)
+        for token in tokens:
+            if token.type == "fence" and token.info.strip() == lang:
+                return token.content
+        return None
 
-        # 负面模式（减分项）- 如果包含这些模式，降低对应意图的匹配度
-        self.negative_patterns = {
-            QueryIntent.OVERVIEW: [
-                r'具体|详细|特定|某个|单独|个别',  # 这些暗示不是要概述
-                r'specific|particular|individual|detailed|exact'
-            ],
-            QueryIntent.HOW_TO: [
-                r'是什么|定义|含义|概念|理论|原理',  # 这些暗示不是要操作指南
-                r'what.*is|definition|concept|theory|principle'
-            ]
-        }
+    async def analyze(self, query: str) -> AnalysisResult:
+        chain = INTENT_ANALYSIS_PROMPT | self.llm | StrOutputParser()
 
-    def _calculate_keyword_score(self, query: str, intent: QueryIntent) -> float:
-        """
-        计算关键词匹配分数
-
-        Args:
-            query: 查询文本
-            intent: 意图类型
-
-        Returns:
-            匹配分数 (0-1)
-        """
-        query_lower = query.lower()
-        patterns = self.keyword_patterns.get(intent, [])
-        negative_patterns = self.negative_patterns.get(intent, [])
-
-        # 正面匹配分数
-        positive_score = 0
-        total_patterns = len(patterns)
-
-        for pattern in patterns:
-            if re.search(pattern, query_lower):
-                positive_score += 1
-
-        if total_patterns == 0:
-            return 0.0
-
-        positive_ratio = positive_score / total_patterns
-
-        # 负面模式减分
-        negative_score = 0
-        for pattern in negative_patterns:
-            if re.search(pattern, query_lower):
-                negative_score += 0.2  # 每个负面模式减0.2分
-
-        # 最终分数
-        final_score = max(0.0, positive_ratio - negative_score)
-
-        logger.debug(f"Intent {intent.value}: positive={positive_ratio:.2f}, negative={negative_score:.2f}, final={final_score:.2f}")
-        return final_score
-
-    def analyze_intent_by_keywords(self, query: str) -> dict[QueryIntent, float]:
-        """
-        基于关键词分析查询意图
-
-        Args:
-            query: 查询文本
-
-        Returns:
-            各个意图的匹配分数字典
-        """
-        scores = {}
-
-        for intent in QueryIntent:
-            score = self._calculate_keyword_score(query, intent)
-            scores[intent] = score
-
-        return scores
-
-    def analyze_intent(self, query: str, use_llm_fallback: bool = True) -> QueryIntent:
-        """
-        分析查询意图
-
-        Args:
-            query: 查询文本
-            use_llm_fallback: 是否使用LLM作为后备方案
-
-        Returns:
-            识别出的查询意图
-        """
-        logger.debug(f"分析查询意图: {query[:100]}...")
-
-        # 1. 基于关键词的分析
-        keyword_scores = self.analyze_intent_by_keywords(query)
-
-        # 找到最高分数的意图
-        max_score = max(keyword_scores.values())
-        best_intent = max(keyword_scores.items(), key=lambda x: x[1])[0]
-
-        logger.debug(f"关键词分析结果: {dict((k.value, f'{v:.2f}') for k, v in keyword_scores.items())}")
-
-        # 2. 如果关键词匹配分数足够高，直接返回
-        if max_score >= 0.3:  # 阈值可调
-            logger.info(f"基于关键词识别意图: {best_intent.value} (score: {max_score:.2f})")
-            return best_intent
-
-        # 3. 如果关键词匹配分数较低，且有LLM可用，使用语义分析
-        if use_llm_fallback and self.llm and max_score < 0.3:
-            try:
-                semantic_intent = self._semantic_analysis(query)
-                logger.info(f"基于语义分析识别意图: {semantic_intent.value}")
-                return semantic_intent
-            except Exception as e:
-                logger.warning(f"语义分析失败，使用关键词结果: {e}")
-
-        # 4. 默认处理逻辑
-        if max_score > 0:
-            logger.info(f"使用最佳关键词匹配: {best_intent.value} (score: {max_score:.2f})")
-            return best_intent
-
-        # 5. 无明确匹配，返回默认意图
-        logger.info("无明确意图匹配，默认为事实查询")
-        return QueryIntent.FACTUAL
-
-    def _semantic_analysis(self, query: str) -> QueryIntent:
-        """
-        使用LLM进行语义分析
-
-        Args:
-            query: 查询文本
-
-        Returns:
-            识别出的查询意图
-        """
-        prompt = PromptTemplate.from_template("""
-分析以下查询的意图类型，从以下选项中选择一个最合适的：
-
-1. overview（概述类）- 用户想要了解某个主题的整体情况、总体介绍、主要内容概览
-2. how_to（操作指南类）- 用户想要学习如何做某事、需要步骤指导、操作教程
-3. comparison（比较类）- 用户想要比较不同选项、了解区别、优缺点对比
-4. factual（事实查询类）- 用户想要了解具体事实、定义、细节信息
-
-查询：{query}
-
-请仔细分析查询的语义和用户真实意图，只返回对应的意图类型（overview/how_to/comparison/factual），不要包含其他内容：
-""")
+        ai_res = await chain.ainvoke({
+            "query": query
+        })
 
         try:
-            response = self.llm.invoke(prompt.format(query=query))
-            intent_str = response.content.strip().lower()
-
-            # 解析LLM返回的意图
-            for intent in QueryIntent:
-                if intent.value in intent_str:
-                    return intent
-
-            # 如果解析失败，记录并返回默认值
-            logger.warning(f"无法解析LLM返回的意图: {intent_str}")
-            return QueryIntent.FACTUAL
-
+            res_dict = json.loads(self._extract_code_block(ai_res) or ai_res)
+            return AnalysisResult.from_dict(res_dict)
         except Exception as e:
-            logger.error(f"语义分析调用失败: {e}")
-            raise
-
-    def get_intent_description(self, intent: QueryIntent) -> str:
-        """
-        获取意图的中文描述
-
-        Args:
-            intent: 查询意图
-
-        Returns:
-            意图的中文描述
-        """
-        descriptions = {
-            QueryIntent.OVERVIEW: "概述查询 - 用户想要了解整体情况和主要内容",
-            QueryIntent.HOW_TO: "操作指南查询 - 用户需要步骤指导和实践方法",
-            QueryIntent.COMPARISON: "比较查询 - 用户想要对比不同选项的差异",
-            QueryIntent.FACTUAL: "事实查询 - 用户想要了解具体事实和详细信息"
-        }
-        return descriptions.get(intent, "未知意图类型")
-
-    def analyze_with_confidence(self, query: str) -> dict[str, any]:
-        """
-        分析查询意图并返回详细信息
-
-        Args:
-            query: 查询文本
-
-        Returns:
-            包含意图、置信度和详细分析的字典
-        """
-        keyword_scores = self.analyze_intent_by_keywords(query)
-        intent = self.analyze_intent(query)
-
-        max_score = max(keyword_scores.values())
-        confidence = "high" if max_score >= 0.5 else "medium" if max_score >= 0.3 else "low"
-
-        return {
-            "intent": intent,
-            "confidence": confidence,
-            "confidence_score": max_score,
-            "keyword_scores": dict((k.value, v) for k, v in keyword_scores.items()),
-            "description": self.get_intent_description(intent),
-            "analysis_method": "keyword" if max_score >= 0.3 else "semantic" if self.llm else "default"
-        }
+            logger.error(f"Failed to parse intent analysis result: {e}", exc_info=True)
+            return self.fallback_intent
 
 
-# 便捷函数
-def create_intent_analyzer(llm: Optional[ChatOpenAI] = None) -> IntentAnalyzer:
-    """创建意图分析器实例"""
+def create_intent_analyzer(llm: ChatOpenAI) -> IntentAnalyzer:
     return IntentAnalyzer(llm)
+
+if __name__ == "__main__":
+    import asyncio
+
+    from langchain_openai import ChatOpenAI
+
+    async def main():
+        args = {
+            "model": "deepseek-ai/DeepSeek-V3",
+            "temperature": 0.1,
+            "api_key": "CCC",
+            "base_url": "DDD"
+        }
+        llm = ChatOpenAI(**args)
+        analyzer = IntentAnalyzer(llm)
+
+        queries = [
+            "Redis 和 Memcached 有什么区别？",
+            "如何在 Linux 上安装 PostgreSQL？",
+            "Python 的主要特点有哪些？",
+            "给我推荐几本学习机器学习的书籍。",
+            "什么是量子计算？",
+            "请总结一下人工智能的发展历程。",
+            "帮我写一首关于春天的诗。",
+            "AI 助手能做什么？",
+            "今天的天气怎么样？",
+            "简单介绍一下当前的知识库",
+        ]
+
+        for query in queries:
+            result = await analyzer.analyze(query)
+            print(f"Query: {query}")
+            print(f"Intent: {result.intent.value}")
+            print(f"Reason: {result.reason}")
+            print(f"Strategy: {result.strategy}")
+            print(f"Queries: {result.queries}")
+            print("-" * 40)
+
+    asyncio.run(main())
