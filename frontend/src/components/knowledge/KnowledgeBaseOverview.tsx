@@ -10,7 +10,8 @@ import {
   ChatBubbleLeftRightIcon,
   CogIcon,
   CalendarIcon,
-  DocumentIcon
+  DocumentIcon,
+  TrashIcon
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { useAppStore } from '../../store/appStore'
@@ -37,7 +38,8 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
     addChatSession,
     setActiveChat,
     addKnowledgeBase,
-    updateKnowledgeBase
+    updateKnowledgeBase,
+    deleteKnowledgeBase
   } = useAppStore()
 
   // Filter collections based on search query
@@ -157,6 +159,25 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
     }
   }
 
+  const handleDeleteClick = async (collectionId: string) => {
+    const collection = collections.find(c => c.id === collectionId)
+    if (!collection) return
+    
+    if (confirm(`确定要删除知识库 "${collection.name}" 吗？\n\n此操作将永久删除知识库及其所有文档，无法恢复。`)) {
+      try {
+        await apiClient.deleteCollection(collectionId)
+        // Remove from local state
+        setCollections(prev => prev.filter(c => c.id !== collectionId))
+        // Remove from app store
+        deleteKnowledgeBase(collectionId)
+        console.log('知识库删除成功:', collection.name)
+      } catch (error) {
+        console.error('删除知识库失败:', error)
+        alert('删除知识库失败: ' + (error as Error).message)
+      }
+    }
+  }
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('zh-CN', {
       year: 'numeric',
@@ -249,6 +270,16 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                       <BookOpenIcon className="w-5 h-5 text-blue-500" />
                       <h3 className="font-semibold text-gray-900 truncate">{collection.name}</h3>
                     </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDeleteClick(collection.id)
+                      }}
+                      className="p-1 hover:bg-red-50 rounded transition-colors group"
+                      title="删除知识库"
+                    >
+                      <TrashIcon className="w-4 h-4 text-gray-400 group-hover:text-red-500" />
+                    </button>
                   </div>
                   
                   <p className="text-sm text-gray-600 mb-3 line-clamp-2">

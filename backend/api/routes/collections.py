@@ -117,9 +117,6 @@ async def delete_collection(collection_id: str, request: Request):
 
     collection_service = app_state.collection_service
 
-    success = await collection_service.delete_collection(collection_id)
-
-    if not success:
-        raise HTTPNotFoundException(f"Collection '{collection_id}' not found")
+    await collection_service.delete_collection(collection_id)
 
     return {}

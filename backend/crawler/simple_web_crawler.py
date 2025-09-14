@@ -37,7 +37,7 @@ class SimpleWebCrawler:
     Fast and lightweight for basic document crawling needs.
     """
 
-    def __init__(self, cache_dir: str, max_depth: int = 3, delay: float = 1.0, max_pages: int = 50):
+    def __init__(self, cache_dir: str, max_depth: int = 0, delay: float = 1.0, max_pages: int = 1000):
         """Initialize crawler with basic settings"""
         self.cache_dir = cache_dir
         self.max_depth = max_depth
