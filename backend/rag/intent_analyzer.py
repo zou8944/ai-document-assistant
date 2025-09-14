@@ -20,6 +20,8 @@ class QueryIntent(Enum):
     HOW_TO = "how_to"         # 操作指南类：如何做、步骤、教程
     FACTUAL = "factual"       # 事实查询类：具体问题、定义、细节
     COMPARISON = "comparison"  # 比较类：对比、区别、优缺点
+    GREETING = "greeting"     # 问候类：你好、谢谢、再见等社交性对话
+    GENERAL = "general"       # 通用类：不需要特定文档的一般性问题
 
 
 class IntentAnalyzer:
@@ -53,6 +55,18 @@ class IntentAnalyzer:
                 r'哪个好|哪种好|选择|更好|更适合|不同点|相同点|异同',
                 r'difference|compare|comparison|versus|vs|pros.*cons|better.*than',
                 r'which.*better|what.*difference|contrast.*with|similar.*different'
+            ],
+            QueryIntent.GREETING: [
+                r'^你好$|^您好$|^hi$|^hello$|^hey$|^嗨$|^早上好$|^下午好$|^晚上好$',
+                r'^谢谢$|^thank.*you$|^thanks$|^多谢$|^感谢$',
+                r'^再见$|^拜拜$|^bye$|^goodbye$|^see.*you$',
+                r'^没事$|^没关系$|^不客气$|^不用谢$|^ok$|^好的$|^嗯$|^啊$'
+            ],
+            QueryIntent.GENERAL: [
+                r'^今天.*天气|^现在几点|^时间|当前时间|^日期',
+                r'你是谁|你叫什么|你的名字|who.*are.*you|what.*is.*your.*name',
+                r'你能做什么|能帮我什么|你的功能|what.*can.*you.*do|your.*capabilities',
+                r'聊天$|聊聊$|随便聊|无聊|chat|talk|conversation$'
             ]
         }
 
@@ -225,9 +239,31 @@ class IntentAnalyzer:
             QueryIntent.OVERVIEW: "概述查询 - 用户想要了解整体情况和主要内容",
             QueryIntent.HOW_TO: "操作指南查询 - 用户需要步骤指导和实践方法",
             QueryIntent.COMPARISON: "比较查询 - 用户想要对比不同选项的差异",
-            QueryIntent.FACTUAL: "事实查询 - 用户想要了解具体事实和详细信息"
+            QueryIntent.FACTUAL: "事实查询 - 用户想要了解具体事实和详细信息",
+            QueryIntent.GREETING: "问候查询 - 用户进行社交性对话，无需文档支持",
+            QueryIntent.GENERAL: "通用查询 - 用户询问一般性问题，无需特定文档"
         }
         return descriptions.get(intent, "未知意图类型")
+
+    def requires_document_retrieval(self, intent: QueryIntent) -> bool:
+        """
+        判断某个意图是否需要检索文档
+
+        Args:
+            intent: 查询意图
+
+        Returns:
+            是否需要检索文档
+        """
+        # 这些意图类型需要文档支持
+        document_required_intents = {
+            QueryIntent.OVERVIEW,
+            QueryIntent.HOW_TO,
+            QueryIntent.FACTUAL,
+            QueryIntent.COMPARISON
+        }
+
+        return intent in document_required_intents
 
     def analyze_with_confidence(self, query: str) -> dict[str, any]:
         """

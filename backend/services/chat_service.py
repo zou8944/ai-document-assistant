@@ -11,6 +11,7 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from exception import HTTPNotFoundException
 from models.dto import ChatDTO, ChatMessageDTO
 from models.responses import ChatMessageResponse, ChatResponse, SourceReference
+from rag.intent_analyzer import IntentAnalyzer, QueryIntent
 from repository.chat import ChatMessageRepository, ChatRepository
 from repository.collection import CollectionRepository
 from vector_store.chroma_client import create_chroma_manager
@@ -41,6 +42,9 @@ class ChatService:
 
         chat_kwargs = self.config.get_openai_chat_kwargs()
         self.llm = ChatOpenAI(**chat_kwargs)
+
+        # Initialize intent analyzer
+        self.intent_analyzer = IntentAnalyzer(llm=self.llm)
 
         logger.info("ChatService initialized successfully")
 
@@ -139,10 +143,27 @@ class ChatService:
         self,
         query: str,
         collection_ids: list[str],
+        intent: Optional[QueryIntent] = None,
         top_k_per_collection: int = 5
     ) -> list[dict[str, Any]]:
-        """Retrieve documents from multiple collections"""
+        """Retrieve documents from multiple collections with intent-based strategy"""
         all_results = []
+
+        # Adjust retrieval parameters based on intent
+        if intent == QueryIntent.OVERVIEW:
+            top_k_per_collection = max(top_k_per_collection, 8)
+            score_threshold = 0.2  # Lower threshold for broader coverage
+        elif intent == QueryIntent.HOW_TO:
+            top_k_per_collection = max(top_k_per_collection, 6)
+            score_threshold = 0.3  # Standard threshold
+        elif intent == QueryIntent.COMPARISON:
+            top_k_per_collection = max(top_k_per_collection, 7)
+            score_threshold = 0.25  # Moderate threshold
+        else:
+            score_threshold = 0.3
+
+        logger.info(f"Intent-based retrieval: {intent.value if intent else 'None'}, "
+                   f"top_k={top_k_per_collection}, threshold={score_threshold}")
 
         # Generate query embedding once
         query_embedding = await self.embeddings.aembed_query(query)
@@ -154,7 +175,7 @@ class ChatService:
                     collection_name=collection_id,
                     query_embedding=query_embedding,
                     limit=top_k_per_collection,
-                    score_threshold=0.3
+                    score_threshold=score_threshold
                 )
 
                 # Add collection info to results
@@ -169,7 +190,14 @@ class ChatService:
 
         # Sort by relevance score and take top results
         all_results.sort(key=lambda x: x.get('score', 0), reverse=True)
-        return all_results[:top_k_per_collection * 2]
+
+        # Adjust final result count based on intent
+        if intent == QueryIntent.OVERVIEW:
+            max_results = top_k_per_collection * len(collection_ids)  # More results for overview
+        else:
+            max_results = top_k_per_collection * 2  # Standard limit
+
+        return all_results[:max_results]
 
     def _format_sources(self, documents: list[dict[str, Any]]) -> list[SourceReference]:
         """Format retrieved documents as source references"""
@@ -214,8 +242,76 @@ class ChatService:
 
         return "\n\n".join(context_parts)
 
+    def _generate_non_document_response(self, user_message: str, intent: QueryIntent) -> str:
+        """
+        Generate response for queries that don't need document retrieval
+
+        Args:
+            user_message: User's message
+            intent: Detected intent
+
+        Returns:
+            Appropriate response for the intent
+        """
+        if intent == QueryIntent.GREETING:
+            # Handle greetings
+            greetings_map = {
+                "你好": "您好！我是您的AI文档助手，可以帮您查找和分析文档内容。有什么问题需要我协助的吗？",
+                "您好": "您好！我是您的AI文档助手，可以帮您查找和分析文档内容。有什么问题需要我协助的吗？",
+                "hi": "Hello! I'm your AI document assistant. How can I help you today?",
+                "hello": "Hello! I'm your AI document assistant. How can I help you today?",
+                "谢谢": "不客气！很高兴能帮助您。如果还有其他问题，请随时告诉我。",
+                "thank": "You're welcome! Feel free to ask if you have any other questions.",
+                "再见": "再见！期待下次为您提供帮助。",
+                "bye": "Goodbye! Looking forward to helping you again.",
+            }
+
+            message_lower = user_message.lower().strip()
+            for key, response in greetings_map.items():
+                if key in message_lower:
+                    return response
+
+            return "您好！我是您的AI文档助手。如果您有任何关于文档的问题，请随时告诉我！"
+
+        elif intent == QueryIntent.GENERAL:
+            # Handle general queries
+            if any(keyword in user_message.lower() for keyword in ["你是谁", "你叫什么", "who are you", "your name"]):
+                return "我是您的AI文档助手，专门帮助您查找、分析和理解文档内容。我可以回答关于已加载文档的各种问题，包括概述、操作指南、具体事实查询等。"
+
+            elif any(keyword in user_message.lower() for keyword in ["能做什么", "功能", "capabilities", "what can you do"]):
+                return """我可以为您提供以下服务：
+
+📋 **文档分析功能：**
+• 文档内容概述和总结
+• 操作步骤指导
+• 具体事实查询
+• 不同选项的对比分析
+
+🔍 **智能检索：**
+• 根据您的问题类型调整搜索策略
+• 提供相关来源引用
+• 多文档综合分析
+
+💡 **使用建议：**
+• 询问"给我概述一下..."获取整体介绍
+• 询问"如何..."获取操作指南
+• 询问具体问题获取准确答案
+• 询问"A和B的区别"进行对比分析
+
+请告诉我您想了解什么内容！"""
+
+            elif any(keyword in user_message.lower() for keyword in ["时间", "几点", "日期", "time", "date"]):
+                return "抱歉，我是文档助手，无法提供实时时间信息。我主要专注于帮助您分析和查找文档内容。有什么关于文档的问题需要我协助吗？"
+
+            else:
+                return "我主要专注于帮助您分析文档内容。如果您有关于已加载文档的问题，请告诉我，我会尽力为您解答！"
+
+        else:
+            # Fallback for other non-document intents
+            return "我是您的AI文档助手，主要帮助您查找和分析文档内容。请告诉我您想了解文档中的什么信息！"
+
     async def chat(self, chat_id: str, user_message: str) -> Optional[ChatMessageResponse]:
-        """Send a message and get AI response"""
+        """Send a message and get AI response with intent-based processing"""
         # Get chat information
         chat = await self.get_chat(chat_id)
         if not chat:
@@ -228,10 +324,25 @@ class ChatService:
             content=user_message
         )
 
-        # Retrieve relevant documents from multiple collections
+        # Analyze user intent
+        intent_info = self.intent_analyzer.analyze_with_confidence(user_message)
+        intent = intent_info["intent"]
+        intent_confidence = intent_info["confidence"]
+
+        logger.info(f"Detected intent: {intent.value} (confidence: {intent_confidence}) - {intent_info['description']}")
+
+        # Check if document retrieval is needed based on intent
+        needs_documents = self.intent_analyzer.requires_document_retrieval(intent)
+
+        if needs_documents:
+            pass
+
+        # Retrieve relevant documents from multiple collections with intent-based strategy
+        logger.info(f"Intent {intent.value} requires document retrieval")
         relevant_docs = await self._retrieve_from_multiple_collections(
             user_message,
-            chat.collection_ids
+            chat.collection_ids,
+            intent=intent
         )
 
         # Format context and sources
@@ -248,10 +359,12 @@ class ChatService:
             for msg in history[:-1]:  # Exclude the current message
                 conversation_context += f"{msg.role}: {msg.content}\n"
 
-        # Generate AI response using RAG
-        from rag.prompt_templates import get_rag_prompt
+        # Generate AI response using intent-specific RAG
+        from rag.prompt_templates import get_prompt_by_intent
 
-        prompt = get_rag_prompt()
+        prompt = get_prompt_by_intent(intent)
+
+        logger.debug(f"Using intent-specific prompt template for {intent.value}")
 
         # Prepare the full context
         full_context = context
@@ -267,7 +380,7 @@ class ChatService:
             "question": user_message
         })
 
-        # Save AI response with sources
+        # Save AI response with sources and intent info
         ai_msg = self.chat_message_repo.add_message(
             chat_id=chat_id,
             role="assistant",
@@ -276,7 +389,8 @@ class ChatService:
             metadata=json.dumps({
                 "model": self.config.openai_chat_model,
                 "sources_count": len(sources),
-                "collections_searched": chat.collection_ids
+                "collections_searched": chat.collection_ids,
+                "document_retrieval": True
             })
         )
 
@@ -297,14 +411,76 @@ class ChatService:
             content=user_message
         )
 
-        # Retrieve relevant documents
+        # Analyze user intent
+        yield {
+            "event": "status",
+            "data": json.dumps({"status": "analyzing_intent"})
+        }
+
+        intent_info = self.intent_analyzer.analyze_with_confidence(user_message)
+        intent = intent_info["intent"]
+        intent_confidence = intent_info["confidence"]
+
+        logger.info(f"Detected intent: {intent.value} (confidence: {intent_confidence})")
+
+        # Check if document retrieval is needed based on intent
+        needs_documents = self.intent_analyzer.requires_document_retrieval(intent)
+
+        if not needs_documents:
+            # Handle non-document queries directly
+            logger.info(f"Intent {intent.value} does not require document retrieval")
+
+            yield {
+                "event": "status",
+                "data": json.dumps({"status": "generating_direct_response"})
+            }
+
+            ai_response = self._generate_non_document_response(user_message, intent)
+
+            # Send the direct response as streaming content
+            yield {
+                "event": "content",
+                "data": json.dumps({"content": ai_response}, ensure_ascii=False)
+            }
+
+            # Save AI response without sources
+            ai_msg = self.chat_message_repo.add_message(
+                chat_id=chat_id,
+                role="assistant",
+                content=ai_response,
+                sources=json.dumps([]),
+                metadata=json.dumps({
+                    "model": self.config.openai_chat_model,
+                    "sources_count": 0,
+                    "collections_searched": [],
+                    "document_retrieval": False
+                })
+            )
+
+            # Send completion event
+            yield {
+                "event": "done",
+                "data": json.dumps({
+                    "message_id": ai_msg.id,
+                    "sources_count": 0,
+                    "total_content_length": len(ai_response),
+                    "document_retrieval": False
+                })
+            }
+
+            logger.info(f"Generated non-document streaming response for chat {chat_id}")
+            return
+
+        # Retrieve relevant documents with intent-based strategy
+        logger.info(f"Intent {intent.value} requires document retrieval")
         yield {
             "event": "status",
             "data": json.dumps({"status": "retrieving_documents"})
         }
         relevant_docs = await self._retrieve_from_multiple_collections(
             user_message,
-            chat.collection_ids
+            chat.collection_ids,
+            intent=intent
         )
 
         # Send sources found
@@ -339,10 +515,10 @@ class ChatService:
         if conversation_context:
             full_context = conversation_context + "\n\n当前文档上下文:\n" + context
 
-        # Generate AI response using RAG
-        from rag.prompt_templates import get_rag_prompt
+        # Generate AI response using intent-specific RAG
+        from rag.prompt_templates import get_prompt_by_intent
 
-        prompt = get_rag_prompt()
+        prompt = get_prompt_by_intent(intent)
 
         # Create streaming chain
         chain = prompt | self.llm
