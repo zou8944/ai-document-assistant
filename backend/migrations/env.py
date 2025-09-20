@@ -7,6 +7,9 @@ from sqlalchemy import engine_from_config, pool
 # Import our database models for autogenerate support
 from database.base import Base
 
+# Import all models to ensure they are registered with SQLAlchemy
+from models.database import Collection, Document, DocumentChunk, Task, TaskLog, Chat, ChatMessage, Settings
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config

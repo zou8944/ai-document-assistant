@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI):
         document_service = DocumentService(config)
         collection_service = CollectionService(config)
         settings_service = SettingsService(config)
-        task_service = TaskService(config)
+        task_service = TaskService(config, collection_service)
 
         logger.info("Services initialized successfully")
 

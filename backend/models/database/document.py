@@ -50,6 +50,11 @@ class Document(Base):
         nullable=False,
         doc="File name or page title"
     )
+    summary: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        doc="Document summary"
+    )
     uri: Mapped[str] = mapped_column(
         Text,
         nullable=False,

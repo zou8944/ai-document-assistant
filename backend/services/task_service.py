@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-from langchain_openai import OpenAIEmbeddings
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from crawler.simple_web_crawler import SimpleCrawlResult, create_simple_web_crawler
 from data_processing.file_processor import create_file_processor
@@ -22,8 +22,10 @@ from database.connection import transaction
 from exception import HTTPNotFoundException
 from models.dto import DocumentChunkDTO, DocumentDTO, TaskDTO, TaskLogDTO
 from models.responses import TaskResponse
+from rag.document_summarizer import DocumentSummarizer
 from repository.document import DocumentChunkRepository, DocumentRepository
 from repository.task import TaskLogRepository, TaskRepository
+from services.collection_service import CollectionService
 from vector_store.chroma_client import create_chroma_manager
 
 logger = logging.getLogger(__name__)
@@ -44,11 +46,13 @@ class UrlTaskStats:
 class TaskService:
     """Service for managing async tasks"""
 
-    def __init__(self, config=None):
+    def __init__(self, config, collection_service: CollectionService):
         """Initialize task service"""
         from config import get_config
 
         self.config = config or get_config()
+
+        self.collection_service = collection_service
 
         # Task queue and workers
         self.task_queue: asyncio.Queue = asyncio.Queue(maxsize=100)
@@ -66,6 +70,11 @@ class TaskService:
         self.chroma_manager = create_chroma_manager(self.config)
         self.file_processor = create_file_processor(self.config)
         self.web_crawler = create_simple_web_crawler(self.config)
+
+        # LLM
+        chat_kwargs = self.config.get_openai_chat_kwargs()
+        self.llm = ChatOpenAI(**chat_kwargs)
+        self.summarizer = DocumentSummarizer(self.llm)
 
         # Initialize embeddings
         embeddings_kwargs = self.config.get_openai_embeddings_kwargs()
@@ -331,6 +340,9 @@ class TaskService:
             logger.error(error_msg)
             self.task_repo.mark_completed(task_id, False, error_msg)
 
+        # 重新为目标知识库生成摘要
+        await self.collection_service.refresh_collection_summary(task.collection_id)
+
     async def _check_document_exists(self, collection_id: str, uri: str) -> bool:
         """Check if document already exists and handle duplication logic"""
         existing_doc = self.doc_repo.find_by_uri(collection_id, uri)
@@ -362,6 +374,7 @@ class TaskService:
         doc_page_uri: str,
         doc_title: str,
         doc_content: str,
+        doc_summary: str,
         doc_mime_type: str,
         doc_status: str,
         doc_error_message: str | None,
@@ -394,6 +407,7 @@ class TaskService:
             name=doc_title or f"Page from {doc_page_uri}",
             uri=doc_page_uri,
             content=doc_content,
+            summary=doc_summary,
             size_bytes=len(doc_content.encode()),
             mime_type=doc_mime_type,
             chunk_count=len(chunks),
@@ -525,6 +539,10 @@ class TaskService:
 
         # Process file content
         result = self.file_processor.process_file(file_path)
+
+        self._log_info_task(task_id, f"Summarizing content for: {file_path_obj.name}")
+        summary = self.summarizer.summarize_document(result.content) if result.success else ""
+
         if not result.success:
             self._log_err_task(task_id, f"Failed to process {file_path_obj.name}: {result.error}")
             await self._store_document(
@@ -532,6 +550,7 @@ class TaskService:
                 doc_page_uri=file_uri,
                 doc_title=result.file_path,
                 doc_content=result.content,
+                doc_summary=summary,
                 doc_mime_type=mime_type or "text/plain",
                 doc_status="failed",
                 doc_error_message=result.error,
@@ -563,6 +582,7 @@ class TaskService:
                 doc_page_uri=file_uri,
                 doc_title=result.file_path,
                 doc_content=result.content,
+                doc_summary=summary,
                 doc_mime_type=mime_type or "text/plain",
                 doc_status=doc_status,
                 doc_error_message=error_message,
@@ -620,6 +640,9 @@ class TaskService:
     async def _process_single_page(self, task_id: str, collection_id: str, crawl_result: SimpleCrawlResult, override: bool):
         """Process a single crawled page and return status"""
 
+        self._log_info_task(task_id, f"Summarizing content for: {crawl_result.url}")
+        summary = self.summarizer.summarize_document(crawl_result.content) if crawl_result.success else ""
+
         # if crawl fail, create a document with status "failed"
         if not crawl_result.success:
             self._log_err_task(task_id, f"Crawl failed for page: {crawl_result.url}")
@@ -628,6 +651,7 @@ class TaskService:
                 doc_page_uri=crawl_result.url,
                 doc_title=crawl_result.title,
                 doc_content=crawl_result.content,
+                doc_summary=summary,
                 doc_mime_type="text/html",
                 doc_status="failed",
                 doc_error_message=crawl_result.error,
@@ -673,6 +697,7 @@ class TaskService:
                 doc_page_uri=page_url,
                 doc_title=crawl_result.title,
                 doc_content=crawl_result.content,
+                doc_summary=summary,
                 doc_mime_type="text/markdown",
                 doc_status=doc_status,
                 doc_error_message=error_message,

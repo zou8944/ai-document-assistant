@@ -18,7 +18,7 @@ from models.rag import ChatMessageRoleEnum, CollectionSummary, DocChunk, History
 
 # 文档摘要提示词模板
 DOC_SUMMARY_PROMPT = PromptTemplate.from_template("""
-请基于以下文档内容生成一段 20-30 字的摘要，突出主要主题和关键信息：
+请阅读以下文档内容，并用简洁的语言生成总结。总结长度约为 50 个字，需突出主要主题和关键信息。若原文不足 50 字，则直接输出原文。
 {document_content}
 """)
 

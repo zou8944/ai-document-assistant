@@ -5,9 +5,12 @@ Collection management service.
 import logging
 from typing import Optional
 
+from langchain_openai import ChatOpenAI
+
 from database.connection import transaction
 from models.dto import CollectionDTO
 from models.responses import CollectionResponse
+from rag.document_summarizer import DocumentSummarizer
 from repository.collection import CollectionRepository
 from repository.document import DocumentChunkRepository, DocumentRepository
 
@@ -28,6 +31,11 @@ class CollectionService:
         self.collection_repo = CollectionRepository()
         self.doc_repo = DocumentRepository()
         self.doc_chunk_repo = DocumentChunkRepository()
+
+        # LLM
+        chat_kwargs = self.config.get_openai_chat_kwargs()
+        self.llm = ChatOpenAI(**chat_kwargs)
+        self.summarizer = DocumentSummarizer(self.llm)
 
         logger.info("CollectionService initialized successfully")
 
@@ -109,6 +117,14 @@ class CollectionService:
             await self.chroma_manager.delete_collection(collection_id)
 
         logger.info(f"Deleted collection '{collection_id}'")
+
+    async def refresh_collection_summary(self, collection_id: str):
+        docs = self.doc_repo.get_by_collection(collection_id)
+        doc_summaries = [doc.summary for doc in docs if doc.summary]
+        if not doc_summaries:
+            return
+        collection_summary = self.summarizer.summarize_collection(doc_summaries)
+        self.collection_repo.update(collection_id, summary=collection_summary)
 
     def close(self):
         """Close connections and cleanup resources"""

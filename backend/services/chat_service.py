@@ -191,7 +191,7 @@ class ChatService:
             assert collection and collection.name
             summaries.append(CollectionSummary(
                 name=collection.name,
-                summary=collection.description or ""
+                summary=collection.summary or ""
             ))
         return summaries
 
