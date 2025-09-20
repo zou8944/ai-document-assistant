@@ -10,9 +10,10 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from exception import HTTPNotFoundException
 from models.dto import ChatDTO, ChatMessageDTO
+from models.rag import ChatMessageRoleEnum, CollectionSummary, DocChunk, HistoryItem
 from models.responses import ChatMessageResponse, ChatResponse, SourceReference
-from rag.intent_analyzer import IntentAnalyzer, QueryIntent
-from rag.prompt_templates import get_non_document_prompt, get_prompt_by_intent
+from rag.intent_analyzer import IntentAnalyzer
+from rag.prompt_templates import build_rag_prompt
 from repository.chat import ChatMessageRepository, ChatRepository
 from repository.collection import CollectionRepository
 from vector_store.chroma_client import create_chroma_manager
@@ -141,64 +142,30 @@ class ChatService:
         return self.chat_message_repo.count_by_chat(chat_id)
 
     async def _retrieve_from_multiple_collections(
-        self,
-        query: str,
-        collection_ids: list[str],
-        intent: Optional[QueryIntent] = None,
-        top_k_per_collection: int = 5
+        self, collection_ids: list[str], queries: list[str], top_k_per_collection: int = 5
     ) -> list[dict[str, Any]]:
         """Retrieve documents from multiple collections with intent-based strategy"""
         all_results = []
+        score_threshold = 0.4
 
-        # Adjust retrieval parameters based on intent
-        if intent == QueryIntent.OVERVIEW:
-            top_k_per_collection = max(top_k_per_collection, 8)
-            score_threshold = 0.2  # Lower threshold for broader coverage
-        elif intent == QueryIntent.HOW_TO:
-            top_k_per_collection = max(top_k_per_collection, 6)
-            score_threshold = 0.3  # Standard threshold
-        elif intent == QueryIntent.COMPARISON:
-            top_k_per_collection = max(top_k_per_collection, 7)
-            score_threshold = 0.25  # Moderate threshold
-        else:
-            score_threshold = 0.3
-
-        logger.info(f"Intent-based retrieval: {intent.value if intent else 'None'}, "
-                   f"top_k={top_k_per_collection}, threshold={score_threshold}")
-
-        # Generate query embedding once
-        query_embedding = await self.embeddings.aembed_query(query)
-
-        for collection_id in collection_ids:
-            try:
-                # Search in this collection
+        for query in queries:
+            query_embedding = await self.embeddings.aembed_query(query)
+            for collection_id in collection_ids:
                 results = await self.chroma_manager.search_similar(
                     collection_name=collection_id,
                     query_embedding=query_embedding,
                     limit=top_k_per_collection,
                     score_threshold=score_threshold
                 )
-
-                # Add collection info to results
                 for result in results:
                     result['collection_id'] = collection_id
 
                 all_results.extend(results)
 
-            except Exception as e:
-                logger.warning(f"Failed to search collection '{collection_id}': {e}")
-                continue
-
         # Sort by relevance score and take top results
         all_results.sort(key=lambda x: x.get('score', 0), reverse=True)
 
-        # Adjust final result count based on intent
-        if intent == QueryIntent.OVERVIEW:
-            max_results = top_k_per_collection * len(collection_ids)  # More results for overview
-        else:
-            max_results = top_k_per_collection * 2  # Standard limit
-
-        return all_results[:max_results]
+        return all_results[:top_k_per_collection * 2]
 
     def _format_sources(self, documents: list[dict[str, Any]]) -> list[SourceReference]:
         """Format retrieved documents as source references"""
@@ -217,32 +184,46 @@ class ChatService:
 
         return sources
 
-    def _format_context(self, documents: list[dict[str, Any]]) -> str:
-        """Format retrieved documents as context"""
-        if not documents:
-            return "未找到相关文档。"
+    def _get_collection_summaries(self, collection_ids: list[str]) -> list[CollectionSummary]:
+        summaries = []
+        for collection_id in collection_ids:
+            collection = self.collection_repo.get_by_id(collection_id)
+            assert collection and collection.name
+            summaries.append(CollectionSummary(
+                name=collection.name,
+                summary=collection.description or ""
+            ))
+        return summaries
 
-        # Cache collection names to avoid repeated queries
-        collection_names = {}
+    def _get_chat_history(self, chat_id: str, max_messages: int = 10) -> list[HistoryItem]:
+        history = self.chat_message_repo.get_conversation_history(chat_id, max_messages)
+        history_items = []
+        for chat_message in history:
+            if chat_message.role == "user":
+                role_enum = ChatMessageRoleEnum.USER
+            else:
+                role_enum = ChatMessageRoleEnum.ASSISTANT
+            history_items.append(HistoryItem(
+                role=role_enum,
+                message=chat_message.content or ""
+            ))
+        return history_items
 
-        context_parts = []
-        for i, doc in enumerate(documents, 1):
+    def _format_doc_chunks(
+        self, documents: list[dict[str, Any]], colletcion_summaries: list[CollectionSummary],
+    ) -> list[DocChunk]:
+        result = []
+        for doc in documents:
             doc_name = doc.get('document_name', 'Unknown')
             content = doc.get('content', '')
             collection_id = doc.get('collection_id', 'unknown')
-
-            # Get collection name
-            collection_name = collection_names.get(collection_id)
-            if collection_name is None:
-                collection = self.collection_repo.get_by_id(collection_id)
-                collection_name = collection.name if collection else collection_id
-                collection_names[collection_id] = collection_name
-
-            context_part = f"[文档 {i}] 来源: '{doc_name}' (来自知识库: {collection_name})\n内容: {content}"
-            context_parts.append(context_part)
-
-        return "\n\n".join(context_parts)
-
+            collection_name = next((col.name for col in colletcion_summaries if col.name == collection_id), collection_id)
+            result.append(DocChunk(
+                doc_name=doc_name,
+                collection_name=collection_name,
+                content=content,
+            ))
+        return result
 
     async def chat(self, chat_id: str, user_message: str) -> Optional[ChatMessageResponse]:
         """Send a message and get AI response with intent-based processing"""
@@ -251,7 +232,7 @@ class ChatService:
         if not chat:
             raise HTTPNotFoundException(detail=f"Chat '{chat_id}' not found")
 
-        # Save user message
+        # 用户提问先入库
         self.chat_message_repo.add_message(
             chat_id=chat_id,
             role="user",
@@ -259,101 +240,32 @@ class ChatService:
         )
 
         # Analyze user intent
-        intent_info = self.intent_analyzer.analyze_with_confidence(user_message)
-        intent = intent_info["intent"]
-        logger.info(f"Detected intent: {intent.value} (confidence: {intent_info['confidence']}) - {intent_info['description']}")
+        intent_info = await self.intent_analyzer.analyze(user_message)
 
-        # Check if document retrieval is needed based on intent
-        needs_documents = self.intent_analyzer.requires_document_retrieval(intent)
+        # 向量检索
+        relevant_docs = []
+        sources = []
+        if len(intent_info.queries) > 1:
+            relevant_docs = await self._retrieve_from_multiple_collections(chat.collection_ids, intent_info.queries)
+            sources = self._format_sources(relevant_docs)
 
-        if not needs_documents:
-            # Handle non-document queries directly with LLM
-            logger.info(f"Intent {intent.value} does not require document retrieval")
-
-            # Get conversation history for context
-            history = self.chat_message_repo.get_conversation_history(chat_id, max_messages=10)
-
-            # Format conversation history
-            conversation_context = ""
-            if len(history) > 1:  # More than just the current message
-                conversation_context = "对话历史:\n"
-                for msg in history[:-1]:  # Exclude the current message
-                    conversation_context += f"{msg.role}: {msg.content}\n"
-                conversation_context += "\n"
-
-            # Use non-document prompt template
-            from rag.prompt_templates import get_non_document_prompt
-
-            prompt = get_non_document_prompt()
-
-            # Generate response using LLM
-            from langchain_core.output_parsers import StrOutputParser
-            chain = prompt | self.llm | StrOutputParser()
-
-            ai_response = await chain.ainvoke({
-                "context": conversation_context,
-                "question": user_message
-            })
-
-            # Save AI response without sources
-            ai_msg = self.chat_message_repo.add_message(
-                chat_id=chat_id,
-                role="assistant",
-                content=ai_response,
-                sources=json.dumps([]),
-                metadata=json.dumps({
-                    "model": self.config.openai_chat_model,
-                    "sources_count": 0,
-                    "collections_searched": [],
-                    "document_retrieval": False
-                })
-            )
-
-            logger.info(f"Generated non-document response for chat {chat_id}")
-            return self._to_message_response(ai_msg)
-
-        # Retrieve relevant documents from multiple collections with intent-based strategy
-        logger.info(f"Intent {intent.value} requires document retrieval")
-        relevant_docs = await self._retrieve_from_multiple_collections(
-            user_message,
-            chat.collection_ids,
-            intent=intent
+        ## 提示词素材准备
+        collection_summaries = self._get_collection_summaries(chat.collection_ids)
+        chat_histories = self._get_chat_history(chat_id, max_messages=10)
+        doc_chunks = self._format_doc_chunks(relevant_docs, collection_summaries)
+        # 提示词构建
+        prompt = build_rag_prompt(
+            collections=collection_summaries,
+            histories=chat_histories,
+            reference_chunks=doc_chunks,
+            user_query=user_message
         )
-
-        # Format context and sources
-        context = self._format_context(relevant_docs)
-        sources = self._format_sources(relevant_docs)
-
-        # Get conversation history for context
-        history = self.chat_message_repo.get_conversation_history(chat_id, max_messages=10)
-
-        # Format conversation history
-        conversation_context = ""
-        if len(history) > 1:  # More than just the current message
-            conversation_context = "\n对话历史:\n"
-            for msg in history[:-1]:  # Exclude the current message
-                conversation_context += f"{msg.role}: {msg.content}\n"
-
-        # Generate AI response using intent-specific RAG
-        prompt = get_prompt_by_intent(intent)
-
-        logger.debug(f"Using intent-specific prompt template for {intent.value}")
-
-        # Prepare the full context
-        full_context = context
-        if conversation_context:
-            full_context = conversation_context + "\n\n当前文档上下文:\n" + context
-
-        # Generate response
+        # 阻塞式 AI 生成
         from langchain_core.output_parsers import StrOutputParser
-        chain = prompt | self.llm | StrOutputParser()
+        chain = self.llm | StrOutputParser()
+        ai_response = await chain.ainvoke(prompt)
 
-        ai_response = await chain.ainvoke({
-            "context": full_context,
-            "question": user_message
-        })
-
-        # Save AI response with sources and intent info
+        # 结果入库
         ai_msg = self.chat_message_repo.add_message(
             chat_id=chat_id,
             role="assistant",
@@ -369,6 +281,7 @@ class ChatService:
 
         logger.info(f"Generated AI response for chat {chat_id} with {len(sources)} sources")
 
+        # 返回 AI 回复
         return self._to_message_response(ai_msg)
 
     async def chat_stream_generator(self, chat_id: str, user_message: str):
@@ -377,149 +290,59 @@ class ChatService:
         if not chat:
             raise HTTPNotFoundException(detail=f"Chat '{chat_id}' not found")
 
-        # Save user message
+        # 用户提问先入库
         self.chat_message_repo.add_message(
             chat_id=chat_id,
             role="user",
             content=user_message
         )
 
-        # Analyze user intent
+        # 意图分析
         yield {
             "event": "status",
             "data": json.dumps({"status": "analyzing_intent"})
         }
+        intent_info = await self.intent_analyzer.analyze(user_message)
 
-        intent_info = self.intent_analyzer.analyze_with_confidence(user_message)
-        intent = intent_info["intent"]
-        logger.info(f"Detected intent: {intent.value} (confidence: {intent_info['confidence']})")
-
-        # Check if document retrieval is needed based on intent
-        needs_documents = self.intent_analyzer.requires_document_retrieval(intent)
-
-        if not needs_documents:
-            # Handle non-document queries directly with LLM
-            logger.info(f"Intent {intent.value} does not require document retrieval")
-
+        # 向量检索
+        relevant_docs = []
+        sources = []
+        if len(intent_info.queries) > 1:
             yield {
                 "event": "status",
-                "data": json.dumps({"status": "generating_direct_response"})
+                "data": json.dumps({"status": "retrieving_documents"})
             }
+            relevant_docs = await self._retrieve_from_multiple_collections(chat.collection_ids, intent_info.queries)
 
-            # Get conversation history for context
-            history = self.chat_message_repo.get_conversation_history(chat_id, max_messages=10)
-
-            # Format conversation history
-            conversation_context = ""
-            if len(history) > 1:  # More than just the current message
-                conversation_context = "对话历史:\n"
-                for msg in history[:-1]:  # Exclude the current message
-                    conversation_context += f"{msg.role}: {msg.content}\n"
-                conversation_context += "\n"
-
-            # Use non-document prompt template
-            non_document_prompt = get_non_document_prompt()
-
-            # Stream response using LLM
-            chain = non_document_prompt | self.llm
-
-            full_response = ""
-            async for chunk in chain.astream({
-                "context": conversation_context,
-                "question": user_message
-            }):
-                content = chunk.content if hasattr(chunk, 'content') else str(chunk)
-                if content:
-                    full_response += str(content)
-                    yield {
-                        "event": "content",
-                        "data": json.dumps({"content": content}, ensure_ascii=False)
-                    }
-
-            # Save AI response without sources
-            ai_msg = self.chat_message_repo.add_message(
-                chat_id=chat_id,
-                role="assistant",
-                content=full_response,
-                sources=json.dumps([]),
-                metadata=json.dumps({
-                    "model": self.config.openai_chat_model,
-                    "sources_count": 0,
-                    "collections_searched": [],
-                    "document_retrieval": False
-                })
-            )
-
-            # Send completion event
+            sources = self._format_sources(relevant_docs)
             yield {
-                "event": "done",
+                "event": "sources",
                 "data": json.dumps({
-                    "message_id": ai_msg.id,
-                    "sources_count": 0,
-                    "total_content_length": len(full_response),
-                    "document_retrieval": False
+                    "sources": [source.model_dump() for source in sources],
+                    "count": len(sources)
                 })
             }
 
-            logger.info(f"Generated non-document streaming response for chat {chat_id}")
-            return
-
-        # Retrieve relevant documents with intent-based strategy
-        logger.info(f"Intent {intent.value} requires document retrieval")
-        yield {
-            "event": "status",
-            "data": json.dumps({"status": "retrieving_documents"})
-        }
-        relevant_docs = await self._retrieve_from_multiple_collections(
-            user_message,
-            chat.collection_ids,
-            intent=intent
-        )
-
-        # Send sources found
-        sources = self._format_sources(relevant_docs)
-        yield {
-            "event": "sources",
-            "data": json.dumps({
-                "sources": [source.model_dump() for source in sources],
-                "count": len(sources)
-            })
-        }
-
-        # Generate AI response
+        # AI 生成
         yield {
             "event": "status",
             "data": json.dumps({"status": "generating_response"})
         }
+        ## 提示词素材准备
+        collection_summaries = self._get_collection_summaries(chat.collection_ids)
+        chat_histories = self._get_chat_history(chat_id, max_messages=10)
+        doc_chunks = self._format_doc_chunks(relevant_docs, collection_summaries)
+        # 提示词构建
+        prompt = build_rag_prompt(
+            collections=collection_summaries,
+            histories=chat_histories,
+            reference_chunks=doc_chunks,
+            user_query=user_message
+        )
 
-        # Format context and get conversation history
-        context = self._format_context(relevant_docs)
-        history = self.chat_message_repo.get_conversation_history(chat_id, max_messages=10)
-
-        # Format conversation history
-        conversation_context = ""
-        if len(history) > 1:  # More than just the current message
-            conversation_context = "\n对话历史:\n"
-            for msg in history[:-1]:  # Exclude the current message
-                conversation_context += f"{msg.role}: {msg.content}\n"
-
-        # Prepare the full context
-        full_context = context
-        if conversation_context:
-            full_context = conversation_context + "\n\n当前文档上下文:\n" + context
-
-        # Generate AI response using intent-specific RAG
-        prompt = get_prompt_by_intent(intent)
-
-        # Create streaming chain
-        chain = prompt | self.llm
-
-        # Stream response chunks
+        # 结果流式相应
         full_response = ""
-        async for chunk in chain.astream({
-            "context": full_context,
-            "question": user_message
-        }):
+        async for chunk in self.llm.astream(prompt):
             content = chunk.content if hasattr(chunk, 'content') else str(chunk)
             if content:
                 full_response += str(content)
@@ -528,7 +351,7 @@ class ChatService:
                     "data": json.dumps({"content": content}, ensure_ascii=False)
                 }
 
-        # Save complete AI response
+        # 完成后，AI 回复入库
         ai_msg = self.chat_message_repo.add_message(
             chat_id=chat_id,
             role="assistant",
@@ -541,7 +364,7 @@ class ChatService:
             })
         )
 
-        # Send completion event
+        # 发送结束事件
         yield {
             "event": "done",
             "data": json.dumps({
