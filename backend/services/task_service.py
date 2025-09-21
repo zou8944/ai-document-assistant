@@ -13,8 +13,6 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-
 from crawler.simple_web_crawler import SimpleCrawlResult, create_simple_web_crawler
 from data_processing.file_processor import create_file_processor
 from data_processing.text_splitter import create_document_processor
@@ -22,10 +20,9 @@ from database.connection import transaction
 from exception import HTTPNotFoundException
 from models.dto import DocumentChunkDTO, DocumentDTO, TaskDTO, TaskLogDTO
 from models.responses import TaskResponse
-from rag.document_summarizer import DocumentSummarizer
 from repository.document import DocumentChunkRepository, DocumentRepository
 from repository.task import TaskLogRepository, TaskRepository
-from services.collection_service import CollectionService
+from services import CollectionService, LLMService
 from vector_store.chroma_client import create_chroma_manager
 
 logger = logging.getLogger(__name__)
@@ -46,7 +43,7 @@ class UrlTaskStats:
 class TaskService:
     """Service for managing async tasks"""
 
-    def __init__(self, config, collection_service: CollectionService):
+    def __init__(self, config, collection_service: CollectionService, llm_service: LLMService):
         """Initialize task service"""
         from config import get_config
 
@@ -71,14 +68,8 @@ class TaskService:
         self.file_processor = create_file_processor(self.config)
         self.web_crawler = create_simple_web_crawler(self.config)
 
-        # LLM
-        chat_kwargs = self.config.get_openai_chat_kwargs()
-        self.llm = ChatOpenAI(**chat_kwargs)
-        self.summarizer = DocumentSummarizer(self.llm)
-
-        # Initialize embeddings
-        embeddings_kwargs = self.config.get_openai_embeddings_kwargs()
-        self.embeddings = OpenAIEmbeddings(**embeddings_kwargs)
+        # LLM service
+        self.llm_service = llm_service
 
         logger.info("TaskService initialized successfully")
 
@@ -541,7 +532,7 @@ class TaskService:
         result = self.file_processor.process_file(file_path)
 
         self._log_info_task(task_id, f"Summarizing content for: {file_path_obj.name}")
-        summary = self.summarizer.summarize_document(result.content) if result.success else ""
+        summary = self.llm_service.summarize_document(result.content) if result.success else ""
 
         if not result.success:
             self._log_err_task(task_id, f"Failed to process {file_path_obj.name}: {result.error}")
@@ -569,7 +560,7 @@ class TaskService:
             try:
                 chunks = self.document_processor.process_file_content(file_path, result.content, result.file_type)
                 texts = [chunk.content for chunk in chunks]
-                chunk_embeddings = await self.embeddings.aembed_documents(texts)
+                chunk_embeddings = await self.llm_service.embed_documents(texts)
             except Exception as e:
                 doc_status = "failed"
                 error_message = f"Error processing chunks for {file_path_obj.name}: {str(e)}"
@@ -641,7 +632,7 @@ class TaskService:
         """Process a single crawled page and return status"""
 
         self._log_info_task(task_id, f"Summarizing content for: {crawl_result.url}")
-        summary = self.summarizer.summarize_document(crawl_result.content) if crawl_result.success else ""
+        summary = self.llm_service.summarize_document(crawl_result.content) if crawl_result.success else ""
 
         # if crawl fail, create a document with status "failed"
         if not crawl_result.success:
@@ -684,7 +675,7 @@ class TaskService:
             try:
                 chunks = self.document_processor.process_web_content(page_url, crawl_result.content, crawl_result.title)
                 texts = [chunk.content for chunk in chunks]
-                chunk_embeddings = await self.embeddings.aembed_documents(texts)
+                chunk_embeddings = await self.llm_service.embed_documents(texts)
             except Exception as e:
                 doc_status = "failed"
                 error_message = f"Embedding failed: {str(e)}"
@@ -711,4 +702,5 @@ class TaskService:
         """Close connections and cleanup resources"""
         if self.running:
             asyncio.create_task(self.stop_workers())
+        self.llm_service.close()
         logger.info("TaskService resources closed")

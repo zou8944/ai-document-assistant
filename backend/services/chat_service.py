@@ -6,16 +6,13 @@ import json
 import logging
 from typing import Any, Optional
 
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-
 from exception import HTTPNotFoundException
 from models.dto import ChatDTO, ChatMessageDTO
 from models.rag import ChatMessageRoleEnum, CollectionSummary, DocChunk, HistoryItem
 from models.responses import ChatMessageResponse, ChatResponse, SourceReference
-from rag.intent_analyzer import IntentAnalyzer
-from rag.prompt_templates import build_rag_prompt
 from repository.chat import ChatMessageRepository, ChatRepository
 from repository.collection import CollectionRepository
+from services import LLMService
 from vector_store.chroma_client import create_chroma_manager
 
 logger = logging.getLogger(__name__)
@@ -24,7 +21,7 @@ logger = logging.getLogger(__name__)
 class ChatService:
     """Service for managing conversations and AI responses"""
 
-    def __init__(self, config=None):
+    def __init__(self, config, llm_service: LLMService):
         """Initialize chat service"""
         from config import get_config
 
@@ -38,15 +35,8 @@ class ChatService:
         # Initialize components that will be reused
         self.chroma_manager = create_chroma_manager(self.config)
 
-        # Initialize embeddings and LLM
-        embeddings_kwargs = self.config.get_openai_embeddings_kwargs()
-        self.embeddings = OpenAIEmbeddings(**embeddings_kwargs)
-
-        chat_kwargs = self.config.get_openai_chat_kwargs()
-        self.llm = ChatOpenAI(**chat_kwargs)
-
-        # Initialize intent analyzer
-        self.intent_analyzer = IntentAnalyzer(llm=self.llm)
+        # Initialize LLM service
+        self.llm_service = llm_service
 
         logger.info("ChatService initialized successfully")
 
@@ -149,7 +139,7 @@ class ChatService:
         score_threshold = 0.4
 
         for query in queries:
-            query_embedding = await self.embeddings.aembed_query(query)
+            query_embedding = await self.llm_service.embed_query(query)
             for collection_id in collection_ids:
                 results = await self.chroma_manager.search_similar(
                     collection_name=collection_id,
@@ -240,7 +230,7 @@ class ChatService:
         )
 
         # Analyze user intent
-        intent_info = await self.intent_analyzer.analyze(user_message)
+        intent_info = await self.llm_service.analyze_intent(user_message)
 
         # 向量检索
         relevant_docs = []
@@ -254,16 +244,14 @@ class ChatService:
         chat_histories = self._get_chat_history(chat_id, max_messages=10)
         doc_chunks = self._format_doc_chunks(relevant_docs, collection_summaries)
         # 提示词构建
-        prompt = build_rag_prompt(
+        prompt = self.llm_service.build_rag_prompt(
             collections=collection_summaries,
             histories=chat_histories,
             reference_chunks=doc_chunks,
             user_query=user_message
         )
         # 阻塞式 AI 生成
-        from langchain_core.output_parsers import StrOutputParser
-        chain = self.llm | StrOutputParser()
-        ai_response = await chain.ainvoke(prompt)
+        ai_response = await self.llm_service.generate_chat_response(prompt)
 
         # 结果入库
         ai_msg = self.chat_message_repo.add_message(
@@ -302,7 +290,7 @@ class ChatService:
             "event": "status",
             "data": json.dumps({"status": "analyzing_intent"})
         }
-        intent_info = await self.intent_analyzer.analyze(user_message)
+        intent_info = await self.llm_service.analyze_intent(user_message)
 
         # 向量检索
         relevant_docs = []
@@ -333,7 +321,7 @@ class ChatService:
         chat_histories = self._get_chat_history(chat_id, max_messages=10)
         doc_chunks = self._format_doc_chunks(relevant_docs, collection_summaries)
         # 提示词构建
-        prompt = build_rag_prompt(
+        prompt = self.llm_service.build_rag_prompt(
             collections=collection_summaries,
             histories=chat_histories,
             reference_chunks=doc_chunks,
@@ -342,8 +330,7 @@ class ChatService:
 
         # 结果流式相应
         full_response = ""
-        async for chunk in self.llm.astream(prompt):
-            content = chunk.content if hasattr(chunk, 'content') else str(chunk)
+        async for content in self.llm_service.stream_chat_response(prompt):
             if content:
                 full_response += str(content)
                 yield {
@@ -378,4 +365,5 @@ class ChatService:
 
     def close(self):
         self.chroma_manager.close()
+        self.llm_service.close()
         logger.info("ChatService resources closed")

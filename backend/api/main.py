@@ -13,11 +13,14 @@ from api.routes import chats, collections, documents, health, ingest, settings, 
 from api.state import AppState, set_app_state
 from config import get_config
 from database.connection import create_tables
-from services.chat_service import ChatService
-from services.collection_service import CollectionService
-from services.document_service import DocumentService
-from services.settings_service import SettingsService
-from services.task_service import TaskService
+from services import (
+    ChatService,
+    CollectionService,
+    DocumentService,
+    LLMService,
+    SettingsService,
+    TaskService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +47,12 @@ async def lifespan(app: FastAPI):
 
         # Initialize services
         logger.info("Initializing services...")
-        chat_service = ChatService(config)
+        llm_service = LLMService(config)
+        chat_service = ChatService(config, llm_service)
         document_service = DocumentService(config)
-        collection_service = CollectionService(config)
+        collection_service = CollectionService(config, llm_service)
         settings_service = SettingsService(config)
-        task_service = TaskService(config, collection_service)
+        task_service = TaskService(config, collection_service, llm_service)
 
         logger.info("Services initialized successfully")
 

@@ -5,14 +5,12 @@ Collection management service.
 import logging
 from typing import Optional
 
-from langchain_openai import ChatOpenAI
-
 from database.connection import transaction
 from models.dto import CollectionDTO
 from models.responses import CollectionResponse
-from rag.document_summarizer import DocumentSummarizer
 from repository.collection import CollectionRepository
 from repository.document import DocumentChunkRepository, DocumentRepository
+from services import LLMService
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +18,7 @@ logger = logging.getLogger(__name__)
 class CollectionService:
     """Service for managing document collections"""
 
-    def __init__(self, config=None):
+    def __init__(self, config, llm_service: LLMService):
         """Initialize collection service"""
         from config import get_config
         from vector_store.chroma_client import create_chroma_manager
@@ -32,10 +30,8 @@ class CollectionService:
         self.doc_repo = DocumentRepository()
         self.doc_chunk_repo = DocumentChunkRepository()
 
-        # LLM
-        chat_kwargs = self.config.get_openai_chat_kwargs()
-        self.llm = ChatOpenAI(**chat_kwargs)
-        self.summarizer = DocumentSummarizer(self.llm)
+        # LLM service
+        self.llm_service = llm_service
 
         logger.info("CollectionService initialized successfully")
 
@@ -123,10 +119,11 @@ class CollectionService:
         doc_summaries = [doc.summary for doc in docs if doc.summary]
         if not doc_summaries:
             return
-        collection_summary = self.summarizer.summarize_collection(doc_summaries)
+        collection_summary = self.llm_service.summarize_collection(doc_summaries)
         self.collection_repo.update(collection_id, summary=collection_summary)
 
     def close(self):
         """Close connections and cleanup resources"""
         self.chroma_manager.close()
+        self.llm_service.close()
         logger.info("CollectionService resources closed")
