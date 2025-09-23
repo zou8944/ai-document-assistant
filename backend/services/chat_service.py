@@ -12,7 +12,8 @@ from models.rag import ChatMessageRoleEnum, CollectionSummary, DocChunk, History
 from models.responses import ChatMessageResponse, ChatResponse, SourceReference
 from repository.chat import ChatMessageRepository, ChatRepository
 from repository.collection import CollectionRepository
-from services import LLMService
+from repository.document import DocumentRepository
+from services.llm_service import LLMService
 from vector_store.chroma_client import create_chroma_manager
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ class ChatService:
         self.chat_repo = ChatRepository()
         self.chat_message_repo = ChatMessageRepository()
         self.collection_repo = CollectionRepository()
+        self.document_repo = DocumentRepository()
 
         # Initialize components that will be reused
         self.chroma_manager = create_chroma_manager(self.config)
@@ -215,7 +217,7 @@ class ChatService:
             ))
         return result
 
-    async def chat(self, chat_id: str, user_message: str) -> Optional[ChatMessageResponse]:
+    async def chat(self, chat_id: str, user_message: str, document_ids: list[str]) -> Optional[ChatMessageResponse]:
         """Send a message and get AI response with intent-based processing"""
         # Get chat information
         chat = await self.get_chat(chat_id)
@@ -229,20 +231,40 @@ class ChatService:
             content=user_message
         )
 
-        # Analyze user intent
-        intent_info = await self.llm_service.analyze_intent(user_message)
-
-        # 向量检索
-        relevant_docs = []
-        sources = []
-        if len(intent_info.queries) > 1:
-            relevant_docs = await self._retrieve_from_multiple_collections(chat.collection_ids, intent_info.queries)
-            sources = self._format_sources(relevant_docs)
-
-        ## 提示词素材准备
         collection_summaries = self._get_collection_summaries(chat.collection_ids)
         chat_histories = self._get_chat_history(chat_id, max_messages=10)
-        doc_chunks = self._format_doc_chunks(relevant_docs, collection_summaries)
+
+        # 如果指定了文档 id，则直接使用这些文档
+        sources = []
+        doc_chunks = []
+        if document_ids:
+            docs = [self.document_repo.get_by_id(document_id) for document_id in document_ids]
+            doc_chunks = [DocChunk(
+                doc_name=doc.name or "Unknown Document",
+                collection_name=next((col.name for col in collection_summaries if col.name == doc.collection_id), doc.collection_id or "Unknown Collection"),
+                content=doc.content or ""
+            ) for doc in docs if doc]
+            sources = [SourceReference(
+                document_id=doc.id or "",
+                document_name=doc.name or "Unknown Document",
+                document_uri=doc.uri or "",
+                chunk_index=0,
+                content_preview="",
+                relevance_score=1.0
+            ) for doc in docs if doc]
+        else:
+            # 意图分析
+            intent_info = await self.llm_service.analyze_intent(user_message)
+
+            # 向量检索
+            relevant_docs = []
+            sources = []
+            if len(intent_info.queries) > 1:
+                relevant_docs = await self._retrieve_from_multiple_collections(chat.collection_ids, intent_info.queries)
+                sources = self._format_sources(relevant_docs)
+
+            ## 提示词素材准备
+            doc_chunks = self._format_doc_chunks(relevant_docs, collection_summaries)
         # 提示词构建
         prompt = self.llm_service.build_rag_prompt(
             collections=collection_summaries,
@@ -272,7 +294,7 @@ class ChatService:
         # 返回 AI 回复
         return self._to_message_response(ai_msg)
 
-    async def chat_stream_generator(self, chat_id: str, user_message: str):
+    async def chat_stream_generator(self, chat_id: str, user_message: str, document_ids: list[str]):
         # Get chat information
         chat = await self.get_chat(chat_id)
         if not chat:
@@ -285,41 +307,58 @@ class ChatService:
             content=user_message
         )
 
-        # 意图分析
-        yield {
-            "event": "status",
-            "data": json.dumps({"status": "analyzing_intent"})
-        }
-        intent_info = await self.llm_service.analyze_intent(user_message)
+        collection_summaries = self._get_collection_summaries(chat.collection_ids)
+        chat_histories = self._get_chat_history(chat_id, max_messages=10)
 
-        # 向量检索
-        relevant_docs = []
+        doc_chunks = []
         sources = []
-        if len(intent_info.queries) > 1:
+        if document_ids:
+            docs = [self.document_repo.get_by_id(document_id) for document_id in document_ids]
+            doc_chunks = [DocChunk(
+                doc_name=doc.name or "Unknown Document",
+                collection_name=next((col.name for col in collection_summaries if col.name == doc.collection_id), doc.collection_id or "Unknown Collection"),
+                content=doc.content or ""
+            ) for doc in docs if doc]
+            sources = [SourceReference(
+                document_id=doc.id or "",
+                document_name=doc.name or "Unknown Document",
+                document_uri=doc.uri or "",
+                chunk_index=0,
+                content_preview="",
+                relevance_score=1.0
+            ) for doc in docs if doc]
+        else:
+            # 意图分析
             yield {
                 "event": "status",
-                "data": json.dumps({"status": "retrieving_documents"})
+                "data": json.dumps({"status": "analyzing_intent"})
             }
-            relevant_docs = await self._retrieve_from_multiple_collections(chat.collection_ids, intent_info.queries)
+            intent_info = await self.llm_service.analyze_intent(user_message)
 
-            sources = self._format_sources(relevant_docs)
-            yield {
-                "event": "sources",
-                "data": json.dumps({
-                    "sources": [source.model_dump() for source in sources],
-                    "count": len(sources)
-                })
-            }
+            # 向量检索
+            relevant_docs = []
+            if len(intent_info.queries) > 1:
+                yield {
+                    "event": "status",
+                    "data": json.dumps({"status": "retrieving_documents"})
+                }
+                relevant_docs = await self._retrieve_from_multiple_collections(chat.collection_ids, intent_info.queries)
+
+                sources = self._format_sources(relevant_docs)
+                yield {
+                    "event": "sources",
+                    "data": json.dumps({
+                        "sources": [source.model_dump() for source in sources],
+                        "count": len(sources)
+                    })
+                }
+            doc_chunks = self._format_doc_chunks(relevant_docs, collection_summaries)
 
         # AI 生成
         yield {
             "event": "status",
             "data": json.dumps({"status": "generating_response"})
         }
-        ## 提示词素材准备
-        collection_summaries = self._get_collection_summaries(chat.collection_ids)
-        chat_histories = self._get_chat_history(chat_id, max_messages=10)
-        doc_chunks = self._format_doc_chunks(relevant_docs, collection_summaries)
         # 提示词构建
         prompt = self.llm_service.build_rag_prompt(
             collections=collection_summaries,

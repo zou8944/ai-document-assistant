@@ -84,3 +84,4 @@ class UpdateChatRequest(BaseModel):
 class ChatMessageRequest(BaseModel):
     """Request model for sending a chat message"""
     message: str = Field(..., description="User message", min_length=1)
+    document_ids: Optional[list[str]] = Field(None, description="List of document IDs to use as context")

@@ -181,7 +181,8 @@ async def send_message(
     # Send message and get response
     response_message = await chat_service.chat(
         chat_id=chat_id,
-        user_message=request_data.message
+        user_message=request_data.message,
+        document_ids=request_data.document_ids or []
     )
 
     if not response_message:
@@ -205,5 +206,6 @@ async def send_message_stream(
 
     return EventSourceResponse(chat_service.chat_stream_generator(
         chat_id=chat_id,
-        user_message=request_data.message
+        user_message=request_data.message,
+        document_ids=request_data.document_ids or []
     ))

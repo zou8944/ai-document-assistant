@@ -10,7 +10,7 @@ from models.dto import CollectionDTO
 from models.responses import CollectionResponse
 from repository.collection import CollectionRepository
 from repository.document import DocumentChunkRepository, DocumentRepository
-from services import LLMService
+from services.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
 

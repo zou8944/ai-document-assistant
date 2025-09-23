@@ -112,6 +112,7 @@ export interface ChatMessageRequest {
   message: string
   stream?: boolean
   include_sources?: boolean
+  document_ids?: string[]
 }
 
 export interface SourceInfo {

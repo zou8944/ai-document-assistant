@@ -22,7 +22,8 @@ from models.dto import DocumentChunkDTO, DocumentDTO, TaskDTO, TaskLogDTO
 from models.responses import TaskResponse
 from repository.document import DocumentChunkRepository, DocumentRepository
 from repository.task import TaskLogRepository, TaskRepository
-from services import CollectionService, LLMService
+from services.collection_service import CollectionService
+from services.llm_service import LLMService
 from vector_store.chroma_client import create_chroma_manager
 
 logger = logging.getLogger(__name__)

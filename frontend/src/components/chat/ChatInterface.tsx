@@ -25,6 +25,8 @@ import {
   UpdateChatRequest
 } from '../../services/apiClient'
 import KnowledgeBaseSelector from './KnowledgeBaseSelector'
+import DocumentPicker from './DocumentPicker'
+import RichTextInput from './RichTextInput'
 
 // Markdown content component with custom styling
 const MarkdownContent: React.FC<{ content: string; isUser?: boolean }> = ({ content, isUser = false }) => {
@@ -50,7 +52,8 @@ const MarkdownContent: React.FC<{ content: string; isUser?: boolean }> = ({ cont
             {children}
           </blockquote>
         ),
-        code: ({ inline, className, children, ...props }) => {
+        code: ({ className, children, ...props }: any) => {
+          const inline = !className
           if (inline) {
             return (
               <code
@@ -116,6 +119,13 @@ interface Message {
   content: string
   timestamp: string
   sources?: SourceReference[]
+}
+
+interface DocumentMention {
+  id: string
+  name: string
+  start: number
+  end: number
 }
 
 // Component for collapsible source references
@@ -192,6 +202,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [showKnowledgeBaseSelector, setShowKnowledgeBaseSelector] = useState(false)
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([])
+  const [documentMentions, setDocumentMentions] = useState<DocumentMention[]>([])
   const [streamingContent, setStreamingContent] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [currentStreamingSources, setCurrentStreamingSources] = useState<SourceReference[]>([])  
@@ -256,7 +268,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
   const handleSendMessage = async () => {
     if (!message.trim() || isLoading || !currentChat) return
 
-    const userMessageContent = message.trim()
+    const userMessageContent = getRealUserInput(message).trim()
+    if (!userMessageContent) return
     setMessage('')
     
     // Add user message to UI immediately
@@ -277,7 +290,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
     try {
       await apiClient.sendMessageStream(
         currentChat.id,
-        { message: userMessageContent, include_sources: true },
+        {
+          message: userMessageContent,
+          include_sources: true,
+          document_ids: selectedDocumentIds.length > 0 ? selectedDocumentIds : undefined
+        },
         (event) => handleStreamEvent(event),
         handleStreamError
       )
@@ -398,26 +415,46 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
 
   const handleUpdateKnowledgeBases = async (selectedKbIds: string[]) => {
     if (!currentChat) return
-    
+
     try {
       // Update the chat with new knowledge base collection IDs via API
       const updateRequest: UpdateChatRequest = {
         collection_ids: selectedKbIds
       }
-      
+
       const response = await apiClient.updateChat(currentChat.id, updateRequest)
       const updatedChat = extractData(response)
-      
+
       // Update local state with the response from API
       updateChatSession(currentChat.id, {
         knowledgeBaseIds: updatedChat.collection_ids
       })
-      
+
       console.log('Knowledge bases updated successfully:', selectedKbIds)
     } catch (error) {
       console.error('Failed to update knowledge bases:', error)
       alert('更新知识库失败: ' + (error as Error).message)
     }
+  }
+
+  const handleUpdateSelectedDocuments = (documentIds: string[]) => {
+    setSelectedDocumentIds(documentIds)
+  }
+
+  const handleRichTextChange = (value: string, mentions: DocumentMention[], mentionedDocIds: string[]) => {
+    setMessage(value)
+    setDocumentMentions(mentions)
+
+    // 如果有新的文档ID传入，立即更新选择列表
+    if (mentionedDocIds.length > 0) {
+      const allSelectedIds = [...new Set([...selectedDocumentIds, ...mentionedDocIds])]
+      setSelectedDocumentIds(allSelectedIds)
+    }
+  }
+
+  const getRealUserInput = (input: string): string => {
+    // 移除所有@[docName](doc:docId)格式的内容
+    return input.replace(/@\[[^\]]+\]\(doc:[^)]+\)/g, '').trim()
   }
 
   const getKnowledgeBaseNames = () => {
@@ -462,7 +499,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
               <span className="text-gray-500">暂无知识库</span>
             )}
           </div>
-          
+
           <div className="flex items-center space-x-4">
             <button
               onClick={() => setShowKnowledgeBaseSelector(true)}
@@ -584,31 +621,38 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
 
       {/* Input Area */}
       <div className="flex-shrink-0 p-4 border-t border-gray-200/50 bg-white/50 backdrop-blur-sm">
-        <div className="flex space-x-3">
-          <div className="flex-1 relative">
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey && !isLoading && !isStreaming) {
-                  e.preventDefault()
-                  handleSendMessage()
-                }
-              }}
-              placeholder="输入您的问题..."
-              disabled={isLoading || isStreaming}
-              rows={1}
-              className="w-full resize-none rounded-lg border border-gray-300 bg-white/80 backdrop-blur-sm px-4 py-3 pr-12 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ minHeight: '48px', maxHeight: '120px' }}
-            />
+        <div className="space-y-2">
+          {/* 文档选择器 */}
+          <DocumentPicker
+            selectedDocumentIds={selectedDocumentIds}
+            onDocumentSelect={handleUpdateSelectedDocuments}
+          />
+
+          {/* 输入框和发送按钮 */}
+          <div className="flex space-x-3">
+            <div className="flex-1 relative">
+              <RichTextInput
+                value={message}
+                onChange={handleRichTextChange}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && !isLoading && !isStreaming) {
+                    e.preventDefault()
+                    handleSendMessage()
+                  }
+                }}
+                placeholder="输入您的问题，使用 @ 来引用特定文档..."
+                disabled={isLoading || isStreaming}
+                className="w-full resize-none rounded-lg border border-gray-300 bg-white/80 backdrop-blur-sm px-4 py-3 pr-12 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+            </div>
+            <button
+              onClick={handleSendMessage}
+              disabled={!getRealUserInput(message).trim() || isLoading || isStreaming}
+              className="flex-shrink-0 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white p-3 rounded-lg transition-colors disabled:cursor-not-allowed"
+            >
+              <PaperAirplaneIcon className="w-5 h-5" />
+            </button>
           </div>
-          <button
-            onClick={handleSendMessage}
-            disabled={!message.trim() || isLoading || isStreaming}
-            className="flex-shrink-0 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white p-3 rounded-lg transition-colors disabled:cursor-not-allowed"
-          >
-            <PaperAirplaneIcon className="w-5 h-5" />
-          </button>
         </div>
       </div>
 
@@ -619,6 +663,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
         onSelect={handleUpdateKnowledgeBases}
         selectedIds={currentChat.knowledgeBaseIds}
       />
+
     </div>
   )
 }
