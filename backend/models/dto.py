@@ -17,7 +17,6 @@ from models.database import (
     Collection,
     Document,
     DocumentChunk,
-    Settings,
     Task,
     TaskLog,
 )
@@ -164,20 +163,6 @@ class TaskLogDTO(DTOConvertible[TaskLog, "TaskLogDTO"]):
     timestamp: datetime | None = None
 
 
-@dataclass(frozen=True)
-class SettingsDTO(DTOConvertible[Settings, "SettingsDTO"]):
-    """Settings data transfer object for repository-service boundary."""
-
-    key: str | None = None
-    value: str | None = None
-    value_type: str | None = None
-    category: str | None = None
-    description: str | None = None
-    is_sensitive: bool | None = None
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-
-
 # Convenience type aliases for easier imports
 CollectionData = CollectionDTO
 DocumentData = DocumentDTO
@@ -186,4 +171,3 @@ ChatData = ChatDTO
 ChatMessageData = ChatMessageDTO
 TaskData = TaskDTO
 TaskLogData = TaskLogDTO
-SettingsData = SettingsDTO

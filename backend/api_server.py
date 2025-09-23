@@ -18,15 +18,11 @@ backend_dir = Path(__file__).parent
 sys.path.insert(0, str(backend_dir))
 
 # Initialize configuration first
-try:
-    conf = config.init_config()
-except Exception as e:
-    print(f"Failed to initialize configuration: {e}", file=sys.stderr)
-    sys.exit(1)
+conf = config.get_config()
 
 # Configure logging
 logging.basicConfig(
-    level=getattr(logging, conf.log_level.upper()),
+    level=getattr(logging, conf.system.log_level.upper()),
     format='%(asctime)s - %(name)s - %(levelname)s - [Thread-%(threadName)s] - %(message)s',
     handlers=[
         logging.FileHandler('api_server.log'),
@@ -45,14 +41,6 @@ if __name__ == "__main__":
     parser.add_argument("--reload", action="store_true", help="Enable auto-reload for development")
 
     args = parser.parse_args()
-
-    # Validate configuration
-    try:
-        conf.validate()
-    except ValueError as e:
-        logger.error(f"Configuration validation failed: {e}")
-        logger.warning("Please check your environment variables and try again.")
-        sys.exit(1)
 
     logger.info("Starting AI Document Assistant API server")
     logger.info(f"Host: {args.host}, Port: {args.port}")

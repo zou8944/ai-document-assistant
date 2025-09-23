@@ -20,10 +20,9 @@ class CollectionService:
 
     def __init__(self, config, llm_service: LLMService):
         """Initialize collection service"""
-        from config import get_config
         from vector_store.chroma_client import create_chroma_manager
 
-        self.config = config or get_config()
+        self.config = config
         self.chroma_manager = create_chroma_manager(self.config)
 
         self.collection_repo = CollectionRepository()

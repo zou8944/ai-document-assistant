@@ -18,10 +18,8 @@ logger = logging.getLogger(__name__)
 class LLMService:
     """Centralized service for all LLM-related operations"""
 
-    def __init__(self, config=None):
-        from config import get_config
-
-        self.config = config or get_config()
+    def __init__(self, config):
+        self.config = config
 
         # Initialize OpenAI components
         embeddings_kwargs = self.config.get_openai_embeddings_kwargs()

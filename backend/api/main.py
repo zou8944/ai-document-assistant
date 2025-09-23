@@ -10,32 +10,16 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.middleware import UnifiedResponseMiddleware
 from api.routes import chats, collections, documents, health, ingest, settings, tasks
-from api.state import AppState, set_app_state
+from api.state import AppState, get_app_state_direct, set_app_state
 from config import get_config
 from database.connection import create_tables
-from services import (
-    ChatService,
-    CollectionService,
-    DocumentService,
-    LLMService,
-    SettingsService,
-    TaskService,
-)
 
 logger = logging.getLogger(__name__)
-
-# Global services (will be initialized in lifespan)
-chat_service: ChatService
-document_service: DocumentService
-collection_service: CollectionService
-settings_service: SettingsService
-task_service: TaskService
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
-    global chat_service, document_service, query_service, collection_service, settings_service, task_service
 
     try:
         # Initialize configuration
@@ -47,28 +31,15 @@ async def lifespan(app: FastAPI):
 
         # Initialize services
         logger.info("Initializing services...")
-        llm_service = LLMService(config)
-        chat_service = ChatService(config, llm_service)
-        document_service = DocumentService(config)
-        collection_service = CollectionService(config, llm_service)
-        settings_service = SettingsService(config)
-        task_service = TaskService(config, collection_service, llm_service)
 
         logger.info("Services initialized successfully")
 
+        state = AppState.create_from_config(config)
+        set_app_state(app, state)
+
         # Start task workers
         logger.info("Starting task workers...")
-        await task_service.start_workers()
-
-        # Store services in typed app state for access in routes
-        state = AppState(
-            chat_service=chat_service,
-            document_service=document_service,
-            collection_service=collection_service,
-            settings_service=settings_service,
-            task_service=task_service
-        )
-        set_app_state(app, state)
+        await state.task_service.start_workers()
 
         yield
 
@@ -78,18 +49,12 @@ async def lifespan(app: FastAPI):
     finally:
         # Cleanup services
         logger.info("Shutting down services...")
-
-        if task_service:
-            await task_service.stop_workers()
-            task_service.close()
-        if chat_service:
-            chat_service.close()
-        if document_service:
-            document_service.close()
-        if collection_service:
-            collection_service.close()
-        if settings_service:
-            settings_service.close()
+        state = get_app_state_direct(app)
+        if state:
+            await state.task_service.stop_workers()
+            state.chat_service.close()
+            state.document_service.close()
+            state.collection_service.close()
 
         logger.info("Services shutdown complete")
 

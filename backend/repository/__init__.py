@@ -4,7 +4,6 @@ from repository.base import BaseRepository
 from repository.chat import ChatMessageRepository, ChatRepository
 from repository.collection import CollectionRepository
 from repository.document import DocumentChunkRepository, DocumentRepository
-from repository.settings import SettingsRepository
 from repository.task import TaskLogRepository, TaskRepository
 
 __all__ = [
@@ -16,5 +15,4 @@ __all__ = [
     "TaskLogRepository",
     "ChatRepository",
     "ChatMessageRepository",
-    "SettingsRepository",
 ]

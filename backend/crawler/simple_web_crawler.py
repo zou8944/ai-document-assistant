@@ -14,7 +14,7 @@ import requests
 from bs4 import BeautifulSoup, Tag
 from markdownify import markdownify
 
-from config import Config
+from models.config import AppConfig, KnowledgeBaseConfig
 
 logger = logging.getLogger(__name__)
 
@@ -37,12 +37,12 @@ class SimpleWebCrawler:
     Fast and lightweight for basic document crawling needs.
     """
 
-    def __init__(self, cache_dir: str, max_depth: int = 0, delay: float = 1.0, max_pages: int = 1000):
+    def __init__(self, cache_dir: str, config: AppConfig):
         """Initialize crawler with basic settings"""
         self.cache_dir = cache_dir
-        self.max_depth = max_depth
-        self.delay = max(delay, 1.0)
-        self.max_pages = max_pages
+        self.default_max_depth = 0
+        self.delay = 1.0
+        self.max_pages = config.knowledge_base.max_crawl_pages
 
         # Anti-detection headers
         self.headers = {
@@ -58,7 +58,7 @@ class SimpleWebCrawler:
         self.session.headers.update(self.headers)
 
         logger.info(
-            f"Initialized SimpleWebCrawler with max_depth={max_depth}, delay={delay}s, max_pages={max_pages}"
+            f"Initialized SimpleWebCrawler with max_depth={self.default_max_depth}, delay={self.delay}s, max_pages={self.max_pages}"
         )
 
     def _is_same_domain(self, url1: str, url2: str) -> bool:
@@ -250,20 +250,18 @@ class SimpleWebCrawler:
         }
 
 
-def create_simple_web_crawler(config: Config) -> SimpleWebCrawler:
-    """Create and return a SimpleWebCrawler instance with specified configuration"""
+def create_simple_web_crawler(config: AppConfig) -> SimpleWebCrawler:
     return SimpleWebCrawler(
-        cache_dir=config.crawler_cache_dir,
-        max_depth=config.crawler_max_depth,
-        max_pages=config.crawler_max_pages,
-        delay=config.crawler_delay,
+        cache_dir=AppConfig.get_crawl_cache_dir().absolute().__str__(),
+        config=config,
     )
 
 
 if __name__ == "__main__":
 
     def main():
-        crawler = create_simple_web_crawler(Config(crawler_max_pages=10))
+        config = AppConfig(knowledge_base=KnowledgeBaseConfig(max_crawl_pages=10))
+        crawler = create_simple_web_crawler(config)
         results = crawler.crawl_recursive(
             urls=["https://docs.crawl4ai.com/core/page-interaction/"],
             recursive_prefix="https://docs.crawl4ai.com/core/",

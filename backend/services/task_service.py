@@ -46,9 +46,7 @@ class TaskService:
 
     def __init__(self, config, collection_service: CollectionService, llm_service: LLMService):
         """Initialize task service"""
-        from config import get_config
-
-        self.config = config or get_config()
+        self.config = config
 
         self.collection_service = collection_service
 
@@ -64,7 +62,7 @@ class TaskService:
         self.doc_chunk_repo = DocumentChunkRepository()
 
         # Shared components - created once and reused
-        self.document_processor = create_document_processor(self.config)
+        self.document_processor = create_document_processor()
         self.chroma_manager = create_chroma_manager(self.config)
         self.file_processor = create_file_processor(self.config)
         self.web_crawler = create_simple_web_crawler(self.config)

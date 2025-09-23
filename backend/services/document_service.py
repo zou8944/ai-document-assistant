@@ -9,7 +9,6 @@ from typing import Any, Optional
 from fastapi import Response
 from langchain_openai import OpenAIEmbeddings
 
-from config import get_config
 from crawler import create_simple_web_crawler
 from data_processing.file_processor import create_file_processor
 from data_processing.text_splitter import create_document_processor
@@ -58,13 +57,13 @@ class DocumentService:
     Pure business logic without communication protocol concerns.
     """
 
-    def __init__(self, config=None):
+    def __init__(self, config):
         """Initialize document service with configuration"""
-        self.config = config or get_config()
+        self.config = config
 
         # Initialize components
         self.file_processor = create_file_processor(self.config)
-        self.document_processor = create_document_processor(self.config)
+        self.document_processor = create_document_processor()
         self.web_crawler = create_simple_web_crawler(self.config)
         self.chroma_manager = create_chroma_manager(self.config)
 

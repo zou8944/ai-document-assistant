@@ -24,9 +24,7 @@ class ChatService:
 
     def __init__(self, config, llm_service: LLMService):
         """Initialize chat service"""
-        from config import get_config
-
-        self.config = config or get_config()
+        self.config = config
 
         # Initialize repository instance
         self.chat_repo = ChatRepository()

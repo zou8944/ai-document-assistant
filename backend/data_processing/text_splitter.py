@@ -213,9 +213,5 @@ class DocumentProcessor:
 
 
 # Convenience function for creating processor instance
-def create_document_processor(config=None) -> DocumentProcessor:
-    """Create and return a DocumentProcessor instance with standard configuration"""
-    if config:
-        return DocumentProcessor(chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap)
-    else:
-        return DocumentProcessor(chunk_size=1000, chunk_overlap=200)
+def create_document_processor() -> DocumentProcessor:
+    return DocumentProcessor(chunk_size=1000, chunk_overlap=200)
