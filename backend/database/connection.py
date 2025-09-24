@@ -1,6 +1,5 @@
 """Database connection and session management."""
 
-import os
 from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -10,11 +9,13 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from config import get_config
 from database.base import Base
 
 
 def _configure_sqlite(dbapi_connection, connection_record):
     """Configure SQLite-specific settings."""
+    _ = connection_record  # Unused parameter
     cursor = dbapi_connection.cursor()
     # Enable WAL mode for better concurrency
     cursor.execute("PRAGMA journal_mode=WAL")
@@ -29,20 +30,20 @@ def _configure_sqlite(dbapi_connection, connection_record):
     cursor.close()
 
 
-# Database configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/app.db")
+# Get database configuration
+conf = get_config()
+DATABASE_URL = f"sqlite:///{conf.get_app_db_path()}"
 
 # Create engine
 engine = create_engine(
     DATABASE_URL,
-    echo=os.getenv("DATABASE_DEBUG", "false").lower() == "true",
+    echo=False,  # Can be controlled via log level if needed
     pool_pre_ping=True,
-    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {},
+    connect_args={"check_same_thread": False},
 )
 
-# Configure SQLite optimizations if using SQLite
-if "sqlite" in DATABASE_URL:
-    event.listen(Engine, "connect", _configure_sqlite)
+# Configure SQLite optimizations
+event.listen(Engine, "connect", _configure_sqlite)
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -88,6 +89,7 @@ class transaction:
         return self.session
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        _ = exc_val, exc_tb  # Unused parameters
         if exc_type:
             self.session.rollback()
         else:

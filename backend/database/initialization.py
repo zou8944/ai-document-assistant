@@ -1,7 +1,6 @@
 """Database initialization script."""
 
-import os
-
+from config import get_config
 from database.connection import create_tables
 from database.init_data import initialize_default_settings
 
@@ -33,11 +32,9 @@ def check_database_exists() -> bool:
     Returns:
         True if database exists, False otherwise
     """
-    database_url = os.getenv("DATABASE_URL", "sqlite:///./data/app.db")
-    if database_url.startswith("sqlite:///"):
-        db_path = database_url[10:]  # Remove sqlite:///
-        return os.path.exists(db_path)
-    return True  # For non-SQLite databases, assume they exist
+    conf = get_config()
+    db_path = conf.get_app_db_path()
+    return db_path.exists()
 
 
 if __name__ == "__main__":

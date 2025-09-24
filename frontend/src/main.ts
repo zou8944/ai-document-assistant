@@ -118,10 +118,10 @@ class DocumentAssistantApp {
   private async startAPIServer(): Promise<void> {
     try {
       // Get the project root directory
-      const projectRoot = isDev 
+      const projectRoot = isDev
         ? join(process.cwd(), '..')  // When running from frontend, go up one level
         : process.resourcesPath
-      
+
       const backendDir = join(projectRoot, 'backend')
       const apiServerScript = 'api_server.py'
 
@@ -130,15 +130,17 @@ class DocumentAssistantApp {
       console.log('Backend dir:', backendDir)
       console.log('API server script:', apiServerScript)
 
+      // Run database migrations first
+      await this.runAlembicMigrations(backendDir)
+
       // Find available port
       const port = await this.findAvailablePort(8000)
       
       // Start API server using uv
       this.apiServerProcess = spawn('uv', [
-        'run', 'python', apiServerScript,
+        'run', apiServerScript,
         '--host', '127.0.0.1',
-        '--port', port.toString(),
-        '--log-level', isDev ? 'debug' : 'info'
+        '--port', port.toString()
       ], {
         cwd: backendDir,
         env: {
@@ -205,12 +207,18 @@ class DocumentAssistantApp {
       
     } catch (error) {
       console.error('Failed to start API server:', error)
-      
-      // Show error dialog
-      dialog.showErrorBox(
-        'Backend Error',
-        `Failed to start API server: ${error}`
-      )
+
+      // Show error dialog with appropriate message
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      let dialogTitle = 'Backend Error'
+      let dialogMessage = `Failed to start API server: ${errorMessage}`
+
+      if (errorMessage.includes('Migration failed')) {
+        dialogTitle = 'Database Migration Error'
+        dialogMessage = `Database migration failed: ${errorMessage}\n\nPlease check the application logs for more details.`
+      }
+
+      dialog.showErrorBox(dialogTitle, dialogMessage)
     }
   }
 
@@ -314,6 +322,50 @@ class DocumentAssistantApp {
     throw new Error('No available port found')
   }
   
+  private async runAlembicMigrations(backendDir: string): Promise<void> {
+    console.log('Running database migrations...')
+
+    return new Promise((resolve, reject) => {
+      const migrationProcess = spawn('uv', [
+        'run', 'alembic', 'upgrade', 'head'
+      ], {
+        cwd: backendDir,
+        env: {
+          ...process.env,
+          UV_PROJECT_DIR: backendDir
+        },
+        stdio: ['pipe', 'pipe', 'pipe']
+      })
+
+      let stderr = ''
+
+      migrationProcess.stdout?.on('data', (data) => {
+        console.log('Migration:', data.toString().trim())
+      })
+
+      migrationProcess.stderr?.on('data', (data) => {
+        stderr += data.toString()
+        console.log('Migration stderr:', data.toString().trim())
+      })
+
+      migrationProcess.on('close', (code) => {
+        console.log(`Migration process exited with code ${code}`)
+
+        if (code === 0) {
+          console.log('Database migrations completed successfully')
+          resolve()
+        } else {
+          reject(new Error(`Migration failed with code ${code}. Error: ${stderr}`))
+        }
+      })
+
+      migrationProcess.on('error', (error) => {
+        console.error('Migration process error:', error)
+        reject(new Error(`Failed to start migration process: ${error.message}`))
+      })
+    })
+  }
+
   private async waitForServerReady(baseURL: string, maxAttempts: number = 30): Promise<void> {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
@@ -325,11 +377,11 @@ class DocumentAssistantApp {
       } catch (error) {
         // Server not ready yet
       }
-      
+
       console.log(`Waiting for API server... (${attempt}/${maxAttempts})`)
       await new Promise(resolve => setTimeout(resolve, 1000))
     }
-    
+
     throw new Error('API server failed to start within timeout')
   }
 

@@ -12,7 +12,8 @@ AI 文档阅读助手：聚合 本地文件 / 文件夹 / 网站 作为知识来
   - 文本处理：`data_processing/`
   - 向量存储：`vector_store/`（Chroma 客户端）
   - RAG 逻辑：`rag/`（检索链、意图分析、缓存、摘要）
-  - 服务接口：`api/` (`api/main.py` + routes/*)
+  - 服务接口：`api/` (FastAPI应用定义 + routes/*)
+  - 启动入口：`api_server.py`
   - 服务层：`services/`（collection / document / query）
   - 数据模型：`models/`（Pydantic 请求/响应/流式）
 - 前端：`frontend/` (Electron + React + TS + Tailwind)

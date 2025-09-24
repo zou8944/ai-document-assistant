@@ -34,10 +34,30 @@
 - Python 3.9+
 - Docker (用于 Chroma)
 
-### 环境变量
-```bash
-# OpenAI API Key (必需)
-export OPENAI_API_KEY="your-openai-api-key"
+### 配置文件
+应用使用 TOML 配置文件进行配置，首次启动时会在用户目录下创建默认配置：
+- 配置文件位置：`~/.ai-document-assistant/config.toml`
+- 可通过应用内的设置界面进行配置
+
+配置文件示例
+
+```toml
+[llm]
+api_key = "sk-xxxxxx"
+base_url = "https://api.siliconflow.cn/v1"
+chat_model = "deepseek-ai/DeepSeek-V3"
+
+[embedding]
+api_key = "sk-xxxxxx"
+base_url = "https://api.siliconflow.cn/v1"
+model = "Pro/BAAI/bge-m3"
+
+[knowledge_base]
+max_crawl_pages = 1000
+max_file_size_mb = 10
+
+[system]
+log_level = "debug"
 ```
 
 ## 🛠️ 快速开始
@@ -75,7 +95,7 @@ npm install
 
 # 终端 1: 启动后端 (可选，前端会自动启动)
 cd backend
-uv run python main.py
+uv run api_server.py
 
 # 终端 2: 启动前端
 cd frontend
@@ -219,7 +239,7 @@ ai-document-assistant/
 
 **1. Python 后端无法启动**
 - 检查 Python 环境和依赖安装
-- 验证 OPENAI_API_KEY 环境变量
+- 通过应用设置界面配置 API Key
 - 确认 Chroma 容器正在运行
 
 **2. Electron 窗口显示异常**
