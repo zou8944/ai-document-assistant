@@ -32,16 +32,22 @@ interface AppStore extends AppState {
 
 const initialSettings: AppSettings = {
   llm: {
-    apiKey: '',
-    baseUrl: 'https://api.openai.com/v1',
-    chatModel: 'gpt-3.5-turbo'
+    api_key: '',
+    base_url: 'https://api.openai.com/v1',
+    chat_model: 'gpt-3.5-turbo'
   },
   embedding: {
-    apiKey: '',
-    baseUrl: 'https://api.openai.com/v1',
-    embeddingModel: 'text-embedding-ada-002'
+    api_key: '',
+    base_url: 'https://api.openai.com/v1',
+    model: 'text-embedding-ada-002'
   },
-  dataLocation: './data'
+  knowledge_base: {
+    max_crawl_pages: 1000,
+    max_file_size_mb: 10
+  },
+  system: {
+    log_level: 'info'
+  }
 }
 
 export const useAppStore = create<AppStore>()(
@@ -120,7 +126,12 @@ export const useAppStore = create<AppStore>()(
 
         updateSettings: (newSettings) =>
           set((state) => ({
-            settings: { ...state.settings, ...newSettings }
+            settings: {
+              llm: { ...state.settings.llm, ...newSettings.llm },
+              embedding: { ...state.settings.embedding, ...newSettings.embedding },
+              knowledge_base: { ...state.settings.knowledge_base, ...newSettings.knowledge_base },
+              system: { ...state.settings.system, ...newSettings.system }
+            }
           })),
 
         // Computed getters

@@ -38,18 +38,32 @@ export interface ImportStatus {
   message: string
 }
 
+export interface LLMConfig {
+  api_key: string
+  base_url: string
+  chat_model: string
+}
+
+export interface EmbeddingConfig {
+  api_key: string
+  base_url: string
+  model: string
+}
+
+export interface KnowledgeBaseConfig {
+  max_crawl_pages: number
+  max_file_size_mb: number
+}
+
+export interface SystemConfig {
+  log_level: string
+}
+
 export interface AppSettings {
-  llm: {
-    apiKey: string
-    baseUrl: string
-    chatModel: string
-  }
-  embedding: {
-    apiKey: string
-    baseUrl: string
-    embeddingModel: string
-  }
-  dataLocation: string
+  llm: LLMConfig
+  embedding: EmbeddingConfig
+  knowledge_base: KnowledgeBaseConfig
+  system: SystemConfig
 }
 
 export interface AppState {

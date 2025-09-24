@@ -3,6 +3,7 @@
  * Updated to match the actual FastAPI backend endpoints.
  */
 
+
 // Collection types
 export interface Collection {
   id: string
@@ -130,15 +131,33 @@ export interface HealthResponse {
   timestamp: string
 }
 
-// Settings
+// Settings - matches backend AppConfig structure
+export interface LLMConfig {
+  api_key: string
+  base_url: string
+  chat_model: string
+}
+
+export interface EmbeddingConfig {
+  api_key: string
+  base_url: string
+  model: string
+}
+
+export interface KnowledgeBaseConfig {
+  max_crawl_pages: number
+  max_file_size_mb: number
+}
+
+export interface SystemConfig {
+  log_level: string
+}
+
 export interface Settings {
-  openai_api_key?: string
-  openai_model_name: string
-  embedding_model_name: string
-  chunk_size: number
-  chunk_overlap: number
-  top_k: number
-  temperature: number
+  llm: LLMConfig
+  embedding: EmbeddingConfig
+  knowledge_base: KnowledgeBaseConfig
+  system: SystemConfig
 }
 
 // Streaming types for SSE
@@ -668,9 +687,9 @@ export class DocumentAssistantAPI {
   }
 
   /**
-   * Update settings
+   * Update settings - requires complete configuration
    */
-  async updateSettings(settings: Partial<Settings>): Promise<APIResponse<Settings>> {
+  async updateSettings(settings: Settings): Promise<APIResponse<Settings>> {
     return this.request<APIResponse<Settings>>('/api/v1/settings', {
       method: 'PUT',
       body: JSON.stringify(settings),
