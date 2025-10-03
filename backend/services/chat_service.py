@@ -33,7 +33,7 @@ class ChatService:
         self.document_repo = DocumentRepository()
 
         # Initialize components that will be reused
-        self.chroma_manager = create_chroma_manager(self.config)
+        self.chroma_manager = create_chroma_manager()
 
         # Initialize LLM service
         self.llm_service = llm_service

@@ -58,6 +58,7 @@ dependencies = [
     "sse-starlette>=3.0.2",
     "markdown-it-py>=3.0.0",
     "toml>=0.10.2",
+    "posthog>=5.4.0",
 ]
 
 [project.optional-dependencies]
@@ -107,6 +108,9 @@ dev-dependencies = [
 
     # Type stubs
     "types-requests>=2.32.0.20240523",
+
+    # Build tools
+    "pyinstaller>=6.0.0",
 ]
 
 # Ruff configuration

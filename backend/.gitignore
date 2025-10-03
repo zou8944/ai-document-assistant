@@ -17,3 +17,5 @@ data/
 *.log
 logs/
 api_server.log
+build/*
+dist/*

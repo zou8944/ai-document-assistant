@@ -23,7 +23,7 @@ class CollectionService:
         from vector_store.chroma_client import create_chroma_manager
 
         self.config = config
-        self.chroma_manager = create_chroma_manager(self.config)
+        self.chroma_manager = create_chroma_manager()
 
         self.collection_repo = CollectionRepository()
         self.doc_repo = DocumentRepository()

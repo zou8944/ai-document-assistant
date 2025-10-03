@@ -63,7 +63,7 @@ class TaskService:
 
         # Shared components - created once and reused
         self.document_processor = create_document_processor()
-        self.chroma_manager = create_chroma_manager(self.config)
+        self.chroma_manager = create_chroma_manager()
         self.file_processor = create_file_processor(self.config)
         self.web_crawler = create_simple_web_crawler(self.config)
 

@@ -65,7 +65,7 @@ class DocumentService:
         self.file_processor = create_file_processor(self.config)
         self.document_processor = create_document_processor()
         self.web_crawler = create_simple_web_crawler(self.config)
-        self.chroma_manager = create_chroma_manager(self.config)
+        self.chroma_manager = create_chroma_manager()
 
         # Initialize repositories
         self.doc_repo = DocumentRepository()
