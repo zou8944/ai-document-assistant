@@ -123,29 +123,48 @@ class DocumentAssistantApp {
         : process.resourcesPath
 
       const backendDir = join(projectRoot, 'backend')
-      const apiServerScript = 'api_server.py'
 
       console.log('Starting API server...')
       console.log('Project root:', projectRoot)
       console.log('Backend dir:', backendDir)
-      console.log('API server script:', apiServerScript)
 
-      // Run database migrations first
-      await this.runAlembicMigrations(backendDir)
+      // In development, run database migrations first
+      if (isDev) {
+        await this.runAlembicMigrations(backendDir)
+      }
 
       // Find available port
       const port = await this.findAvailablePort(8000)
-      
-      // Start API server using uv
-      this.apiServerProcess = spawn('uv', [
-        'run', apiServerScript,
-        '--host', '127.0.0.1',
-        '--port', port.toString()
-      ], {
-        cwd: backendDir,
+
+      // Choose executable path based on environment
+      let executablePath: string
+      let args: string[]
+      let cwd: string
+
+      if (isDev) {
+        // Development: use uv to run Python script
+        executablePath = 'uv'
+        args = ['run', 'api_server.py', '--host', '127.0.0.1', '--port', port.toString()]
+        cwd = backendDir
+      } else {
+        // Production: use PyInstaller executable
+        const executableName = process.platform === 'win32'
+          ? 'ai-document-assistant-backend.exe'
+          : 'ai-document-assistant-backend'
+        executablePath = join(backendDir, 'dist', executableName)
+        args = ['--host', '127.0.0.1', '--port', port.toString()]
+        cwd = backendDir
+      }
+
+      console.log('Executable path:', executablePath)
+      console.log('Arguments:', args)
+
+      // Start API server
+      this.apiServerProcess = spawn(executablePath, args, {
+        cwd,
         env: {
           ...process.env,
-          UV_PROJECT_DIR: backendDir
+          ...(isDev ? { UV_PROJECT_DIR: backendDir } : {})
         },
         stdio: ['pipe', 'pipe', 'pipe']
       })

@@ -42,7 +42,8 @@
     "react-markdown": "^10.1.0",
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
-    "zustand": "^5.0.7"
+    "zustand": "^5.0.7",
+    "electron-is-dev": "^2.0.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.1.4",
@@ -59,7 +60,6 @@
     "concurrently": "^8.2.2",
     "electron": "^27.0.4",
     "electron-builder": "^24.6.4",
-    "electron-is-dev": "^2.0.0",
     "eslint": "^8.53.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.4",
@@ -81,8 +81,13 @@
     },
     "files": [
       "dist/**/*",
-      "node_modules/**/*",
-      "../backend/**/*"
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../backend/dist/ai-document-assistant-backend",
+        "to": "backend/dist/ai-document-assistant-backend"
+      }
     ],
     "mac": {
       "category": "public.app-category.productivity",

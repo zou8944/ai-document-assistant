@@ -7,3 +7,4 @@ qdrant_data/
 .idea
 .vscode
 **/chroma_db
+release/

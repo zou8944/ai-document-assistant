@@ -215,6 +215,70 @@ ai-document-assistant/
 3. 查看 AI 生成的答案和引用来源
 4. 继续对话深入探讨
 
+## 📦 打包发布
+
+### 使用 Makefile 打包
+
+项目提供了 Makefile 来简化打包流程：
+
+```bash
+# 安装所有依赖
+make install
+
+# 打包到 macOS
+make package-mac
+
+# 打包到 Windows
+make package-win
+
+# 打包到 Linux
+make package-linux
+
+# 打包到所有平台
+make package-all
+```
+
+### 打包产物
+
+安装包会生成在 `frontend/release/` 目录：
+
+- **macOS**: `.dmg` 和 `.zip`
+- **Windows**: `.exe` (NSIS 安装程序) 和 `.zip`
+- **Linux**: `.AppImage` 和 `.deb`
+
+### 其他命令
+
+```bash
+make help          # 查看所有可用命令
+make clean         # 清理所有构建产物
+make clean-release # 仅清理发布产物
+make test          # 运行所有测试
+make lint          # 运行代码检查
+make dev           # 启动开发服务器
+```
+
+### 注意事项
+
+1. **应用图标**：需要准备以下图标文件
+   - macOS: `frontend/assets/icon.icns`
+   - Windows: `frontend/assets/icon.ico`
+
+2. **Python 环境**：打包时会自动包含虚拟环境
+   - 确保运行 `make install` 来安装后端依赖
+   - 生产环境使用系统 Python + 打包的依赖库
+   - 开发环境使用 `uv` 命令
+   - 安装包大小约 250MB（包含所有 Python 依赖）
+
+3. **代码签名**：当前已禁用以避免符号链接问题
+   - 如需启用，请在 `package.json` 中移除 `"identity": null`
+   - macOS 需要 Apple Developer 证书
+   - Windows 需要代码签名证书
+
+4. **跨平台构建**
+   - 在 macOS 上可以构建所有平台
+   - 在 Windows 上只能构建 Windows 和 Linux
+   - 在 Linux 上只能构建 Linux 和 Windows
+
 ## 🔧 开发指南
 
 ### 代码规范
