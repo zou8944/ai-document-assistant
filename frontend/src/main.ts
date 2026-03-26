@@ -9,7 +9,6 @@ import isDev from 'electron-is-dev'
 
 // API server subprocess management
 import { spawn, ChildProcess } from 'child_process'
-import { join as pathJoin } from 'path'
 
 // Type definitions for API server management
 interface APIServerInfo {
@@ -17,6 +16,16 @@ interface APIServerInfo {
   pid: number
   baseURL: string
 }
+
+// Configuration constants
+const CONFIG = {
+  DEFAULT_PORT: 8000,
+  PORT_SCAN_RANGE: 100,
+  SERVER_READY_TIMEOUT_MS: 30000,
+  SERVER_READY_RETRY_INTERVAL_MS: 1000,
+  SHUTDOWN_TIMEOUT_MS: 2000,
+  RESTART_DELAY_MS: 1000,
+} as const
 
 class DocumentAssistantApp {
   private mainWindow: BrowserWindow | null = null
@@ -128,13 +137,21 @@ class DocumentAssistantApp {
       console.log('Project root:', projectRoot)
       console.log('Backend dir:', backendDir)
 
-      // In development, run database migrations first
+      // Run database migrations
       if (isDev) {
+        // In development, fail fast if migration fails
         await this.runAlembicMigrations(backendDir)
+      } else {
+        // In production, try migration but don't block startup
+        try {
+          await this.runAlembicMigrations(backendDir)
+        } catch (error) {
+          console.warn('Database migration warning (continuing startup):', error)
+        }
       }
 
       // Find available port
-      const port = await this.findAvailablePort(8000)
+      const port = await this.findAvailablePort(CONFIG.DEFAULT_PORT)
 
       // Choose executable path based on environment
       let executablePath: string
@@ -169,41 +186,51 @@ class DocumentAssistantApp {
         stdio: ['pipe', 'pipe', 'pipe']
       })
 
-      // Create log files for API server output
-      const logDir = pathJoin(backendDir, 'logs')
-      const fs = await import('fs/promises')
-      try {
-        await fs.mkdir(logDir, { recursive: true })
-      } catch {
-        // Directory might already exist
-      }
-      
-      this.apiServerProcess.stdout?.on('data', (data) => {
-        console.log('API Server stdout:', data.toString())
-      })
+      // Setup logging for API server output
+      await this.setupServerLogging(backendDir, this.apiServerProcess)
 
-      this.apiServerProcess.stderr?.on('data', (data) => {
-        console.log('API Server stderr:', data.toString())
-      })
-
-      this.apiServerProcess.on('error', (error) => {
+      this.apiServerProcess.on('error', async (error) => {
         console.error('API server process error:', error)
-        
-        // Show error dialog
+
+        // Try to restart once before showing error
+        if (!this.apiServerInfo) {
+          console.log('Attempting to restart API server...')
+          try {
+            await this.startAPIServer()
+            return
+          } catch (restartError) {
+            console.error('Failed to restart API server:', restartError)
+          }
+        }
+
+        // Show error dialog if restart fails
         dialog.showErrorBox(
           'Backend Error',
-          `Failed to start API server: ${error.message}`
+          `Failed to start API server: ${error.message}\n\nPlease restart the application.`
         )
       })
 
       this.apiServerProcess.on('close', (code: number) => {
         console.log(`API server process exited with code ${code}`)
+        const wasRunning = this.apiServerProcess !== null
         this.apiServerProcess = null
         this.apiServerInfo = null
-        
+
         // Notify renderer of process end
         if (this.mainWindow && !this.mainWindow.isDestroyed()) {
           this.mainWindow.webContents.send('api-server-disconnected', { code })
+        }
+
+        // If unexpected exit (code != 0), try to restart once
+        if (code !== 0 && wasRunning) {
+          console.log('API server crashed, attempting restart...')
+          setTimeout(async () => {
+            try {
+              await this.startAPIServer()
+            } catch (error) {
+              console.error('Failed to restart crashed API server:', error)
+            }
+          }, CONFIG.RESTART_DELAY_MS)
         }
       })
 
@@ -319,9 +346,9 @@ class DocumentAssistantApp {
     })
   }
 
-  private async findAvailablePort(startPort: number = 8000): Promise<number> {
+  private async findAvailablePort(startPort: number = CONFIG.DEFAULT_PORT): Promise<number> {
     const net = await import('net')
-    
+
     const isPortAvailable = (port: number): Promise<boolean> => {
       return new Promise((resolve) => {
         const server = net.createServer()
@@ -331,16 +358,53 @@ class DocumentAssistantApp {
         server.on('error', () => resolve(false))
       })
     }
-    
-    for (let port = startPort; port < startPort + 100; port++) {
+
+    for (let port = startPort; port < startPort + CONFIG.PORT_SCAN_RANGE; port++) {
       if (await isPortAvailable(port)) {
         return port
       }
     }
-    
-    throw new Error('No available port found')
+
+    throw new Error(`No available port found in range ${startPort}-${startPort + CONFIG.PORT_SCAN_RANGE}`)
   }
   
+  private async setupServerLogging(backendDir: string, process: ChildProcess): Promise<void> {
+    const logDir = join(backendDir, 'logs')
+    const fs = await import('fs/promises')
+    const fsSync = await import('fs')
+
+    try {
+      await fs.mkdir(logDir, { recursive: true })
+    } catch {
+      // Directory might already exist
+    }
+
+    // Create log file with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const logFilePath = join(logDir, `api-server-${timestamp}.log`)
+    const logStream = fsSync.createWriteStream(logFilePath, { flags: 'a' })
+
+    // Write to both console and file
+    process.stdout?.on('data', (data) => {
+      const message = data.toString()
+      console.log('API Server stdout:', message)
+      logStream.write(`[stdout] ${new Date().toISOString()} ${message}`)
+    })
+
+    process.stderr?.on('data', (data) => {
+      const message = data.toString()
+      console.log('API Server stderr:', message)
+      logStream.write(`[stderr] ${new Date().toISOString()} ${message}`)
+    })
+
+    // Close log stream when process exits
+    process.on('close', () => {
+      logStream.end()
+    })
+
+    console.log(`Server logs will be written to: ${logFilePath}`)
+  }
+
   private async runAlembicMigrations(backendDir: string): Promise<void> {
     console.log('Running database migrations...')
 
@@ -385,7 +449,9 @@ class DocumentAssistantApp {
     })
   }
 
-  private async waitForServerReady(baseURL: string, maxAttempts: number = 30): Promise<void> {
+  private async waitForServerReady(baseURL: string): Promise<void> {
+    const maxAttempts = Math.floor(CONFIG.SERVER_READY_TIMEOUT_MS / CONFIG.SERVER_READY_RETRY_INTERVAL_MS)
+
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const response = await fetch(`${baseURL}/api/v1/health`)
@@ -398,29 +464,29 @@ class DocumentAssistantApp {
       }
 
       console.log(`Waiting for API server... (${attempt}/${maxAttempts})`)
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      await new Promise(resolve => setTimeout(resolve, CONFIG.SERVER_READY_RETRY_INTERVAL_MS))
     }
 
-    throw new Error('API server failed to start within timeout')
+    throw new Error(`API server failed to start within ${CONFIG.SERVER_READY_TIMEOUT_MS}ms`)
   }
 
   private async cleanup(): Promise<void> {
     console.log('Cleaning up resources...')
-    
+
     // Close API server process
     if (this.apiServerProcess) {
       try {
         // Try graceful shutdown first
         this.apiServerProcess.kill('SIGTERM')
-        
+
         // Wait a bit for graceful shutdown
-        await new Promise(resolve => setTimeout(resolve, 2000))
-        
+        await new Promise(resolve => setTimeout(resolve, CONFIG.SHUTDOWN_TIMEOUT_MS))
+
         // Force kill if still running
         if (!this.apiServerProcess.killed) {
           this.apiServerProcess.kill('SIGKILL')
         }
-        
+
         this.apiServerProcess = null
         this.apiServerInfo = null
         console.log('API server process terminated')
