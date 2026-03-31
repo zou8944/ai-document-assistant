@@ -1,9 +1,11 @@
 """
 ChromaDB vector store client wrapper for managing document embeddings.
 Following 2024 best practices for LangChain integration.
+Supports both persistent local storage and HTTP client for Docker deployments.
 """
 
 import logging
+import os
 from typing import Any, Optional
 
 import chromadb
@@ -32,17 +34,37 @@ class ChromaManager:
     """
 
     def __init__(self, persist_directory: str = "./chroma_db"):
-        """Initialize ChromaDB client with persistent storage"""
+        """
+        Initialize ChromaDB client.
+        Uses HTTP client if CHROMA_HOST is set (Docker), otherwise uses persistent local storage.
+        """
         try:
-            self.persist_directory = persist_directory
-            self.client = chromadb.PersistentClient(
-                path=persist_directory,
-                settings=Settings(
-                    anonymized_telemetry=False,
-                    allow_reset=True
+            chroma_host = os.getenv("CHROMA_HOST")
+            chroma_port = int(os.getenv("CHROMA_PORT", "8000"))
+
+            if chroma_host:
+                # Docker environment - use HTTP client
+                self.persist_directory = None
+                self.client = chromadb.HttpClient(
+                    host=chroma_host,
+                    port=chroma_port,
+                    settings=Settings(
+                        anonymized_telemetry=False,
+                        allow_reset=True
+                    )
                 )
-            )
-            logger.info(f"Connected to ChromaDB at {persist_directory}")
+                logger.info(f"Connected to ChromaDB HTTP server at {chroma_host}:{chroma_port}")
+            else:
+                # Local environment - use persistent client
+                self.persist_directory = persist_directory
+                self.client = chromadb.PersistentClient(
+                    path=persist_directory,
+                    settings=Settings(
+                        anonymized_telemetry=False,
+                        allow_reset=True
+                    )
+                )
+                logger.info(f"Connected to ChromaDB at {persist_directory}")
         except Exception as e:
             logger.error(f"Failed to connect to ChromaDB: {e}")
             raise

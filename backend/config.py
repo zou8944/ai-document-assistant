@@ -1,8 +1,10 @@
 """
 Configuration management for AI Document Assistant Backend.
 TOML-based configuration with automatic initialization.
+Supports both TOML file configuration and environment variables (Docker-friendly).
 """
 
+import os
 from typing import Optional
 
 from models.config import AppConfig
@@ -20,7 +22,13 @@ _config: Optional[AppConfig] = None
 
 
 def get_config() -> AppConfig:
-    """Get current configuration, always reading from file to ensure freshness."""
+    """Get current configuration. Priority: environment variables > config file > defaults."""
+    # If running in Docker (environment variable set), use env config
+    if os.getenv("DOCKER_ENV") or os.getenv("OPENAI_API_KEY"):
+        config = AppConfig.from_env()
+        config.ensure_directories_exist()
+        return config
+
     # Check if config file exists, create with defaults if not
     if not CONFIG_FILE_PATH.exists():
         default_config = AppConfig()

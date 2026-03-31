@@ -1,6 +1,6 @@
 # AI Document Assistant
 
-一个基于 Electron + React + Python 的 AI 文档阅读助手，支持本地文件处理和网站内容抓取，并提供智能问答功能。
+一个基于 React + Python 的 AI 文档阅读助手，支持本地文件处理和网站内容抓取，并提供智能问答功能。
 
 > 本项目以 [Context Engineering Intro](https://github.com/coleam00/context-engineering-intro?tab=readme-ov-file#template-structure) 为蓝本构建，提供了完整的项目模板结构和最佳实践指南。
 
@@ -9,27 +9,56 @@
 - **📁 文件处理**: 支持 PDF、Word、Markdown、文本等多种格式
 - **🌐 网站抓取**: 递归抓取同域名下的网页内容
 - **🤖 智能问答**: 基于 RAG 技术的文档问答系统
-- **💎 原生界面**: 遵循 Apple Liquid Glass 设计，提供原生 macOS 体验
+- **🐳 容器化部署**: 支持 Docker Compose 一键部署
 - **⚡ 高性能**: 使用 Chroma 向量数据库确保快速检索
 
 ## 🏗️ 技术架构
 
-### 前端 (Electron + React)
-- **Electron**: 跨平台桌面应用框架
+### 前端 (React Web 应用)
 - **React + TypeScript**: 现代化 UI 开发
 - **Tailwind CSS**: 实用优先的 CSS 框架
-- **Apple Liquid Glass**: 毛玻璃效果设计
+- **Nginx**: 静态文件服务和 API 反向代理
 
-### 后端 (Python)
+### 后端 (Python FastAPI)
+- **FastAPI**: 高性能 Web 框架
 - **LangChain**: RAG 流程编排
 - **Crawl4AI**: 智能网页抓取
 - **Chroma**: 向量数据库
 - **OpenAI Embeddings**: 文本向量化
 
-## 📦 安装要求
+## 📦 部署方式
 
-### 系统要求
-- macOS 10.15+, Windows 10+, 或 Ubuntu 18.04+
+### 方式 1: Docker Compose (推荐)
+这是最简单的部署方式，适合生产环境和快速体验。
+
+**系统要求**:
+- Docker 20.10+
+- Docker Compose 2.0+
+- 至少 4GB 可用内存
+
+**快速开始**:
+```bash
+# 1. 克隆仓库
+git clone https://github.com/zou8944/ai-document-assistant
+cd ai-document-assistant
+
+# 2. 配置环境变量
+cp .env.example .env
+# 编辑 .env 设置 OPENAI_API_KEY 等配置
+
+# 3. 启动服务
+docker-compose up -d
+
+# 4. 访问应用
+# 打开浏览器访问 http://localhost
+```
+
+详细文档请查看: [README.Docker.md](README.Docker.md)
+
+### 方式 2: 本地开发部署
+适合开发和调试。
+
+**系统要求**:
 - Node.js 18+
 - Python 3.9+
 - Docker (用于 Chroma)
@@ -93,14 +122,51 @@ npm install
 ```bash
 # 在两个终端中分别运行:
 
-# 终端 1: 启动后端 (可选，前端会自动启动)
+# 终端 1: 启动后端
 cd backend
-uv run api_server.py
+uv run python api_server.py
 
 # 终端 2: 启动前端
 cd frontend
 npm run dev
+
+# 访问 http://localhost:5173
 ```
+
+## 🐛 开发与调试
+
+### 本地开发模式 (推荐)
+
+这是最方便的调试方式,支持热重载和断点调试。
+
+```bash
+# 1. 启动 Chroma (仅需一次)
+docker run -d -p 8000:8000 --name chroma chromadb/chroma:latest
+
+# 2. 启动后端 (终端 1)
+cd backend
+export OPENAI_API_KEY="your_key"
+uv run python api_server.py
+
+# 3. 启动前端 (终端 2)
+cd frontend
+npm run dev
+
+# 访问 http://localhost:5173
+```
+
+### VS Code 调试
+
+项目已配置好 VS Code 调试环境:
+
+1. **打开调试面板** (⇧⌘D / Ctrl+Shift+D)
+2. **选择调试配置**:
+   - `Backend: FastAPI Dev Server` - 后端调试
+   - `Frontend: Chrome Debug` - 前端调试
+   - `Full Stack: Backend + Frontend` - 全栈调试
+3. **按 F5 开始调试**
+
+详细调试指南: [DEBUG_GUIDE.md](DEBUG_GUIDE.md)
 
 ## 🧪 测试
 
@@ -108,17 +174,16 @@ npm run dev
 ```bash
 cd backend
 uv run pytest tests/ -v
+
+# 或使用 VS Code 任务: Cmd+Shift+P → "Tasks: Run Task" → "Backend: Run Tests"
 ```
 
 ### 前端测试
 ```bash
 cd frontend
 npm test
-```
 
-### 测试覆盖率
-```bash
-cd frontend
+# 测试覆盖率
 npm run test:coverage
 ```
 
@@ -215,69 +280,33 @@ ai-document-assistant/
 3. 查看 AI 生成的答案和引用来源
 4. 继续对话深入探讨
 
-## 📦 打包发布
+## 📦 生产部署
 
-### 使用 Makefile 打包
-
-项目提供了 Makefile 来简化打包流程：
+### Docker 生产部署(推荐)
 
 ```bash
-# 安装所有依赖
-make install
+# 使用生产配置启动
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
-# 打包到 macOS
-make package-mac
+# 查看日志
+docker-compose logs -f
 
-# 打包到 Windows
-make package-win
-
-# 打包到 Linux
-make package-linux
-
-# 打包到所有平台
-make package-all
+# 备份数据
+docker run --rm \
+  -v ai-doc-assistant_backend-data:/data \
+  -v $(pwd):/backup alpine \
+  tar czf /backup/data-backup.tar.gz /data
 ```
 
-### 打包产物
+### 性能优化建议
 
-安装包会生成在 `frontend/release/` 目录：
+1. **使用 HTTPS**: 生产环境必须使用 HTTPS
+2. **反向代理**: 推荐使用 Traefik 或 Caddy
+3. **资源限制**: 在 `docker-compose.prod.yml` 中配置资源限制
+4. **日志管理**: 配置日志轮转避免磁盘占满
+5. **定期备份**: 设置自动备份脚本
 
-- **macOS**: `.dmg` 和 `.zip`
-- **Windows**: `.exe` (NSIS 安装程序) 和 `.zip`
-- **Linux**: `.AppImage` 和 `.deb`
-
-### 其他命令
-
-```bash
-make help          # 查看所有可用命令
-make clean         # 清理所有构建产物
-make clean-release # 仅清理发布产物
-make test          # 运行所有测试
-make lint          # 运行代码检查
-make dev           # 启动开发服务器
-```
-
-### 注意事项
-
-1. **应用图标**：需要准备以下图标文件
-   - macOS: `frontend/assets/icon.icns`
-   - Windows: `frontend/assets/icon.ico`
-
-2. **Python 环境**：打包时会自动包含虚拟环境
-   - 确保运行 `make install` 来安装后端依赖
-   - 生产环境使用系统 Python + 打包的依赖库
-   - 开发环境使用 `uv` 命令
-   - 安装包大小约 250MB（包含所有 Python 依赖）
-
-3. **代码签名**：当前已禁用以避免符号链接问题
-   - 如需启用，请在 `package.json` 中移除 `"identity": null`
-   - macOS 需要 Apple Developer 证书
-   - Windows 需要代码签名证书
-
-4. **跨平台构建**
-   - 在 macOS 上可以构建所有平台
-   - 在 Windows 上只能构建 Windows 和 Linux
-   - 在 Linux 上只能构建 Linux 和 Windows
+详细配置请参考: [README.Docker.md](README.Docker.md)
 
 ## 🔧 开发指南
 

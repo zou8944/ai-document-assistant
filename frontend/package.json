@@ -1,18 +1,12 @@
 {
   "name": "ai-document-assistant-frontend",
   "version": "1.0.0",
-  "description": "AI Document Reading Assistant - Electron Frontend",
+  "description": "AI Document Reading Assistant - Web Frontend",
   "type": "module",
-  "main": "dist/main.cjs",
   "scripts": {
-    "dev": "concurrently \"npm run dev:react\" \"npm run dev:electron\"",
-    "dev:react": "vite",
-    "dev:electron": "npx wait-on tcp:5173 && npx electron dist/main.cjs",
-    "build": "npm run build:react && npm run build:electron",
-    "build:react": "vite build",
-    "build:electron": "tsc -p tsconfig.main.json && mv dist/main.js dist/main.cjs",
-    "start": "npm run build && npx electron dist/main.cjs",
-    "package": "npm run build && electron-builder",
+    "dev": "vite",
+    "build": "vite build",
+    "start": "vite preview",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "type-check": "tsc --noEmit",
     "test": "vitest",
@@ -21,13 +15,13 @@
     "preview": "vite preview"
   },
   "keywords": [
-    "electron",
     "react",
     "typescript",
     "ai",
     "document",
     "assistant",
-    "rag"
+    "rag",
+    "web"
   ],
   "author": "AI Document Assistant Team",
   "license": "MIT",
@@ -35,15 +29,13 @@
   "dependencies": {
     "@heroicons/react": "^2.0.18",
     "clsx": "^2.0.0",
-    "python-shell": "^5.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-dropzone": "^14.2.3",
     "react-markdown": "^10.1.0",
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
-    "zustand": "^5.0.7",
-    "electron-is-dev": "^2.0.0"
+    "zustand": "^5.0.7"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.1.4",
@@ -57,9 +49,6 @@
     "@vitest/coverage-v8": "^1.0.0",
     "@vitest/ui": "^1.0.0",
     "autoprefixer": "^10.4.16",
-    "concurrently": "^8.2.2",
-    "electron": "^27.0.4",
-    "electron-builder": "^24.6.4",
     "eslint": "^8.53.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.4",
@@ -68,49 +57,7 @@
     "tailwindcss": "^3.3.5",
     "typescript": "^5.2.2",
     "vite": "^4.5.0",
-    "vite-plugin-electron": "^0.15.5",
-    "vitest": "^1.0.0",
-    "wait-on": "^7.0.1"
-  },
-  "build": {
-    "appId": "com.ai-document-assistant",
-    "productName": "AI Document Assistant",
-    "directories": {
-      "buildResources": "assets",
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "node_modules/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "../backend/dist/ai-document-assistant-backend",
-        "to": "backend/dist/ai-document-assistant-backend"
-      }
-    ],
-    "mac": {
-      "category": "public.app-category.productivity",
-      "target": [
-        "dmg",
-        "zip"
-      ],
-      "icon": "assets/icon.icns"
-    },
-    "win": {
-      "target": [
-        "nsis",
-        "zip"
-      ],
-      "icon": "assets/icon.ico"
-    },
-    "linux": {
-      "target": [
-        "AppImage",
-        "deb"
-      ],
-      "category": "Office"
-    }
+    "vitest": "^1.0.0"
   },
   "repository": {
     "type": "git",

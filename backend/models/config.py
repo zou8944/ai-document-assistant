@@ -1,5 +1,6 @@
 """Configuration data classes for TOML-based configuration."""
 
+import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -20,6 +21,15 @@ class LLMConfig:
     def from_dict(cls, data: dict):
         return cls(**data)
 
+    @classmethod
+    def from_env(cls):
+        """Load configuration from environment variables."""
+        return cls(
+            api_key=os.getenv("OPENAI_API_KEY", ""),
+            base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+            chat_model=os.getenv("OPENAI_CHAT_MODEL", "gpt-3.5-turbo"),
+        )
+
 
 @dataclass
 class EmbeddingConfig:
@@ -33,6 +43,15 @@ class EmbeddingConfig:
     @classmethod
     def from_dict(cls, data: dict):
         return cls(**data)
+
+    @classmethod
+    def from_env(cls):
+        """Load configuration from environment variables."""
+        return cls(
+            api_key=os.getenv("EMBEDDING_API_KEY", os.getenv("OPENAI_API_KEY", "")),
+            base_url=os.getenv("EMBEDDING_BASE_URL", os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")),
+            model=os.getenv("EMBEDDING_MODEL", "text-embedding-ada-002"),
+        )
 
 
 @dataclass
@@ -59,6 +78,13 @@ class SystemConfig:
     def from_dict(cls, data: dict):
         return cls(**data)
 
+    @classmethod
+    def from_env(cls):
+        """Load configuration from environment variables."""
+        return cls(
+            log_level=os.getenv("LOG_LEVEL", "info"),
+        )
+
 
 @dataclass
 class AppConfig:
@@ -82,6 +108,10 @@ class AppConfig:
 
     @classmethod
     def get_user_config_dir(cls) -> Path:
+        # In Docker, use /app/data; otherwise use home directory
+        docker_data_dir = os.getenv("DATA_DIR", "")
+        if docker_data_dir:
+            return Path(docker_data_dir)
         return Path.home() / ".ai-document-assistant"
 
     @classmethod
@@ -121,6 +151,16 @@ class AppConfig:
             embedding=EmbeddingConfig(**data.get("embedding", {})),
             knowledge_base=KnowledgeBaseConfig(**data.get("knowledge_base", {})),
             system=SystemConfig(**data.get("system", {}))
+        )
+
+    @classmethod
+    def from_env(cls) -> "AppConfig":
+        """Load configuration from environment variables."""
+        return cls(
+            llm=LLMConfig.from_env(),
+            embedding=EmbeddingConfig.from_env(),
+            knowledge_base=KnowledgeBaseConfig(),
+            system=SystemConfig.from_env(),
         )
 
     def to_toml_file(self, file_path: Optional[Path] = None) -> None:

@@ -1,13 +1,12 @@
 /**
- * Process Manager for Python API server lifecycle management.
- * Handles communication with Electron main process for server control.
+ * Process Manager for API server connection management.
+ * Web version - manages HTTP connection to backend API.
  */
 
 // Type definitions
 export interface APIServerInfo {
-  port: number
-  pid: number
   baseURL: string
+  isConnected: boolean
 }
 
 export interface ProcessManagerEvents {
@@ -68,54 +67,80 @@ class EventEmitter<T extends Record<string, any[]> = Record<string, any[]>> {
 }
 
 export class ProcessManager extends EventEmitter<ProcessManagerEvents> {
-  private currentServerInfo: APIServerInfo | null = null
+  private currentServerInfo: APIServerInfo
   private isConnected: boolean = false
+  private healthCheckInterval?: number
 
   constructor() {
     super()
-    this.setupEventListeners()
+    // Get API URL from environment variables
+    const apiUrl = import.meta.env.VITE_API_URL || '/api'
+    this.currentServerInfo = {
+      baseURL: apiUrl,
+      isConnected: false
+    }
     this.initialize()
   }
 
-  private setupEventListeners() {
-    // Listen for server ready events
-    window.electronAPI.onAPIServerReady((info: APIServerInfo) => {
-      console.log('API server ready:', info)
-      this.currentServerInfo = info
-      this.isConnected = true
-      this.emit('server-ready', info)
-      this.emit('connection-status-changed', true)
-    })
+  private async initialize() {
+    // Check server health
+    await this.checkServerHealth()
 
-    // Listen for server disconnection events
-    window.electronAPI.onAPIServerDisconnected((data: { code: number }) => {
-      console.log('API server disconnected:', data)
-      this.currentServerInfo = null
-      this.isConnected = false
-      this.emit('server-disconnected', data)
-      this.emit('connection-status-changed', false)
-    })
+    // Start periodic health checks
+    this.startHealthChecks()
   }
 
-  private async initialize() {
-    // Check if server is already running
+  private async checkServerHealth(): Promise<boolean> {
     try {
-      const serverInfo = await window.electronAPI.getAPIServerInfo()
-      if (serverInfo) {
-        this.currentServerInfo = serverInfo
-        this.isConnected = true
-        this.emit('server-ready', serverInfo)
-        this.emit('connection-status-changed', true)
+      const response = await fetch(`${this.currentServerInfo.baseURL}/api/v1/health`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (response.ok) {
+        if (!this.isConnected) {
+          this.isConnected = true
+          this.currentServerInfo.isConnected = true
+          this.emit('server-ready', this.currentServerInfo)
+          this.emit('connection-status-changed', true)
+          console.log('API server is connected')
+        }
+        return true
+      } else {
+        if (this.isConnected) {
+          this.isConnected = false
+          this.currentServerInfo.isConnected = false
+          this.emit('server-disconnected', { code: response.status })
+          this.emit('connection-status-changed', false)
+          console.warn('API server connection lost')
+        }
+        return false
       }
     } catch (error) {
-      console.error('Failed to get initial server info:', error)
+      if (this.isConnected) {
+        this.isConnected = false
+        this.currentServerInfo.isConnected = false
+        this.emit('server-disconnected', { code: 0 })
+        this.emit('connection-status-changed', false)
+        console.warn('API server connection failed:', error)
+      }
+      return false
     }
+  }
+
+  private startHealthChecks() {
+    // Check every 30 seconds
+    this.healthCheckInterval = window.setInterval(() => {
+      this.checkServerHealth()
+    }, 30000)
   }
 
   /**
    * Get current API server information
    */
-  getServerInfo(): APIServerInfo | null {
+  getServerInfo(): APIServerInfo {
     return this.currentServerInfo
   }
 
@@ -127,34 +152,19 @@ export class ProcessManager extends EventEmitter<ProcessManagerEvents> {
   }
 
   /**
-   * Restart the API server
+   * Manually trigger server health check
    */
-  async restartServer(): Promise<APIServerInfo | null> {
-    try {
-      console.log('Restarting API server...')
-      const serverInfo = await window.electronAPI.restartAPIServer()
-      
-      if (serverInfo) {
-        this.currentServerInfo = serverInfo
-        this.isConnected = true
-        this.emit('server-ready', serverInfo)
-        this.emit('connection-status-changed', true)
-      }
-      
-      return serverInfo
-    } catch (error) {
-      console.error('Failed to restart API server:', error)
-      this.isConnected = false
-      this.emit('connection-status-changed', false)
-      throw error
-    }
+  async restartServer(): Promise<APIServerInfo> {
+    console.log('Checking API server health...')
+    await this.checkServerHealth()
+    return this.currentServerInfo
   }
 
   /**
    * Wait for server to be ready
    */
   waitForServer(timeoutMs: number = 30000): Promise<APIServerInfo> {
-    if (this.isConnected && this.currentServerInfo) {
+    if (this.isConnected) {
       return Promise.resolve(this.currentServerInfo)
     }
 
@@ -171,6 +181,9 @@ export class ProcessManager extends EventEmitter<ProcessManagerEvents> {
       }
 
       this.on('server-ready', onReady)
+
+      // Trigger immediate health check
+      this.checkServerHealth()
     })
   }
 
@@ -178,11 +191,10 @@ export class ProcessManager extends EventEmitter<ProcessManagerEvents> {
    * Clean up resources
    */
   dispose() {
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval)
+    }
     this.removeAllListeners()
-    
-    // Remove Electron API listeners
-    window.electronAPI.removeAllListeners('api-server-ready')
-    window.electronAPI.removeAllListeners('api-server-disconnected')
   }
 }
 
