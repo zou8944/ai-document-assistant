@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "Backend: FastAPI Dev Server",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "module": "uvicorn",
       "args": [
@@ -28,7 +28,7 @@
     },
     {
       "name": "Backend: API Server Script",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/backend/api_server.py",
       "args": [
@@ -47,7 +47,7 @@
     },
     {
       "name": "Backend: Run Tests",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "module": "pytest",
       "args": [
@@ -74,7 +74,7 @@
     },
     {
       "name": "Backend: Docker Attach",
-      "type": "python",
+      "type": "debugpy",
       "request": "attach",
       "connect": {
         "host": "localhost",
