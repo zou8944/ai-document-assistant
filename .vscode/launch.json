@@ -1,0 +1,109 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Backend: FastAPI Dev Server",
+      "type": "python",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "api.main:app",
+        "--reload",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8888",
+        "--log-level",
+        "debug"
+      ],
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/backend",
+        "OPENAI_API_KEY": "${input:openaiApiKey}",
+        "OPENAI_BASE_URL": "https://api.siliconflow.cn/v1",
+        "LOG_LEVEL": "debug"
+      },
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Backend: API Server Script",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/api_server.py",
+      "args": [
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8888"
+      ],
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/backend",
+        "OPENAI_API_KEY": "${input:openaiApiKey}",
+        "OPENAI_BASE_URL": "https://api.siliconflow.cn/v1"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Backend: Run Tests",
+      "type": "python",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "tests/",
+        "-v",
+        "-s"
+      ],
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/backend"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Frontend: Chrome Debug",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/frontend/src",
+      "sourceMapPathOverrides": {
+        "webpack:///src/*": "${webRoot}/*"
+      },
+      "preLaunchTask": "npm: dev - frontend"
+    },
+    {
+      "name": "Backend: Docker Attach",
+      "type": "python",
+      "request": "attach",
+      "connect": {
+        "host": "localhost",
+        "port": 5678
+      },
+      "pathMappings": [
+        {
+          "localRoot": "${workspaceFolder}/backend",
+          "remoteRoot": "/app"
+        }
+      ]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full Stack: Backend + Frontend",
+      "configurations": [
+        "Backend: FastAPI Dev Server",
+        "Frontend: Chrome Debug"
+      ],
+      "stopAll": true
+    }
+  ],
+  "inputs": [
+    {
+      "id": "openaiApiKey",
+      "type": "promptString",
+      "description": "Enter your OpenAI API Key",
+      "default": "sk-"
+    }
+  ]
+}

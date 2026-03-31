@@ -41,11 +41,14 @@ release/
 
 # IDEs
 .idea/
-.vscode/
+# .vscode/  # Shared for unified development environment
 *.swp
 *.swo
 *~
 .DS_Store
+
+# Claude local settings (commands are shared)
+.claude/settings.local.json
 
 # Project specific
 qdrant_data/

@@ -4,7 +4,7 @@
 
 ---
 ## 1. 项目概述
-AI 文档阅读助手：聚合 本地文件 / 文件夹 / 网站 作为知识来源，利用 RAG（Retrieval-Augmented Generation）实现精准问答。前端为 Electron + React + Tailwind 桌面应用，后端为 Python 服务（爬虫 + 数据处理 + 向量存储 + RAG 检索）。
+AI 文档阅读助手：聚合 本地文件 / 文件夹 / 网站 作为知识来源，利用 RAG（Retrieval-Augmented Generation）实现精准问答。前端为 React + Tailwind Web 应用(使用 Docker 部署)，后端为 Python 服务（爬虫 + 数据处理 + 向量存储 + RAG 检索）。
 
 核心路径与模块：
 - 后端：`backend/`
@@ -16,8 +16,10 @@ AI 文档阅读助手：聚合 本地文件 / 文件夹 / 网站 作为知识来
   - 启动入口：`api_server.py`
   - 服务层：`services/`（collection / document / query）
   - 数据模型：`models/`（Pydantic 请求/响应/流式）
-- 前端：`frontend/` (Electron + React + TS + Tailwind)
+  - Docker 配置：`Dockerfile`, 通过环境变量配置（OPENAI_API_KEY, CHROMA_HOST等）
+- 前端：`frontend/` (React + TS + Tailwind Web 应用)
   - 组件：`src/components/`
+  - Docker 配置：`Dockerfile` + `nginx.conf`（Nginx提供静态文件服务和反向代理）
   - 状态与服务：`src/store/`, `src/services/`
   - 入口：`src/main.tsx`, `App.tsx`
 
@@ -71,15 +73,23 @@ AI 文档阅读助手：聚合 本地文件 / 文件夹 / 网站 作为知识来
 - 状态：全局状态（如当前 collection / 索引状态 / 查询历史）集中在 `store/`（可用 Zustand / Redux，视已选方案）。
 - 服务：所有与后端交互在 `src/services/`，禁止直接在组件中 fetch。
 
-### 4.2 Electron
-- 主进程与渲染进程通信使用 `contextBridge` + 安全的 IPC 通道；禁止 `nodeIntegration: true`。
-- 后端 Python 进程生命周期：启动/退出应有统一管理（如 `processManager.ts`）。
 
-### 4.3 样式
+### 4.2 Docker 部署
+- 项目使用 Docker Compose 编排三个服务：frontend (Nginx)、backend (FastAPI)、chroma (向量数据库)。
+- 后端通过环境变量配置（`OPENAI_API_KEY`, `CHROMA_HOST`, `DATA_DIR` 等）,优先级:环境变量 > 配置文件 > 默认值。
+- 前端通过 Nginx 提供静态文件服务,并反向代理 `/api/` 到后端服务。
+- 本地开发:后端使用 `uv run python api_server.py`,前端使用 `npm run dev`,Chroma 可用容器或本地客户端。
+- 生产部署:使用 `docker-compose up -d` 启动所有服务。
+
+### 4.3 后端服务管理
+- 后端服务健康检查：`/api/v1/health` 端点,前端通过定时轮询监控连接状态。
+- 服务发现：Docker 环境使用服务名（如 `backend:8888`）,本地开发使用 `localhost:8888`。
+- 进程管理：`processManager.ts` 负责健康检查和状态管理（已从 Electron IPC 改为 HTTP 轮询）。
+### 4.4 样式
 - Tailwind class 顺序：布局 > 尺寸 > 间距 > 边框 > 背景/模糊 > 排版 > 动画。
 - 玻璃拟态参考：`backdrop-blur-*` + 半透明白/深色渐变 + subtle border (`border-white/10`).
 
-### 4.4 测试
+### 4.5 测试
 - 使用 Vitest / Jest + React Testing Library；关键交互（提问、加载、错误态）需测试。
 - Snapshot 仅用于稳定、低变动组件；其余断言使用语义查询（`getByRole` 等）。
 

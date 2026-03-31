@@ -1,0 +1,33 @@
+{
+  "recommendations": [
+    // Python
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-python.black-formatter",
+    "charliermarsh.ruff",
+
+    // TypeScript/React
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "dsznajder.es7-react-js-snippets",
+
+    // Docker
+    "ms-azuretools.vscode-docker",
+
+    // 通用
+    "eamodio.gitlens",
+    "christian-kohler.path-intellisense",
+    "usernamehw.errorlens",
+    "streetsidesoftware.code-spell-checker",
+
+    // API 测试
+    "humao.rest-client",
+
+    // 数据格式
+    "tamasfe.even-better-toml",
+    "redhat.vscode-yaml",
+
+    // Markdown
+    "yzhang.markdown-all-in-one"
+  ]
+}
