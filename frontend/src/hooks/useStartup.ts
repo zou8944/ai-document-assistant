@@ -76,7 +76,7 @@ export const useStartup = () => {
       // Try to wait for server with timeout
       processManager.waitForServer(30000)
         .then(() => {
-          // Server is ready, onServerReady will be called by event
+          onServerReady()
         })
         .catch((error) => {
           setState({

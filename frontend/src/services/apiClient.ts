@@ -702,8 +702,8 @@ let apiClientInstance: DocumentAssistantAPI | null = null
 
 export const getAPIClient = (): DocumentAssistantAPI => {
   if (!apiClientInstance) {
-    // Default URL - will be updated when API server starts
-    apiClientInstance = new DocumentAssistantAPI('http://127.0.0.1:8000')
+    // Use empty string to route through Vite proxy (avoids CORS)
+    apiClientInstance = new DocumentAssistantAPI('')
   }
   return apiClientInstance
 }

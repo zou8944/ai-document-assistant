@@ -67,17 +67,16 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Add CORS middleware
+# Add unified response middleware (inner)
+app.add_middleware(UnifiedResponseMiddleware)
+
+# Add CORS middleware last so it wraps everything and always injects CORS headers
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify allowed origins
-    allow_credentials=True,
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Add unified response middleware
-app.add_middleware(UnifiedResponseMiddleware)
 
 
 # Include routers with versioned API prefix

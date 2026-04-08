@@ -8,7 +8,6 @@
       "module": "uvicorn",
       "args": [
         "api.main:app",
-        "--reload",
         "--host",
         "127.0.0.1",
         "--port",
@@ -62,15 +61,13 @@
       "console": "integratedTerminal"
     },
     {
-      "name": "Frontend: Chrome Debug",
-      "type": "chrome",
+      "name": "Frontend: Dev Server",
+      "type": "node",
       "request": "launch",
-      "url": "http://localhost:5173",
-      "webRoot": "${workspaceFolder}/frontend/src",
-      "sourceMapPathOverrides": {
-        "webpack:///src/*": "${webRoot}/*"
-      },
-      "preLaunchTask": "npm: dev - frontend"
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "${workspaceFolder}/frontend",
+      "console": "integratedTerminal"
     },
     {
       "name": "Backend: Docker Attach",
@@ -93,7 +90,7 @@
       "name": "Full Stack: Backend + Frontend",
       "configurations": [
         "Backend: FastAPI Dev Server",
-        "Frontend: Chrome Debug"
+        "Frontend: Dev Server"
       ],
       "stopAll": true
     }
