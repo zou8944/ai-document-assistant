@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy import func, select
 
 from database.connection import session_context
-from models.database.collection import Collection
+from database.models.collection import Collection
 from models.dto import CollectionDTO
 from repository.base import BaseRepository
 
@@ -32,7 +32,7 @@ class CollectionRepository(BaseRepository[Collection, CollectionDTO]):
                 return None
 
             # Update document count from actual documents
-            from models.database.document import Document
+            from database.models.document import Document
             doc_count = session.scalar(
                 select(func.count(Document.id)).where(
                     Document.collection_id == collection_id
@@ -40,7 +40,7 @@ class CollectionRepository(BaseRepository[Collection, CollectionDTO]):
             ) or 0
 
             # Update chunk count from actual chunks
-            from models.database.document import DocumentChunk
+            from database.models.document import DocumentChunk
             vector_count = session.scalar(
                 select(func.count(DocumentChunk.id)).where(
                     DocumentChunk.collection_id == collection_id
@@ -63,7 +63,7 @@ class CollectionRepository(BaseRepository[Collection, CollectionDTO]):
                 return False
 
             # Count documents
-            from models.database.document import Document
+            from database.models.document import Document
             doc_count = session.scalar(
                 select(func.count(Document.id)).where(
                     Document.collection_id == collection_id
@@ -71,7 +71,7 @@ class CollectionRepository(BaseRepository[Collection, CollectionDTO]):
             ) or 0
 
             # Count chunks/vectors
-            from models.database.document import DocumentChunk
+            from database.models.document import DocumentChunk
             vector_count = session.scalar(
                 select(func.count(DocumentChunk.id)).where(
                     DocumentChunk.collection_id == collection_id

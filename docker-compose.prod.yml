@@ -22,6 +22,16 @@ services:
           cpus: '1'
           memory: 1G
 
+  postgres:
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
   chroma:
     deploy:
       resources:

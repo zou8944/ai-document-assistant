@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy import func, select
 
 from database.connection import session_context
-from models.database.chat import Chat, ChatMessage
+from database.models.chat import Chat, ChatMessage
 from models.dto import ChatDTO, ChatMessageDTO
 from repository.base import BaseRepository
 

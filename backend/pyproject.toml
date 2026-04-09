@@ -29,6 +29,7 @@ dependencies = [
     # Database ORM
     "sqlalchemy>=2.0.0",
     "alembic>=1.13.0",
+    "psycopg2-binary>=2.9.0",
     # Vector store
     "chromadb>=0.4.24",
     # Web crawling

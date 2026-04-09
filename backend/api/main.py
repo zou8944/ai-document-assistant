@@ -11,8 +11,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.middleware import UnifiedResponseMiddleware
 from api.routes import chats, collections, documents, health, ingest, settings, tasks
 from api.state import AppState, get_app_state_direct, set_app_state
+from alembic import command
+from alembic.config import Config
+
 from config import get_config
-from database.connection import create_tables
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +27,10 @@ async def lifespan(app: FastAPI):
         # Initialize configuration
         config = get_config()
 
-        # Initialize database
-        logger.info("Initializing database...")
-        create_tables()
+        # Run database migrations
+        logger.info("Running database migrations...")
+        alembic_cfg = Config("alembic.ini")
+        command.upgrade(alembic_cfg, "head")
 
         # Initialize services
         logger.info("Initializing services...")

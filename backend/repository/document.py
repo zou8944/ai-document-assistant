@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy import func, select
 
 from database.connection import session_context
-from models.database.document import Document, DocumentChunk
+from database.models.document import Document, DocumentChunk
 from models.dto import DocumentChunkDTO, DocumentDTO
 from repository.base import BaseRepository
 

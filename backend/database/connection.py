@@ -1,49 +1,26 @@
 """Database connection and session management."""
 
+import os
 from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Optional
 
-from sqlalchemy import create_engine, event
-from sqlalchemy.engine import Engine
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from config import get_config
 from database.base import Base
 
-
-def _configure_sqlite(dbapi_connection, connection_record):
-    """Configure SQLite-specific settings."""
-    _ = connection_record  # Unused parameter
-    cursor = dbapi_connection.cursor()
-    # Enable WAL mode for better concurrency
-    cursor.execute("PRAGMA journal_mode=WAL")
-    # Set cache size (64MB)
-    cursor.execute("PRAGMA cache_size=16384")
-    # Enable foreign key constraints
-    cursor.execute("PRAGMA foreign_keys=ON")
-    # Set synchronous mode to NORMAL
-    cursor.execute("PRAGMA synchronous=NORMAL")
-    # Optimize temporary storage
-    cursor.execute("PRAGMA temp_store=MEMORY")
-    cursor.close()
-
-
-# Get database configuration
-conf = get_config()
-DATABASE_URL = f"sqlite:///{conf.get_app_db_path()}"
+DATABASE_URL = os.environ["DATABASE_URL"]
 
 # Create engine
 engine = create_engine(
     DATABASE_URL,
-    echo=False,  # Can be controlled via log level if needed
+    echo=False,
     pool_pre_ping=True,
-    connect_args={"check_same_thread": False},
+    pool_size=5,
+    max_overflow=10,
 )
-
-# Configure SQLite optimizations
-event.listen(Engine, "connect", _configure_sqlite)
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

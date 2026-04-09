@@ -6,7 +6,7 @@ from typing import Optional
 from sqlalchemy import func, select
 
 from database.connection import session_context
-from models.database.task import Task, TaskLog
+from database.models.task import Task, TaskLog
 from models.dto import TaskDTO, TaskLogDTO
 from repository.base import BaseRepository
 

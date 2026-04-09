@@ -28,13 +28,14 @@ services:
       - CHROMA_PORT=8000
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL}
-      - DATABASE_URL=sqlite:////app/data/app.db
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ai_document_assistant}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     volumes:
-      - backend-data:/app/data
       - backend-logs:/app/logs
     depends_on:
       chroma:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     networks:
       - app-network
@@ -45,6 +46,28 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:16-alpine
+    container_name: ai-doc-assistant-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-ai_document_assistant}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-ai_document_assistant}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # Chroma 向量数据库
   chroma:
@@ -71,6 +94,6 @@ networks:
     driver: bridge
 
 volumes:
-  backend-data:
   backend-logs:
+  postgres-data:
   chroma-data:

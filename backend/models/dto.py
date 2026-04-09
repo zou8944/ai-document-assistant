@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Generic, Protocol, TypeVar
 
 from database.base import Base
-from models.database import (
+from database.models import (
     Chat,
     ChatMessage,
     Collection,

@@ -1,4 +1,5 @@
 from logging.config import fileConfig
+import os
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
@@ -7,19 +8,14 @@ from sqlalchemy import engine_from_config, pool
 from database.base import Base
 
 # Import all models to ensure they are registered with SQLAlchemy
-from models.database import Collection, Document, DocumentChunk, Task, TaskLog, Chat, ChatMessage
-
-# Import configuration
-from config import get_config
+from database.models import Collection, Document, DocumentChunk, Task, TaskLog, Chat, ChatMessage, Settings  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
-# Set database URL from configuration
-conf = get_config()
-database_url = f"sqlite:///{conf.get_app_db_path()}"
-config.set_main_option("sqlalchemy.url", database_url)
+# Set database URL from environment variable
+config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
