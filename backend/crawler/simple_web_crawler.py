@@ -4,8 +4,8 @@ Lightweight solution for basic document crawling with domain restrictions.
 """
 
 import logging
-import os
 import time
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 from urllib.parse import urldefrag, urljoin, urlparse
@@ -18,6 +18,8 @@ from models.config import AppConfig, KnowledgeBaseConfig
 
 logger = logging.getLogger(__name__)
 
+SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
+
 
 @dataclass
 class SimpleCrawlResult:
@@ -26,6 +28,7 @@ class SimpleCrawlResult:
     url: str
     title: str
     content: str
+    html_content: str
     links: list[str]
     success: bool
     error: Optional[str] = None
@@ -37,10 +40,8 @@ class SimpleWebCrawler:
     Fast and lightweight for basic document crawling needs.
     """
 
-    def __init__(self, cache_dir: str, config: AppConfig):
+    def __init__(self, config: AppConfig):
         """Initialize crawler with basic settings"""
-        self.cache_dir = cache_dir
-        self.default_max_depth = 0
         self.delay = 1.0
         self.max_pages = config.knowledge_base.max_crawl_pages
 
@@ -57,9 +58,7 @@ class SimpleWebCrawler:
         self.session = requests.Session()
         self.session.headers.update(self.headers)
 
-        logger.info(
-            f"Initialized SimpleWebCrawler with max_depth={self.default_max_depth}, delay={self.delay}s, max_pages={self.max_pages}"
-        )
+        logger.info(f"Initialized SimpleWebCrawler with delay={self.delay}s, max_pages={self.max_pages}")
 
     def _is_same_domain(self, url1: str, url2: str) -> bool:
         """Check if URLs are from the same domain"""
@@ -71,9 +70,12 @@ class SimpleWebCrawler:
             return False
 
     def _clean_url(self, url: str) -> str:
-        """Clean URL by removing fragments"""
+        """Normalize URL: remove fragment, query params and trailing slash."""
         url, _ = urldefrag(url)
-        return url.rstrip("/")
+        parsed = urlparse(url)
+        # Strip query params for canonical form; preserve scheme/netloc/path only
+        canonical = parsed._replace(query="", fragment="")
+        return canonical.geturl().rstrip("/")
 
     def _is_valid_url(self, url: str) -> bool:
         """Check if URL is valid"""
@@ -84,7 +86,7 @@ class SimpleWebCrawler:
             return False
 
     def _extract_content(self, html: str, url: str) -> tuple[str, str, list[str]]:
-        """Extract title, content and links from HTML"""
+        """Extract title, markdown content and links from HTML"""
         soup = BeautifulSoup(html, "lxml")
 
         # Extract title
@@ -106,7 +108,6 @@ class SimpleWebCrawler:
         a_tags = soup.find_all("a")
 
         for link in a_tags:
-            # type assertion
             if not isinstance(link, Tag):
                 continue
 
@@ -128,110 +129,137 @@ class SimpleWebCrawler:
             # Validate URL and check if it's from the same domain
             if self._is_valid_url(absolute_url) and self._is_same_domain(url, absolute_url):
                 clean_url = self._clean_url(absolute_url)
-                if (clean_url and clean_url not in links and clean_url != self._clean_url(url)):
+                if clean_url and clean_url not in links and clean_url != self._clean_url(url):
                     links.append(clean_url)
 
         return title, markdown_content, links
 
-    def _fetch_page_with_cache(self, url: str, force_crawl: bool) -> SimpleCrawlResult:
-        cache_file = self._parse_url_to_cache_file(url)
-
-        html_content = ""
-        if os.path.exists(cache_file) and not force_crawl:
-            logger.info(f"Loading from cache: {cache_file}")
-            with open(cache_file, encoding="utf-8") as f:
-                html_content = f.read()
-        else:
-            response = self.session.get(url, timeout=30)
-            response.raise_for_status()
-            html_content = response.text
-
-            os.makedirs(os.path.dirname(cache_file), exist_ok=True)
-            with open(cache_file, "w", encoding="utf-8") as f:
-                f.write(html_content)
-
+    def _fetch_page(self, url: str) -> SimpleCrawlResult:
+        """Fetch a page from the network and return its content."""
+        response = self.session.get(url, timeout=30)
+        response.raise_for_status()
+        html_content = response.text
         title, content, links = self._extract_content(html_content, url)
-        return SimpleCrawlResult(url=url, title=title, content=content, links=links, success=True)
+        return SimpleCrawlResult(
+            url=url,
+            title=title,
+            content=content,
+            html_content=html_content,
+            links=links,
+            success=True,
+        )
 
-    def _parse_url_to_cache_file(self, url: str) -> str:
-        parsed_url = urlparse(self._clean_url(url))
-        url_domain = parsed_url.netloc.replace("www.", "")
-        path = parsed_url.path.strip("/")
-        if not path:
-            path = "index.html"
-        else:
-            path = f"{path}.html"
-        splites = path.split("/")
-        return os.path.join(self.cache_dir, url_domain, *splites)
+    def _try_sitemap(self, base_url: str, recursive_prefix: str, exclude_urls: list[str]) -> list[str]:
+        """Try to fetch sitemap.xml and return filtered URLs. Returns empty list on failure."""
+        parsed = urlparse(base_url)
+        sitemap_url = f"{parsed.scheme}://{parsed.netloc}/sitemap.xml"
+        try:
+            response = self.session.get(sitemap_url, timeout=10)
+            response.raise_for_status()
+            root = ET.fromstring(response.text)
+            urls = []
+            for loc in root.iter(f"{{{SITEMAP_NS}}}loc"):
+                if not loc.text:
+                    continue
+                url = self._clean_url(loc.text.strip())
+                if (
+                    self._is_valid_url(url)
+                    and (not recursive_prefix or url.startswith(recursive_prefix))
+                    and url not in exclude_urls
+                ):
+                    urls.append(url)
+            logger.info(f"Found {len(urls)} URLs in sitemap.xml at {sitemap_url}")
+            return urls
+        except Exception as e:
+            logger.info(f"sitemap.xml not available at {sitemap_url}: {e}")
+            return []
 
-    def crawl_single_url(self, url: str, force_crawl: bool = False) -> SimpleCrawlResult:
+    def crawl_single_url(self, url: str) -> SimpleCrawlResult:
         """Crawl a single URL"""
-        return self._fetch_page_with_cache(url, force_crawl)
+        return self._fetch_page(url)
 
     def crawl_recursive(
         self,
-        urls: list[str], exclude_urls: list[str] = [],
+        urls: list[str],
+        exclude_urls: Optional[list[str]] = None,
         recursive_prefix: str = "",
-        max_depth: int = 1,
-        force_crawl: bool = False,
-        progress_callback: Optional[Callable[[str, int, int], None]] = None
+        skip_urls: Optional[set[str]] = None,
+        progress_callback: Optional[Callable[[str, int, int], None]] = None,
     ) -> list[SimpleCrawlResult]:
-        """Crawl multiple pages within the same domain with improved queue management"""
-        results = []
-        to_crawl = [(url, 0) for url in urls]  # (url, depth)
-        crawled_urls = set()
-        failed_urls = set()
+        """
+        Crawl all pages within the same domain.
+        First tries sitemap.xml for URL discovery; falls back to BFS via <a> tags.
+        No depth limit — crawls every reachable page up to max_pages.
+
+        skip_urls: URLs already stored in the database; skipped without fetching.
+        """
+        if exclude_urls is None:
+            exclude_urls = []
+        if skip_urls is None:
+            skip_urls = set()
+
+        crawled_urls: set[str] = set()
+        failed_urls: set[str] = set()
+        results: list[SimpleCrawlResult] = []
+
+        # URL discovery — prefer sitemap.xml, fall back to BFS seed
+        sitemap_urls = self._try_sitemap(urls[0] if urls else recursive_prefix, recursive_prefix, exclude_urls)
+        if sitemap_urls:
+            to_crawl = list(dict.fromkeys(sitemap_urls))  # deduplicate, preserve order
+            logger.info(f"Using sitemap.xml: {len(to_crawl)} URLs queued")
+        else:
+            to_crawl = list(urls)
+            logger.info("No sitemap.xml found, starting BFS from provided URLs")
 
         while to_crawl and len(results) < self.max_pages:
-            url, depth = to_crawl.pop(0)
+            url = to_crawl.pop(0)
 
-            # Skip if already processed
-            if url in crawled_urls or url in failed_urls:
-                continue
-
-            # Skip if exceed max depth
-            if depth > max_depth:
+            if url in crawled_urls or url in failed_urls or url in skip_urls:
                 continue
 
             crawled_urls.add(url)
 
-            # Progress callback
-            logger.info(f"Crawling {url}, depth {depth}, crawled: {len(results)}, remaining: {len(to_crawl)}")
+            logger.info(f"Crawling {url} | done: {len(results)} | queued: {len(to_crawl)}")
             if progress_callback:
                 progress_callback(url, len(results), len(results) + len(to_crawl))
 
-            # Fetch page
-            result = self._fetch_page_with_cache(url, force_crawl)
-            results.append(result)
-
-            # Handle failed requests
-            if not result.success:
+            try:
+                result = self._fetch_page(url)
+            except Exception as e:
                 failed_urls.add(url)
-                logger.warning(f"Failed to crawl {url}: {result.error}")
+                results.append(SimpleCrawlResult(
+                    url=url, title="", content="", html_content="",
+                    links=[], success=False, error=str(e),
+                ))
+                logger.warning(f"Failed to crawl {url}: {e}")
                 time.sleep(self.delay)
                 continue
 
-            # Handle success requests.
+            results.append(result)
+
+            if not result.success:
+                failed_urls.add(url)
+                time.sleep(self.delay)
+                continue
+
+            # Discover new links for BFS
             for link in result.links:
-                # If the link is already crawled or failed, skip it
-                if link in crawled_urls or link in failed_urls:
+                if link in crawled_urls or link in failed_urls or link in skip_urls:
                     continue
-                # If the link is in the exclude list, skip it
                 if link in exclude_urls:
                     continue
-                # If the link does not start with the recursive prefix, skip it
-                if not link.startswith(recursive_prefix):
+                if recursive_prefix and not link.startswith(recursive_prefix):
                     continue
-                # If the link is already in the crawl queue, skip it
-                if any(existing_url == link for existing_url, _ in to_crawl):
+                if any(queued == link for queued in to_crawl):
                     continue
-                # Queue it
-                to_crawl.append((link, depth + 1))
+                to_crawl.append(link)
 
-            # Rate limiting
             time.sleep(self.delay)
 
-        logger.info(f"Crawled {len(results)} pages successfully ({len([r for r in results if r.success])} successful)")
+        logger.info(
+            f"Crawl complete: {len(results)} pages total, "
+            f"{len([r for r in results if r.success])} successful"
+        )
         return results
 
     def get_crawl_stats(self, results: list[SimpleCrawlResult]) -> dict[str, Any]:
@@ -251,10 +279,7 @@ class SimpleWebCrawler:
 
 
 def create_simple_web_crawler(config: AppConfig) -> SimpleWebCrawler:
-    return SimpleWebCrawler(
-        cache_dir=AppConfig.get_crawl_cache_dir().absolute().__str__(),
-        config=config,
-    )
+    return SimpleWebCrawler(config=config)
 
 
 if __name__ == "__main__":
@@ -265,8 +290,6 @@ if __name__ == "__main__":
         results = crawler.crawl_recursive(
             urls=["https://docs.crawl4ai.com/core/page-interaction/"],
             recursive_prefix="https://docs.crawl4ai.com/core/",
-            max_depth=2,
-            force_crawl=True,
         )
         for result in results:
             print("-----")
@@ -274,9 +297,5 @@ if __name__ == "__main__":
             print(result.title)
             print("success:", result.success)
             print("error:", result.error)
-            print("Links:")
-            # for link in result.links:
-            #     print(link)
 
     main()
-

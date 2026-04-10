@@ -113,6 +113,10 @@ class CollectionService:
 
         logger.info(f"Deleted collection '{collection_id}'")
 
+    async def update_sitemap(self, collection_id: str, sitemap_json: str) -> None:
+        """Store AI-generated sitemap JSON on the collection."""
+        self.collection_repo.update(collection_id, sitemap_json=sitemap_json)
+
     async def refresh_collection_summary(self, collection_id: str):
         docs = self.doc_repo.get_by_collection(collection_id)
         doc_summaries = [doc.summary for doc in docs if doc.summary]

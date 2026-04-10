@@ -588,72 +588,72 @@ class TaskService:
         collection_id: str,
         input_params: dict[str, Any]
     ):
-        """Process URL ingestion task with full web crawling integration"""
+        """Process URL ingestion task: crawl → store → rewrite links → generate sitemap"""
         self._log_info_task(task_id, "Starting URL ingestion")
 
-        # Get parameters from input
         urls = input_params["urls"]
         exclude_urls = input_params["exclude_urls"]
         recursive_prefix = input_params["recursive_prefix"]
-        max_depth = input_params["max_depth"]
         override = input_params["override"]
 
         if not urls:
             raise ValueError("No URLs specified for ingestion")
 
-        # init zero stats
         stats = UrlTaskStats()
-
         self.update_url_task_progress(task_id, stats)
 
-        # Crawl this url, tracking progress asynchronously
-        def progress_callback(current_url, completed, total):
+        def progress_callback(current_url: str, completed: int, total: int) -> None:
             stats.urls_crawled = completed
             stats.urls_crawl_total = total
             self.update_url_task_progress(task_id, stats)
             self._log_info_task(task_id, f"Crawling page {completed + 1}/{total}: {current_url}")
 
-        crawl_results = self.web_crawler.crawl_recursive(
-            urls, exclude_urls, recursive_prefix, max_depth, progress_callback=progress_callback
-        )
-        successful_results = [r for r in crawl_results if r.success]
+        # When not overriding, skip URLs already stored in DB for this collection
+        skip_urls: set[str] = set()
+        if not override:
+            existing_docs = self.doc_repo.get_by_collection(collection_id)
+            skip_urls = {d.uri for d in existing_docs if d.uri}
 
-        # Process each crawled page
-        for crawl_result in successful_results:
+        crawl_results = self.web_crawler.crawl_recursive(
+            urls, exclude_urls, recursive_prefix,
+            skip_urls=skip_urls,
+            progress_callback=progress_callback,
+        )
+
+        # Store each crawled page (no RAG / chunking)
+        for crawl_result in crawl_results:
             await self._process_single_page(task_id, collection_id, crawl_result, override)
             stats.pages_total += 1
             self.update_url_task_progress(task_id, stats)
 
+        # Phase 2: rewrite in-page links to local routes
+        await self._rewrite_html_links(task_id, collection_id)
+
+        # Phase 3: generate AI sitemap
+        await self._generate_sitemap(task_id, collection_id)
+
         self.task_repo.mark_completed(task_id, True)
         self._log_info_task(task_id, "URL ingestion completed")
 
-    async def _process_single_page(self, task_id: str, collection_id: str, crawl_result: SimpleCrawlResult, override: bool):
-        """Process a single crawled page and return status"""
-
-        self._log_info_task(task_id, f"Summarizing content for: {crawl_result.url}")
-        summary = self.llm_service.summarize_document(crawl_result.content) if crawl_result.success else ""
-
-        # if crawl fail, create a document with status "failed"
+    async def _process_single_page(
+        self, task_id: str, collection_id: str, crawl_result: SimpleCrawlResult, override: bool
+    ):
+        """Store a single crawled page. No RAG chunking or embedding."""
         if not crawl_result.success:
             self._log_err_task(task_id, f"Crawl failed for page: {crawl_result.url}")
-            await self._store_document(
+            await self._store_crawled_page(
                 collection_id=collection_id,
-                doc_page_uri=crawl_result.url,
-                doc_title=crawl_result.title,
-                doc_content=crawl_result.content,
-                doc_summary=summary,
-                doc_mime_type="text/html",
+                url=crawl_result.url,
+                title=crawl_result.title,
+                content=crawl_result.content,
+                html_content=crawl_result.html_content,
+                summary="",
                 doc_status="failed",
-                doc_error_message=crawl_result.error,
-                chunks=[],
-                chunk_embeddings=[]
+                error_message=crawl_result.error,
             )
             return
 
         page_url = crawl_result.url
-        self._log_info_task(task_id, f"Processing page: {page_url}")
-
-        # Check if document already exists
         exists = await self._check_document_exists(collection_id, page_url)
         if exists:
             if override:
@@ -662,40 +662,116 @@ class TaskService:
                 self._log_info_task(task_id, f"Skipping duplicate page: {page_url}")
                 return
         else:
-            self._log_info_task(task_id, f"New page detected: {page_url}")
+            self._log_info_task(task_id, f"Storing page: {page_url}")
 
-        doc_status= "indexed"
-        error_message = None
+        self._log_info_task(task_id, f"Summarizing: {page_url}")
+        summary = self.llm_service.summarize_document(crawl_result.content) if crawl_result.content else ""
 
-        # Chunk and embedding
-        chunks = []
-        chunk_embeddings = []
-        if crawl_result.content:
-            try:
-                chunks = self.document_processor.process_web_content(page_url, crawl_result.content, crawl_result.title)
-                texts = [chunk.content for chunk in chunks]
-                chunk_embeddings = await self.llm_service.embed_documents(texts)
-            except Exception as e:
-                doc_status = "failed"
-                error_message = f"Embedding failed: {str(e)}"
-                self._log_err_task(task_id, error_message)
-
-        # persist
         try:
-            await self._store_document(
+            await self._store_crawled_page(
                 collection_id=collection_id,
-                doc_page_uri=page_url,
-                doc_title=crawl_result.title,
-                doc_content=crawl_result.content,
-                doc_summary=summary,
-                doc_mime_type="text/markdown",
-                doc_status=doc_status,
-                doc_error_message=error_message,
-                chunks=chunks,
-                chunk_embeddings=chunk_embeddings
+                url=page_url,
+                title=crawl_result.title,
+                content=crawl_result.content,
+                html_content=crawl_result.html_content,
+                summary=summary,
+                doc_status="indexed",
+                error_message=None,
             )
         except Exception as e:
-            self._log_err_task(task_id, f"Storage failed for {page_url}: {str(e)}")
+            self._log_err_task(task_id, f"Storage failed for {page_url}: {e}")
+
+    async def _store_crawled_page(
+        self,
+        collection_id: str,
+        url: str,
+        title: str,
+        content: str,
+        html_content: str,
+        summary: str,
+        doc_status: str,
+        error_message: str | None,
+    ):
+        """Persist a crawled page to the database. No Chroma / no chunks."""
+        from urllib.parse import urlparse as _urlparse
+
+        # Remove existing record if any (override case)
+        exist_doc = self.doc_repo.find_by_uri(collection_id, url)
+        if exist_doc:
+            assert exist_doc.id
+            self.doc_chunk_repo.delete_by_document(exist_doc.id)
+            self.doc_repo.delete_by_id(exist_doc.id)
+
+        source_path = _urlparse(url).path or "/"
+
+        doc_record = DocumentDTO(
+            id=uuid.uuid4().hex,
+            collection_id=collection_id,
+            name=title or f"Page from {url}",
+            uri=url,
+            content=content,
+            html_content=html_content,
+            summary=summary,
+            source_path=source_path,
+            size_bytes=len(content.encode()) if content else 0,
+            mime_type="text/markdown",
+            chunk_count=0,
+            status=doc_status,
+            error_message=error_message,
+            hash_md5=hashlib.md5(f"{url}:{title}:{content}".encode()).hexdigest(),
+        )
+        self.doc_repo.create_by_model(doc_record)
+
+    async def _rewrite_html_links(self, task_id: str, collection_id: str):
+        """Phase 2: rewrite <a href> in stored HTML to local docs/{collection_id}/{source_path} routes."""
+        from bs4 import BeautifulSoup
+
+        self._log_info_task(task_id, "Rewriting HTML links...")
+        docs = self.doc_repo.get_by_collection(collection_id)
+
+        # Build mapping: canonical URI → source_path for all crawled docs
+        uri_to_path: dict[str, str] = {
+            d.uri: d.source_path
+            for d in docs
+            if d.uri and d.source_path
+        }
+
+        rewritten = 0
+        for doc in docs:
+            if not doc.id or not doc.html_content:
+                continue
+            soup = BeautifulSoup(doc.html_content, "lxml")
+            changed = False
+            for a_tag in soup.find_all("a", href=True):
+                href = str(a_tag["href"]).rstrip("/")
+                target_path = uri_to_path.get(href) or uri_to_path.get(href + "/")
+                if target_path:
+                    a_tag["href"] = f"docs/{collection_id}/{target_path.lstrip('/')}"
+                    changed = True
+            if changed:
+                self.doc_repo.update(doc.id, html_content=str(soup))
+                rewritten += 1
+
+        self._log_info_task(task_id, f"Link rewriting complete: {rewritten} pages updated")
+
+    async def _generate_sitemap(self, task_id: str, collection_id: str):
+        """Phase 3: build URL-path tree and enrich with LLM descriptions; store as sitemap_json."""
+        self._log_info_task(task_id, "Generating AI sitemap...")
+        docs = self.doc_repo.get_by_collection(collection_id)
+        crawled = [d for d in docs if d.source_path]
+
+        if not crawled:
+            self._log_info_task(task_id, "No crawled pages found, skipping sitemap generation")
+            return
+
+        pages = [{"path": d.source_path, "title": d.name or ""} for d in crawled]
+
+        try:
+            sitemap_json = await self.llm_service.generate_sitemap(pages)
+            await self.collection_service.update_sitemap(collection_id, sitemap_json)
+            self._log_info_task(task_id, "Sitemap stored successfully")
+        except Exception as e:
+            self._log_err_task(task_id, f"Sitemap generation failed: {e}")
 
     def close(self):
         """Close connections and cleanup resources"""

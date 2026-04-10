@@ -84,6 +84,32 @@ class LLMService:
             if content:
                 yield content
 
+    # ==================== Sitemap Generation ====================
+
+    async def generate_sitemap(self, pages: list[dict]) -> str:
+        """
+        Given a list of {path, title} dicts, ask the LLM to add a short description
+        and category for each page. Returns a JSON string.
+        """
+        pages_text = "\n".join(f"- {p['path']}: {p['title']}" for p in pages)
+        prompt = f"""You are analyzing a documentation website's pages.
+Given the page paths and titles below, respond with ONLY a JSON object in this exact format:
+{{
+  "pages": [
+    {{"path": "/example/path", "description": "1-2 sentence description.", "category": "Category name"}},
+    ...
+  ]
+}}
+
+Rules:
+- description: 1-2 sentences describing what the page covers
+- category: short label grouping similar pages (e.g. "Getting Started", "API Reference", "Configuration")
+- Output ONLY valid JSON, no markdown fences, no extra text
+
+Pages:
+{pages_text}"""
+        return await self.invoke_llm(prompt)
+
     # ==================== Direct LLM Access ====================
 
     async def invoke_llm(self, prompt: str, **kwargs) -> str:
