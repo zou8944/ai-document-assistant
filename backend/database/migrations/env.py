@@ -1,14 +1,14 @@
-from logging.config import fileConfig
 import os
+from logging.config import fileConfig
 
 from alembic import context
+from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
-# Import our database models for autogenerate support
-from database.base import Base
+load_dotenv()
 
-# Import all models to ensure they are registered with SQLAlchemy
-from database.models import Collection, Document, DocumentChunk, Task, TaskLog, Chat, ChatMessage, Settings  # noqa: F401
+from database.base import Base  # noqa: E402
+from database.models import Collection, Document, DocumentChunk, Task, TaskLog, Chat, ChatMessage, Settings  # noqa: E402, F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

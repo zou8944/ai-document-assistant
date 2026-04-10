@@ -43,6 +43,11 @@ class Collection(Base):
         nullable=True,
         doc="Collection summary"
     )
+    sitemap_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        doc="AI-generated site tree structure (JSON), produced after full crawl"
+    )
 
     # Statistics (cached values)
     document_count: Mapped[int] = mapped_column(

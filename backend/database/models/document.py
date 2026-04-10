@@ -94,7 +94,18 @@ class Document(Base):
         Text,
         default="",
         server_default="",
-        doc="Document content"
+        doc="Document content (Markdown, used for RAG)"
+    )
+    html_content: Mapped[Optional[str]] = mapped_column(
+        Text,
+        doc="Rewritten HTML content for offline preview (crawled pages only)"
+    )
+
+    # Crawler metadata (crawled pages only)
+    source_path: Mapped[Optional[str]] = mapped_column(
+        Text,
+        doc="URL path component of the crawled page (e.g. /guide/intro), "
+            "used for link rewriting to docs/{collection_id}/{source_path}"
     )
 
     # Content hash for deduplication
