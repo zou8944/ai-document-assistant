@@ -14,8 +14,16 @@ from database.models import Collection, Document, DocumentChunk, Task, TaskLog, 
 # access to the values within the .ini file in use.
 config = context.config
 
-# Set database URL from environment variable
-config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
+# Build database URL from individual environment variables
+_host = os.environ["POSTGRES_HOST"]
+_port = os.environ.get("POSTGRES_PORT", "5432")
+_user = os.environ["POSTGRES_USER"]
+_password = os.environ["POSTGRES_PASSWORD"]
+_db = os.environ["POSTGRES_DB"]
+config.set_main_option(
+    "sqlalchemy.url",
+    f"postgresql://{_user}:{_password}@{_host}:{_port}/{_db}",
+)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

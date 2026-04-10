@@ -12,7 +12,7 @@ import uvicorn
 from dotenv import load_dotenv
 
 # Load .env before any config/env reads; no-op if file doesn't exist
-load_dotenv(Path(__file__).parent / ".env")
+load_dotenv(".env")
 
 import config  # noqa: E402
 

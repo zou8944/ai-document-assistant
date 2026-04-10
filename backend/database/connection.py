@@ -9,7 +9,12 @@ from typing import Optional
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-DATABASE_URL = os.environ["DATABASE_URL"]
+_host = os.environ["POSTGRES_HOST"]
+_port = os.environ.get("POSTGRES_PORT", "5432")
+_user = os.environ["POSTGRES_USER"]
+_password = os.environ["POSTGRES_PASSWORD"]
+_db = os.environ["POSTGRES_DB"]
+DATABASE_URL = f"postgresql://{_user}:{_password}@{_host}:{_port}/{_db}"
 
 # Create engine
 engine = create_engine(

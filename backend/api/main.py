@@ -4,17 +4,22 @@ FastAPI application main file.
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 
-from api.middleware import UnifiedResponseMiddleware
-from api.routes import chats, collections, documents, health, ingest, settings, tasks
-from api.state import AppState, get_app_state_direct, set_app_state
-from alembic import command
-from alembic.config import Config
+# Load .env before any config/env reads; no-op if file doesn't exist
+load_dotenv(Path(__file__).parent.parent / ".env")
 
-from config import get_config
+from alembic import command  # noqa: E402
+from alembic.config import Config  # noqa: E402
+from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+
+from api.middleware import UnifiedResponseMiddleware  # noqa: E402
+from api.routes import chats, collections, documents, health, ingest, settings, tasks  # noqa: E402
+from api.state import AppState, get_app_state_direct, set_app_state  # noqa: E402
+from config import get_config  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +57,10 @@ async def lifespan(app: FastAPI):
     finally:
         # Cleanup services
         logger.info("Shutting down services...")
-        state = get_app_state_direct(app)
+        try:
+            state = get_app_state_direct(app)
+        except AttributeError:
+            state = None
         if state:
             await state.task_service.stop_workers()
             state.chat_service.close()

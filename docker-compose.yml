@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # 前端服务
@@ -28,7 +28,7 @@ services:
     environment:
       - CHROMA_HOST=chroma
       - CHROMA_PORT=8000
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ai_document_assistant}
+      - POSTGRES_HOST=postgres
     volumes:
       - backend-logs:/app/logs
     depends_on:
@@ -60,7 +60,11 @@ services:
       - app-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-ai_document_assistant}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-ai_document_assistant}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
