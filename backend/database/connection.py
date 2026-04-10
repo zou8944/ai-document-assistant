@@ -9,8 +9,6 @@ from typing import Optional
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from database.base import Base
-
 DATABASE_URL = os.environ["DATABASE_URL"]
 
 # Create engine
@@ -74,13 +72,3 @@ class transaction:
         self.session.expunge_all()
         self.session.close()
         _current_session.set(None)
-
-
-def create_tables():
-    """Create all database tables."""
-    Base.metadata.create_all(bind=engine)
-
-
-def drop_tables():
-    """Drop all database tables."""
-    Base.metadata.drop_all(bind=engine)

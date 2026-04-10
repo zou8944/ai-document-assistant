@@ -9,8 +9,12 @@ import sys
 from pathlib import Path
 
 import uvicorn
+from dotenv import load_dotenv
 
-import config
+# Load .env before any config/env reads; no-op if file doesn't exist
+load_dotenv(Path(__file__).parent / ".env")
+
+import config  # noqa: E402
 
 # Add backend directory to Python path
 backend_dir = Path(__file__).parent
