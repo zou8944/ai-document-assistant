@@ -32,24 +32,25 @@ ai-document-assistant/
 │   ├── repository/          # 数据访问层
 │   ├── services/            # 业务逻辑层
 │   ├── vector_store/        # ChromaDB 客户端
-│   └── api_server.py        # 启动入口
+│   ├── api_server.py        # 启动入口
+│   └── .env.example         # 后端环境变量模板
 ├── frontend/                # React 前端
 │   ├── src/
-│   └── nginx.conf
+│   ├── nginx.conf
+│   └── .env.example         # 前端环境变量模板
 ├── docker-compose.yml
-├── docker-compose.prod.yml
-└── .env.example
+└── docker-compose.prod.yml
 ```
 
 ## 快速开始（Docker）
 
 ```bash
-# 1. 配置环境变量
-cp .env.example .env
-# 编辑 .env，至少填写 OPENAI_API_KEY
+# 1. 配置后端环境变量
+cp backend/.env.example backend/.env
+# 编辑 backend/.env，至少填写 OPENAI_API_KEY
 
 # 2. 启动所有服务
-docker compose up -d
+docker compose --env-file backend/.env up -d
 
 # 3. 访问应用
 open http://localhost
@@ -86,7 +87,7 @@ npm run dev
 
 ## 环境变量
 
-完整说明见 [.env.example](.env.example)，核心变量：
+完整说明见 [backend/.env.example](backend/.env.example)，核心变量：
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
@@ -122,12 +123,12 @@ docker compose down -v
 
 ```bash
 # 使用生产配置（含资源限制）
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose --env-file backend/.env -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 生产环境注意事项：
 - 必须配置 HTTPS（推荐用 Traefik 或 Caddy 作反向代理）
-- 修改 `.env` 中的默认数据库密码
+- 修改 `backend/.env` 中的默认数据库密码
 - 定期备份数据卷（见下方备份命令）
 
 ### 数据备份与恢复

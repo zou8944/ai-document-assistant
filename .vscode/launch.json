@@ -17,10 +17,7 @@
       ],
       "cwd": "${workspaceFolder}/backend",
       "env": {
-        "PYTHONPATH": "${workspaceFolder}/backend",
-        "OPENAI_API_KEY": "${input:openaiApiKey}",
-        "OPENAI_BASE_URL": "https://api.siliconflow.cn/v1",
-        "LOG_LEVEL": "debug"
+        "PYTHONPATH": "${workspaceFolder}/backend"
       },
       "console": "integratedTerminal",
       "justMyCode": false
@@ -38,9 +35,7 @@
       ],
       "cwd": "${workspaceFolder}/backend",
       "env": {
-        "PYTHONPATH": "${workspaceFolder}/backend",
-        "OPENAI_API_KEY": "${input:openaiApiKey}",
-        "OPENAI_BASE_URL": "https://api.siliconflow.cn/v1"
+        "PYTHONPATH": "${workspaceFolder}/backend"
       },
       "console": "integratedTerminal"
     },
@@ -95,12 +90,5 @@
       "stopAll": true
     }
   ],
-  "inputs": [
-    {
-      "id": "openaiApiKey",
-      "type": "promptString",
-      "description": "Enter your OpenAI API Key",
-      "default": "sk-"
-    }
-  ]
+  "inputs": []
 }
