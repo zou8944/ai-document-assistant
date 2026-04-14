@@ -56,7 +56,6 @@ class EmbeddingConfig:
 
 @dataclass
 class KnowledgeBaseConfig:
-    max_crawl_pages: int = 1000
     max_file_size_mb: int = 10
 
     def to_dict(self) -> dict:
@@ -213,6 +212,3 @@ class AppConfig:
 
         if self.knowledge_base.max_file_size_mb <= 0:
             raise ValueError("max_file_size_mb must be positive")
-
-        if self.knowledge_base.max_crawl_pages <= 0:
-            raise ValueError("max_crawl_pages must be positive")

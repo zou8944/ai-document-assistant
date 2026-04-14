@@ -6,6 +6,7 @@ Lightweight solution for basic document crawling with domain restrictions.
 import logging
 import time
 import xml.etree.ElementTree as ET
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 from urllib.parse import urldefrag, urljoin, urlparse
@@ -40,10 +41,9 @@ class SimpleWebCrawler:
     Fast and lightweight for basic document crawling needs.
     """
 
-    def __init__(self, config: AppConfig):
+    def __init__(self):
         """Initialize crawler with basic settings"""
         self.delay = 1.0
-        self.max_pages = config.knowledge_base.max_crawl_pages
 
         # Anti-detection headers
         self.headers = {
@@ -58,7 +58,7 @@ class SimpleWebCrawler:
         self.session = requests.Session()
         self.session.headers.update(self.headers)
 
-        logger.info(f"Initialized SimpleWebCrawler with delay={self.delay}s, max_pages={self.max_pages}")
+        logger.info(f"Initialized SimpleWebCrawler with delay={self.delay}s")
 
     def _is_same_domain(self, url1: str, url2: str) -> bool:
         """Check if URLs are from the same domain"""
@@ -178,19 +178,20 @@ class SimpleWebCrawler:
         """Crawl a single URL"""
         return self._fetch_page(url)
 
-    def crawl_recursive(
+    def crawl_recursive_stream(
         self,
         urls: list[str],
         exclude_urls: Optional[list[str]] = None,
         recursive_prefix: str = "",
         skip_urls: Optional[set[str]] = None,
         progress_callback: Optional[Callable[[str, int, int], None]] = None,
-    ) -> list[SimpleCrawlResult]:
+    ) -> Iterator[SimpleCrawlResult]:
         """
         Crawl all pages within the same domain.
         First tries sitemap.xml for URL discovery; falls back to BFS via <a> tags.
         No depth limit — crawls every reachable page up to max_pages.
 
+        Stream crawl results one-by-one so callers can persist progress immediately.
         skip_urls: URLs already stored in the database; skipped without fetching.
         """
         if exclude_urls is None:
@@ -200,7 +201,7 @@ class SimpleWebCrawler:
 
         crawled_urls: set[str] = set()
         failed_urls: set[str] = set()
-        results: list[SimpleCrawlResult] = []
+        yielded = 0
 
         # URL discovery — prefer sitemap.xml, fall back to BFS seed
         sitemap_urls = self._try_sitemap(urls[0] if urls else recursive_prefix, recursive_prefix, exclude_urls)
@@ -211,7 +212,7 @@ class SimpleWebCrawler:
             to_crawl = list(urls)
             logger.info("No sitemap.xml found, starting BFS from provided URLs")
 
-        while to_crawl and len(results) < self.max_pages:
+        while to_crawl:
             url = to_crawl.pop(0)
 
             if url in crawled_urls or url in failed_urls or url in skip_urls:
@@ -219,23 +220,26 @@ class SimpleWebCrawler:
 
             crawled_urls.add(url)
 
-            logger.info(f"Crawling {url} | done: {len(results)} | queued: {len(to_crawl)}")
+            logger.info(f"Crawling {url} | done: {yielded} | queued: {len(to_crawl)}")
             if progress_callback:
-                progress_callback(url, len(results), len(results) + len(to_crawl))
+                progress_callback(url, yielded, yielded + len(to_crawl))
 
             try:
                 result = self._fetch_page(url)
             except Exception as e:
                 failed_urls.add(url)
-                results.append(SimpleCrawlResult(
+                result = SimpleCrawlResult(
                     url=url, title="", content="", html_content="",
                     links=[], success=False, error=str(e),
-                ))
+                )
                 logger.warning(f"Failed to crawl {url}: {e}")
+                yield result
+                yielded += 1
                 time.sleep(self.delay)
                 continue
 
-            results.append(result)
+            yield result
+            yielded += 1
 
             if not result.success:
                 failed_urls.add(url)
@@ -257,10 +261,8 @@ class SimpleWebCrawler:
             time.sleep(self.delay)
 
         logger.info(
-            f"Crawl complete: {len(results)} pages total, "
-            f"{len([r for r in results if r.success])} successful"
+            f"Crawl complete: {yielded} pages crawled in this run"
         )
-        return results
 
     def get_crawl_stats(self, results: list[SimpleCrawlResult]) -> dict[str, Any]:
         """Get statistics about crawl results"""
@@ -279,15 +281,15 @@ class SimpleWebCrawler:
 
 
 def create_simple_web_crawler(config: AppConfig) -> SimpleWebCrawler:
-    return SimpleWebCrawler(config=config)
+    return SimpleWebCrawler()
 
 
 if __name__ == "__main__":
 
     def main():
-        config = AppConfig(knowledge_base=KnowledgeBaseConfig(max_crawl_pages=10))
+        config = AppConfig(knowledge_base=KnowledgeBaseConfig())
         crawler = create_simple_web_crawler(config)
-        results = crawler.crawl_recursive(
+        results = crawler.crawl_recursive_stream(
             urls=["https://docs.crawl4ai.com/core/page-interaction/"],
             recursive_prefix="https://docs.crawl4ai.com/core/",
         )
