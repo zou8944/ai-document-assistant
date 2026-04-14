@@ -149,7 +149,7 @@ class SimpleWebCrawler:
             success=True,
         )
 
-    def _try_sitemap(self, base_url: str, recursive_prefix: str, exclude_urls: list[str]) -> list[str]:
+    def _try_sitemap(self, base_url: str, recursive_prefix: str) -> list[str]:
         """Try to fetch sitemap.xml and return filtered URLs. Returns empty list on failure."""
         parsed = urlparse(base_url)
         sitemap_url = f"{parsed.scheme}://{parsed.netloc}/sitemap.xml"
@@ -165,7 +165,6 @@ class SimpleWebCrawler:
                 if (
                     self._is_valid_url(url)
                     and (not recursive_prefix or url.startswith(recursive_prefix))
-                    and url not in exclude_urls
                 ):
                     urls.append(url)
             logger.info(f"Found {len(urls)} URLs in sitemap.xml at {sitemap_url}")
@@ -181,7 +180,6 @@ class SimpleWebCrawler:
     def crawl_recursive_stream(
         self,
         urls: list[str],
-        exclude_urls: Optional[list[str]] = None,
         recursive_prefix: str = "",
         skip_urls: Optional[set[str]] = None,
         progress_callback: Optional[Callable[[str, int, int], None]] = None,
@@ -194,8 +192,6 @@ class SimpleWebCrawler:
         Stream crawl results one-by-one so callers can persist progress immediately.
         skip_urls: URLs already stored in the database; skipped without fetching.
         """
-        if exclude_urls is None:
-            exclude_urls = []
         if skip_urls is None:
             skip_urls = set()
 
@@ -204,10 +200,12 @@ class SimpleWebCrawler:
         yielded = 0
 
         # URL discovery — prefer sitemap.xml, fall back to BFS seed
-        sitemap_urls = self._try_sitemap(urls[0] if urls else recursive_prefix, recursive_prefix, exclude_urls)
+        sitemap_urls = self._try_sitemap(urls[0] if urls else recursive_prefix, recursive_prefix)
         if sitemap_urls:
             to_crawl = list(dict.fromkeys(sitemap_urls))  # deduplicate, preserve order
-            logger.info(f"Using sitemap.xml: {len(to_crawl)} URLs queued")
+            logger.info(f"Using sitemap.xml: {len(to_crawl)} URLs founded")
+            to_crawl = [url for url in to_crawl if url not in skip_urls]
+            logger.info(f"Skipping {len(skip_urls)} urls, remain {len(to_crawl)} urls")
         else:
             to_crawl = list(urls)
             logger.info("No sitemap.xml found, starting BFS from provided URLs")
@@ -215,7 +213,7 @@ class SimpleWebCrawler:
         while to_crawl:
             url = to_crawl.pop(0)
 
-            if url in crawled_urls or url in failed_urls or url in skip_urls:
+            if url in crawled_urls or url in failed_urls:
                 continue
 
             crawled_urls.add(url)
@@ -249,8 +247,6 @@ class SimpleWebCrawler:
             # Discover new links for BFS
             for link in result.links:
                 if link in crawled_urls or link in failed_urls or link in skip_urls:
-                    continue
-                if link in exclude_urls:
                     continue
                 if recursive_prefix and not link.startswith(recursive_prefix):
                     continue

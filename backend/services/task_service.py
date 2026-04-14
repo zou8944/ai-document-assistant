@@ -265,6 +265,19 @@ class TaskService:
         logger.info("Task workers stopped")
 
     def _sync_worker(self, worker_name: str):
+        """Sync worker wrapper to ensure logging configuration is applied"""
+        from config import get_config
+        from logging_config import configure_logging
+
+        # 确保在新线程中日志配置也正确
+        configure_logging(get_config())
+
+        # 重新获取 logger 以确保使用最新配置
+        global logger
+        import logging
+        logger = logging.getLogger(__name__)
+
+        logger.info(f"Sync worker {worker_name} starting")
         asyncio.run(self._worker(worker_name))
 
     async def _worker(self, worker_name: str):
@@ -596,9 +609,7 @@ class TaskService:
         self._log_info_task(task_id, "Starting URL ingestion")
 
         urls = input_params["urls"]
-        exclude_urls = input_params["exclude_urls"]
         recursive_prefix = input_params["recursive_prefix"]
-        override = input_params["override"]
 
         if not urls:
             raise ValueError("No URLs specified for ingestion")
@@ -615,25 +626,21 @@ class TaskService:
 
         # When not overriding, skip URLs already indexed in DB for this collection.
         # Failed pages will be retried on the next run.
-        skip_urls: set[str] = set()
-        if not override:
-            existing_docs = self.doc_repo.get_by_collection(collection_id)
-            skip_urls = {
-                d.uri for d in existing_docs
-                if d.uri and d.status == "indexed"
-            }
+        existing_docs = self.doc_repo.get_by_collection(collection_id)
+        skip_urls = {
+            d.uri for d in existing_docs if d.uri
+        }
 
         # Stream crawl results and persist each page immediately.
         crawl_count = 0
         for crawl_result in self.web_crawler.crawl_recursive_stream(
             urls=urls,
-            exclude_urls=exclude_urls,
             recursive_prefix=recursive_prefix,
             skip_urls=skip_urls,
             progress_callback=progress_callback,
         ):
             crawl_count += 1
-            await self._process_single_page(task_id, collection_id, crawl_result, override)
+            await self._process_single_page(task_id, collection_id, crawl_result)
             stats.pages_processed += 1
             self.update_url_task_progress(task_id, stats)
         self._log_info_task(task_id, f"Incremental crawl/store completed: {crawl_count} pages processed in this run")
@@ -648,7 +655,7 @@ class TaskService:
         self._log_info_task(task_id, "URL ingestion completed")
 
     async def _process_single_page(
-        self, task_id: str, collection_id: str, crawl_result: SimpleCrawlResult, override: bool
+        self, task_id: str, collection_id: str, crawl_result: SimpleCrawlResult
     ):
         """Store a single crawled page. No RAG chunking or embedding."""
         if not crawl_result.success:
@@ -668,11 +675,8 @@ class TaskService:
         page_url = crawl_result.url
         exists = await self._check_document_exists(collection_id, page_url)
         if exists:
-            if override:
-                self._log_info_task(task_id, f"Overriding existing page: {page_url}")
-            else:
-                self._log_info_task(task_id, f"Skipping duplicate page: {page_url}")
-                return
+            self._log_info_task(task_id, f"Skipping duplicate page: {page_url}")
+            return
         else:
             self._log_info_task(task_id, f"Storing page: {page_url}")
 
@@ -817,20 +821,30 @@ class TaskService:
     ) -> str | None:
         """Download one static asset and return its local relative path."""
         canonical = self._canonicalize_asset_url(asset_url)
+
+        logger.debug(f"Processing asset: {asset_url} (canonical: {canonical})")
+
         if canonical in asset_map:
+            logger.debug(f"Asset {canonical} already in cache, returning: {asset_map[canonical]}")
             return asset_map[canonical]
         if canonical in failed_assets:
+            logger.debug(f"Asset {canonical} failed previously, skipping")
             return None
         failed_assets.add(canonical)
 
         try:
+            logger.debug(f"Downloading asset: {canonical}")
             response = self.web_crawler.session.get(canonical, timeout=30)
             response.raise_for_status()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to download asset {canonical}: {e}")
             return None
 
         content_type = response.headers.get("Content-Type", "").split(";")[0].strip().lower()
+        logger.debug(f"Asset {canonical} content-type: {content_type}")
+
         if content_type.startswith("text/html"):
+            logger.debug(f"Skipping HTML asset: {canonical}")
             return None
 
         suffix = Path(urlparse(canonical).path).suffix.lower()
@@ -845,8 +859,11 @@ class TaskService:
         local_abs_path = domain_dir / local_rel_path
         local_abs_path.parent.mkdir(parents=True, exist_ok=True)
 
+        logger.debug(f"Asset {canonical} will be saved to: {local_rel_path} (category: {category})")
+
         content_bytes = response.content
         if category == "css":
+            logger.debug(f"Rewriting CSS references in: {canonical}")
             encoding = response.encoding or "utf-8"
             try:
                 css_text = response.content.decode(encoding, errors="replace")
@@ -865,6 +882,7 @@ class TaskService:
         local_abs_path.write_bytes(content_bytes)
         asset_map[canonical] = local_rel_path
         failed_assets.discard(canonical)
+        logger.info(f"Successfully mirrored asset: {canonical} -> {local_rel_path} ({len(content_bytes)} bytes)")
         return local_rel_path
 
     def _rewrite_css_references(
@@ -888,10 +906,13 @@ class TaskService:
             if self._should_skip_reference(ref):
                 return match.group(0)
             target_url = urljoin(base_url, ref)
+            logger.debug(f"Processing @import: {ref} (resolved: {target_url})")
             local_rel = self._mirror_asset(target_url, domain_dir, asset_map, failed_assets)
             if not local_rel:
+                logger.warning(f"Failed to mirror CSS import asset: {target_url}")
                 return match.group(0)
             rewritten = self._relative_link(current_rel_path, local_rel)
+            logger.info(f"Rewriting @import: {ref} -> {rewritten}")
             quote = match.group("quote")
             return f"@import {quote}{rewritten}{quote}"
 
@@ -906,10 +927,13 @@ class TaskService:
             if self._should_skip_reference(inner):
                 return match.group(0)
             target_url = urljoin(base_url, inner)
+            logger.debug(f"Processing CSS url(): {inner} (resolved: {target_url})")
             local_rel = self._mirror_asset(target_url, domain_dir, asset_map, failed_assets)
             if not local_rel:
+                logger.warning(f"Failed to mirror CSS url() asset: {target_url}")
                 return match.group(0)
             rewritten = self._relative_link(current_rel_path, local_rel)
+            logger.debug(f"Rewriting CSS url(): {inner} -> {rewritten}")
             if quote:
                 return f"url({quote}{rewritten}{quote})"
             return f"url({rewritten})"
@@ -941,13 +965,16 @@ class TaskService:
                 rewritten_entries.append(entry)
                 continue
             target_url = urljoin(page_url, ref)
+            logger.debug(f"Processing srcset entry: {ref} (resolved: {target_url})")
             local_rel = self._mirror_asset(target_url, domain_dir, asset_map, failed_assets)
             if not local_rel:
+                logger.warning(f"Failed to mirror srcset asset: {target_url}")
                 rewritten_entries.append(entry)
                 continue
             rel_ref = self._relative_link(page_rel_path, local_rel)
             descriptor = " ".join(parts[1:]).strip()
             rewritten_entries.append(f"{rel_ref} {descriptor}".strip())
+            logger.debug(f"Rewriting srcset entry: {entry} -> {rel_ref} {descriptor}")
             changed = True
 
         if not changed:
@@ -978,6 +1005,8 @@ class TaskService:
         if not crawled_docs:
             self._log_info_task(task_id, "No crawled HTML pages found, skipping link rewriting")
             return
+
+        logger.info(f"Starting link rewriting for {len(crawled_docs)} crawled pages")
 
         page_rel_map: dict[str, str] = {}
         for doc in crawled_docs:
@@ -1012,6 +1041,8 @@ class TaskService:
                 page_rel_path = page_rel_map[canonical_page_url]
                 pages_manifest[canonical_page_url] = page_rel_path
 
+                logger.debug(f"Processing page: {doc.uri} -> {page_rel_path}")
+
                 soup = BeautifulSoup(doc.html_content, "lxml")
                 changed = False
 
@@ -1025,6 +1056,7 @@ class TaskService:
                         continue
                     new_href = self._relative_link(page_rel_path, target_rel)
                     if new_href != raw_href:
+                        logger.info(f"Rewriting page link: {raw_href} -> {new_href} (resolves to {resolved})")
                         a_tag["href"] = new_href
                         changed = True
 
@@ -1033,11 +1065,14 @@ class TaskService:
                     if self._should_skip_reference(raw_src):
                         continue
                     resolved = urljoin(doc.uri, raw_src)
+                    logger.debug(f"Found script asset: {raw_src} (resolved: {resolved})")
                     local_rel = self._mirror_asset(resolved, domain_dir, asset_map, failed_assets)
                     if not local_rel:
+                        logger.warning(f"Failed to mirror script asset: {resolved}")
                         continue
                     new_src = self._relative_link(page_rel_path, local_rel)
                     if new_src != raw_src:
+                        logger.info(f"Rewriting script src: {raw_src} -> {new_src}")
                         script_tag["src"] = new_src
                         changed = True
 
@@ -1051,17 +1086,21 @@ class TaskService:
                         if self._should_skip_reference(raw_value):
                             continue
                         resolved = urljoin(doc.uri, raw_value)
+                        logger.debug(f"Found media asset: {raw_value} (resolved: {resolved})")
                         local_rel = self._mirror_asset(resolved, domain_dir, asset_map, failed_assets)
                         if not local_rel:
+                            logger.warning(f"Failed to mirror media asset: {resolved}")
                             continue
                         new_value = self._relative_link(page_rel_path, local_rel)
                         if new_value != raw_value:
+                            logger.info(f"Rewriting {attr} for <{media_tag.name}>: {raw_value} -> {new_value}")
                             media_tag[attr] = new_value
                             changed = True
 
                     if media_tag.has_attr("srcset"):
                         raw_srcset = str(media_tag.get("srcset", "")).strip()
                         if raw_srcset:
+                            logger.debug(f"Found srcset: {raw_srcset}")
                             rewritten_srcset = self._rewrite_srcset(
                                 srcset=raw_srcset,
                                 page_url=doc.uri,
@@ -1071,6 +1110,7 @@ class TaskService:
                                 failed_assets=failed_assets,
                             )
                             if rewritten_srcset != raw_srcset:
+                                logger.info(f"Rewriting srcset: {raw_srcset} -> {rewritten_srcset}")
                                 media_tag["srcset"] = rewritten_srcset
                                 changed = True
 
@@ -1079,11 +1119,14 @@ class TaskService:
                     if self._should_skip_reference(raw_href):
                         continue
                     resolved = urljoin(doc.uri, raw_href)
+                    logger.debug(f"Found link asset: {raw_href} (resolved: {resolved})")
                     local_rel = self._mirror_asset(resolved, domain_dir, asset_map, failed_assets)
                     if not local_rel:
+                        logger.warning(f"Failed to mirror link asset: {resolved}")
                         continue
                     new_href = self._relative_link(page_rel_path, local_rel)
                     if new_href != raw_href:
+                        logger.info(f"Rewriting link href: {raw_href} -> {new_href}")
                         link_tag["href"] = new_href
                         changed = True
 
@@ -1091,6 +1134,7 @@ class TaskService:
                     css_text = style_tag.string
                     if not css_text:
                         continue
+                    logger.debug("Found style tag, rewriting CSS references")
                     rewritten_css = self._rewrite_css_references(
                         css_text=css_text,
                         base_url=doc.uri,
@@ -1100,6 +1144,7 @@ class TaskService:
                         failed_assets=failed_assets,
                     )
                     if rewritten_css != css_text:
+                        logger.info("Rewriting style tag content with CSS references")
                         style_tag.string.replace_with(rewritten_css)
                         changed = True
 
@@ -1107,6 +1152,7 @@ class TaskService:
                     inline_css = str(styled_tag.get("style", ""))
                     if not inline_css:
                         continue
+                    logger.debug(f"Found inline style on <{getattr(styled_tag, 'name', 'tag')}>: {inline_css}")
                     rewritten_inline = self._rewrite_css_references(
                         css_text=inline_css,
                         base_url=doc.uri,
@@ -1116,6 +1162,7 @@ class TaskService:
                         failed_assets=failed_assets,
                     )
                     if rewritten_inline != inline_css:
+                        logger.info(f"Rewriting inline style on <{getattr(styled_tag, 'name', 'tag')}>: {inline_css} -> {rewritten_inline}")
                         styled_tag["style"] = rewritten_inline
                         changed = True
 
@@ -1157,13 +1204,16 @@ class TaskService:
             )
             total_assets += len(asset_map)
             total_failed_assets += len(failed_assets)
+            logger.info(f"Domain {domain_key} complete: {len(asset_map)} assets mirrored, {len(failed_assets)} failed")
 
+        summary_msg = (
+            f"Link rewriting complete: {rewritten_pages} pages updated, "
+            f"{total_assets} assets mirrored, {total_failed_assets} assets failed"
+        )
+        logger.info(summary_msg)
         self._log_info_task(
             task_id,
-            "Link rewriting complete: "
-            f"{rewritten_pages} pages updated, "
-            f"{total_assets} assets mirrored, "
-            f"{total_failed_assets} assets failed",
+            summary_msg
         )
 
     async def _generate_sitemap(self, task_id: str, collection_id: str):
