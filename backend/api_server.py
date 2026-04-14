@@ -14,24 +14,20 @@ from dotenv import load_dotenv
 # Load .env before any config/env reads; no-op if file doesn't exist
 load_dotenv(".env")
 
-import config  # noqa: E402
-
 # Add backend directory to Python path
 backend_dir = Path(__file__).parent
 sys.path.insert(0, str(backend_dir))
 
+import config  # noqa: E402
+
 # Initialize configuration first
 conf = config.get_config()
 
-# Configure logging
-logging.basicConfig(
-    level=getattr(logging, conf.system.log_level.upper()),
-    format='%(asctime)s - %(name)s - %(levelname)s - [Thread-%(threadName)s] - %(message)s',
-    handlers=[
-        logging.FileHandler(conf.get_log_file_path()),
-        logging.StreamHandler(sys.stderr)
-    ]
-)
+# 导入统一的日志配置
+from logging_config import configure_logging
+
+# 初始配置日志
+configure_logging(conf)
 
 logger = logging.getLogger(__name__)
 

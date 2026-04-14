@@ -57,6 +57,7 @@ class EmbeddingConfig:
 @dataclass
 class KnowledgeBaseConfig:
     max_file_size_mb: int = 10
+    max_crawl_pages: int = 1000
 
     def to_dict(self) -> dict:
         return asdict(self)

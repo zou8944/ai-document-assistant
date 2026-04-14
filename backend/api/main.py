@@ -32,6 +32,16 @@ async def lifespan(app: FastAPI):
         # Initialize configuration
         config = get_config()
 
+        # 重新配置日志（uvicorn 会重置日志配置，所以需要在这里重新应用）
+        from logging_config import configure_logging
+
+        configure_logging(config)
+
+        # 重新获取 logger，确保使用新配置
+        global logger
+        import logging
+        logger = logging.getLogger(__name__)
+
         # Run database migrations
         logger.info("Running database migrations...")
         alembic_cfg = Config("alembic.ini")
