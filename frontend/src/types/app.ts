@@ -11,7 +11,6 @@ export interface KnowledgeBase {
   createdAt: string
   documentCount: number
   sourceType: 'files' | 'website' | 'mixed'
-  sitemapJson?: string
 }
 
 export interface ChatSession {

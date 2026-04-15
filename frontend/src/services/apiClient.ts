@@ -311,6 +311,15 @@ export class DocumentAssistantAPI {
   }
 
   /**
+   * Get README and categories for a collection
+   */
+  async getReadme(collectionId: string): Promise<APIResponse<{ readme_content: string | null, categories_json: string | null }>> {
+    return this.request<APIResponse<{ readme_content: string | null, categories_json: string | null }>>(
+      `/api/v1/collections/${encodeURIComponent(collectionId)}/readme`
+    )
+  }
+
+  /**
    * Get the URL for previewing a crawled document's HTML
    */
   getDocumentPreviewUrl(collectionId: string, documentId: string): string {

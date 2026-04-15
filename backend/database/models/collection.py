@@ -43,10 +43,15 @@ class Collection(Base):
         nullable=True,
         doc="Collection summary"
     )
-    sitemap_json: Mapped[str | None] = mapped_column(
+    readme_content: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
-        doc="AI-generated site tree structure (JSON), produced after full crawl"
+        doc="AI-generated README markdown for the knowledge base navigation page"
+    )
+    categories_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        doc="AI-generated categories data (JSON) for sidebar navigation"
     )
 
     # Statistics (cached values)

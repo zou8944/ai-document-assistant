@@ -651,6 +651,9 @@ class TaskService:
         # Phase 3: generate AI sitemap
         await self._generate_sitemap(task_id, collection_id)
 
+        # Phase 4: generate AI README
+        await self._generate_readme(task_id, collection_id)
+
         self.task_repo.mark_completed(task_id, True)
         self._log_info_task(task_id, "URL ingestion completed")
 
@@ -1234,6 +1237,39 @@ class TaskService:
             self._log_info_task(task_id, "Sitemap stored successfully")
         except Exception as e:
             self._log_err_task(task_id, f"Sitemap generation failed: {e}")
+
+    async def _generate_readme(self, task_id: str, collection_id: str):
+        """Phase 4: generate AI README navigation guide and categories data."""
+        self._log_info_task(task_id, "Generating AI README...")
+        docs = self.doc_repo.get_by_collection(collection_id)
+        crawled = [d for d in docs if d.source_path]
+
+        if not crawled:
+            self._log_info_task(task_id, "No crawled pages found, skipping README generation")
+            return
+
+        pages = [{"path": d.source_path, "title": d.name or ""} for d in crawled]
+
+        try:
+            import json as json_lib
+            raw = await self.llm_service.generate_readme(pages)
+
+            # Strip markdown fences if LLM wraps the response
+            cleaned = raw.strip()
+            if cleaned.startswith("```"):
+                import re
+                cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
+                cleaned = re.sub(r"\n?```$", "", cleaned)
+                cleaned = cleaned.strip()
+
+            parsed = json_lib.loads(cleaned)
+            readme_content = parsed.get("readme", "")
+            categories_json = json_lib.dumps(parsed.get("categories", []), ensure_ascii=False)
+
+            await self.collection_service.update_readme(collection_id, readme_content, categories_json)
+            self._log_info_task(task_id, "README stored successfully")
+        except Exception as e:
+            self._log_err_task(task_id, f"README generation failed: {e}")
 
     def close(self):
         """Close connections and cleanup resources"""

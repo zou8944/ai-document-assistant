@@ -1,17 +1,18 @@
 /**
- * Knowledge base management page with import area and document list
+ * Knowledge base management page - three-column layout
+ * Left: category sidebar | Right: README / DocList / DocReader | Top: search + import
  */
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   ArrowLeftIcon,
   DocumentIcon,
   GlobeAltIcon,
   ArrowDownTrayIcon,
   TrashIcon,
-  EyeIcon,
-  MapIcon,
-  ListBulletIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { useAppStore } from '../../store/appStore'
@@ -19,22 +20,18 @@ import { Document as APIDocument, useAPIClient, extractData, SSEEvent } from '..
 import { ImportStatus } from '../../types/app'
 import { UrlInputDialog } from '../InputDialog'
 import FileUploadModal from '../FileUploadModal'
-import SitemapView from './SitemapView'
-import PagePreview from './PagePreview'
+import SidebarNav from './SidebarNav'
+import ReadmePanel from './ReadmePanel'
+import DocReader from './DocReader'
+import {
+  parseCategories,
+  findCategoryForPath,
+  getPagesForCategory,
+} from '../../utils/categoryParser'
 
 interface KnowledgeBaseManagementProps {
   className?: string
 }
-
-// Map API document to UI document
-const mapAPIDocumentToUIDocument = (doc: APIDocument) => ({
-  id: doc.id,
-  name: doc.name,
-  url: doc.uri,
-  createdAt: doc.created_at,
-  size: doc.size_bytes ? formatFileSize(doc.size_bytes) : '-',
-  status: doc.status
-})
 
 const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 B'
@@ -44,101 +41,165 @@ const formatFileSize = (bytes: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
+const mapAPIDocument = (doc: APIDocument) => ({
+  id: doc.id,
+  name: doc.name,
+  url: doc.uri,
+  source_path: doc.source_path,
+  createdAt: doc.created_at,
+  size: doc.size_bytes ? formatFileSize(doc.size_bytes) : '-',
+  status: doc.status,
+})
+
+type MappedDoc = ReturnType<typeof mapAPIDocument>
+
 export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = ({
-  className
+  className,
 }) => {
   const { getCurrentKnowledgeBase, setActiveKnowledgeBase } = useAppStore()
   const apiClient = useAPIClient()
-  const [documents, setDocuments] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+  const currentKb = getCurrentKnowledgeBase()
+
+  // Data state
+  const [documents, setDocuments] = useState<MappedDoc[]>([])
+  const [loadingDocuments, setLoadingDocuments] = useState(true)
+  const [readmeContent, setReadmeContent] = useState<string | null>(null)
+  const [categoriesJson, setCategoriesJson] = useState<string | null>(null)
+
+  // Navigation state
+  const [activeCategory, setActiveCategory] = useState<string | null>(null)
+  const [selectedDocId, setSelectedDocId] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<MappedDoc[] | null>(null)
+  const [searching, setSearching] = useState(false)
+
+  // Import state
+  const [importCollapsed, setImportCollapsed] = useState(true)
   const [showUrlDialog, setShowUrlDialog] = useState(false)
   const [showFileUpload, setShowFileUpload] = useState(false)
-
-  // Import task progress tracking
-  const [importStatus, setImportStatus] = useState<ImportStatus>({ isActive: false, progress: 0, message: ""})
+  const [importStatus, setImportStatus] = useState<ImportStatus>({ isActive: false, progress: 0, message: '' })
   const [taskStatus, setTaskStatus] = useState<string>()
   const [taskLogs, setTaskLogs] = useState<string[]>([])
   const logTextAreaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Tab and sitemap state
-  const [activeTab, setActiveTab] = useState<'documents' | 'sitemap'>('documents')
-  const [sitemapJson, setSitemapJson] = useState<string | null>(null)
-  const [loadingSitemap, setLoadingSitemap] = useState(false)
+  // Parse categories
+  const categories = useMemo(() => parseCategories(categoriesJson), [categoriesJson])
 
-  // Page preview state
-  const [previewOpen, setPreviewOpen] = useState(false)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [previewTitle, setPreviewTitle] = useState('')
-  const [previewSourceUrl, setPreviewSourceUrl] = useState('')
+  // Determine which docs to show in list
+  const displayedDocs = useMemo(() => {
+    if (searchResults !== null) return searchResults
+    if (activeCategory) {
+      const catPages = getPagesForCategory(categories, activeCategory)
+      const paths = new Set(catPages.map(p => p.path))
+      return documents.filter(d => d.source_path && paths.has(d.source_path))
+    }
+    return documents
+  }, [searchResults, activeCategory, categories, documents])
 
-  const handleBack = () => {
-    setActiveKnowledgeBase(null)
-  }
+  // Find selected document
+  const selectedDoc = useMemo(
+    () => (selectedDocId ? documents.find(d => d.id === selectedDocId) || null : null),
+    [selectedDocId, documents]
+  )
 
-  const loadSitemap = async () => {
+  // Find which category the selected doc belongs to (for sidebar highlight)
+  const highlightedCategory = useMemo(() => {
+    if (!selectedDoc?.source_path) return null
+    return findCategoryForPath(categories, selectedDoc.source_path)
+  }, [selectedDoc, categories])
+
+  // Preview URL for selected doc
+  const previewUrl = useMemo(() => {
+    if (!selectedDoc || !currentKb) return ''
+    return apiClient.getDocumentPreviewUrl(currentKb.id, selectedDoc.id)
+  }, [selectedDoc, currentKb, apiClient])
+
+  // Load data
+  const loadDocuments = useCallback(async () => {
     if (!currentKb) return
     try {
-      setLoadingSitemap(true)
-      const response = await apiClient.getSitemap(currentKb.id)
+      setLoadingDocuments(true)
+      const response = await apiClient.listDocuments(currentKb.id)
       const data = extractData(response)
-      setSitemapJson(data.sitemap_json)
+      setDocuments(data.documents.map(mapAPIDocument))
     } catch (error) {
-      console.error('加载站点结构失败:', error)
+      console.error('加载文档列表失败:', error)
     } finally {
-      setLoadingSitemap(false)
+      setLoadingDocuments(false)
     }
-  }
+  }, [currentKb?.id])
 
-  const openPreview = (doc: any) => {
+  const loadReadme = useCallback(async () => {
     if (!currentKb) return
-    setPreviewUrl(apiClient.getDocumentPreviewUrl(currentKb.id, doc.id))
-    setPreviewTitle(doc.name)
-    setPreviewSourceUrl(doc.url || '')
-    setPreviewOpen(true)
-  }
-
-  const openPreviewByPath = async (path: string) => {
-    if (!currentKb) return
-    const doc = documents.find(d => d.url && new URL(d.url).pathname === path)
-    if (doc) {
-      openPreview(doc)
+    try {
+      const response = await apiClient.getReadme(currentKb.id)
+      const data = extractData(response)
+      setReadmeContent(data.readme_content)
+      setCategoriesJson(data.categories_json)
+    } catch {
+      // No readme available - fallback
+      setReadmeContent(null)
+      setCategoriesJson(null)
     }
-  }
+  }, [currentKb?.id])
 
-  const currentKb = getCurrentKnowledgeBase()
+  // Search handler
+  const handleSearch = useCallback(async (query: string) => {
+    if (!currentKb) return
+    if (!query.trim()) {
+      setSearchResults(null)
+      return
+    }
+    try {
+      setSearching(true)
+      const response = await apiClient.listDocuments(currentKb.id, 1, 50, query)
+      const data = extractData(response)
+      setSearchResults(data.documents.map(mapAPIDocument))
+    } catch (error) {
+      console.error('搜索失败:', error)
+    } finally {
+      setSearching(false)
+    }
+  }, [currentKb?.id])
 
-  // Debug logging
-  console.log('KnowledgeBaseManagement - currentKb:', currentKb)
-  console.log('KnowledgeBaseManagement - activeKnowledgeBase:', useAppStore.getState().activeKnowledgeBase)
-  console.log('KnowledgeBaseManagement - knowledgeBases:', useAppStore.getState().knowledgeBases)
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      handleSearch(searchQuery)
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [searchQuery, handleSearch])
 
-  if (!currentKb) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center text-gray-500">
-          <DocumentIcon className="w-16 h-16 mx-auto mb-4 opacity-50" />
-          <p>找不到知识库</p>
-          <div className="mt-4">
-            <button
-              onClick={handleBack}
-              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
-            >
-              返回列表
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  // Doc click from README - find by path
+  const handleReadmeDocClick = useCallback(
+    (path: string) => {
+      const doc = documents.find(d => d.source_path === path)
+      if (doc) {
+        setSelectedDocId(doc.id)
+      }
+    },
+    [documents]
+  )
 
-  const handleFileUpload = async () => {
-    setShowFileUpload(true)
-  }
+  // Doc click from list
+  const handleDocClick = useCallback((doc: MappedDoc) => {
+    setSelectedDocId(doc.id)
+  }, [])
 
-  const handleUrlImport = async () => {
-    setShowUrlDialog(true)
-  }
+  // Back from reader
+  const handleBackFromReader = useCallback(() => {
+    setSelectedDocId(null)
+  }, [])
 
+  // Category select from sidebar
+  const handleCategorySelect = useCallback((category: string | null) => {
+    setActiveCategory(category)
+    setSelectedDocId(null)
+    setSearchQuery('')
+    setSearchResults(null)
+  }, [])
+
+  // Import handlers
   const handleUrlDialogConfirm = async (config: {
     urls: string[]
     excludeUrls: string[]
@@ -146,103 +207,68 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     recursivePrefix: string
   }) => {
     setShowUrlDialog(false)
-    
     if (!currentKb || config.urls.length === 0) return
-    
     try {
       const response = await apiClient.ingestUrls(currentKb.id, {
         urls: config.urls,
         exclude_urls: config.excludeUrls,
         max_depth: config.maxDepth,
-        recursive_prefix: config.recursivePrefix
+        recursive_prefix: config.recursivePrefix,
       })
       const taskData = extractData(response)
-      
-      // Initialize new task: clear previous state and start processing
-      setImportStatus({ isActive: true, progress: 0, message: "" })
+      setImportStatus({ isActive: true, progress: 0, message: '' })
       setTaskStatus('processing')
       setTaskLogs([])
       streamTaskProgress(taskData.task_id)
-
-      console.log("import status", importStatus.isActive)
-      
     } catch (error) {
       console.error('导入失败:', error)
-      setImportStatus({ isActive: false, progress: 0, message: "" })
+      setImportStatus({ isActive: false, progress: 0, message: '' })
       alert('导入失败: ' + (error as Error).message)
     }
   }
 
-  const handleUrlDialogCancel = () => {
-    setShowUrlDialog(false)
-  }
-
-  const handleFileUploadModalClose = () => {
-    setShowFileUpload(false)
-  }
-
   const handleFilesSelected = async (filePaths: string[]) => {
     if (!currentKb || filePaths.length === 0) return
-    
     setShowFileUpload(false)
-    
     try {
-      
-      const response = await apiClient.ingestFiles(currentKb.id, {
-        files: filePaths
-      })
-      
+      const response = await apiClient.ingestFiles(currentKb.id, { files: filePaths })
       const taskData = extractData(response)
-      // Initialize new task: clear previous state and start processing
       setTaskStatus('processing')
       setTaskLogs([])
-      setImportStatus({ isActive: true, progress: 0, message: "" })
+      setImportStatus({ isActive: true, progress: 0, message: '' })
       streamTaskProgress(taskData.task_id)
-      
     } catch (error) {
       console.error('文件导入失败:', error)
-      setImportStatus({ isActive: false, progress: 0, message: "" })
+      setImportStatus({ isActive: false, progress: 0, message: '' })
       alert('文件导入失败: ' + (error as Error).message)
     }
   }
 
-  const handleDownload = async (doc: any) => {
+  const handleDownload = async (doc: MappedDoc) => {
     if (!currentKb) return
-    
     try {
-      // Download the document from API
       const { blob, filename } = await apiClient.downloadDocument(currentKb.id, doc.id)
-      
-      // Create a download link
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
       link.download = filename
-      
-      // Append to body, click and remove
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      
-      // Clean up the URL object
       window.URL.revokeObjectURL(url)
-      
-      console.log('文档下载成功:', filename)
     } catch (error) {
       console.error('下载失败:', error)
       alert('下载失败: ' + (error as Error).message)
     }
   }
 
-  const handleDelete = async (doc: any) => {
+  const handleDelete = async (doc: MappedDoc) => {
     if (!currentKb) return
-    
     if (confirm(`确定要删除 "${doc.name}" 吗？`)) {
       try {
         await apiClient.deleteDocument(currentKb.id, doc.id)
-        // Refresh documents list
+        if (selectedDocId === doc.id) setSelectedDocId(null)
         loadDocuments()
-        alert('文档删除成功')
       } catch (error) {
         console.error('删除失败:', error)
         alert('删除失败: ' + (error as Error).message)
@@ -250,104 +276,50 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     }
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('zh-CN', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
-
-  // Load documents from API
-  const loadDocuments = async () => {
-    if (!currentKb) return
-    
-    try {
-      setLoading(true)
-      const response = await apiClient.listDocuments(currentKb.id)
-      const data = extractData(response)
-      const mappedDocs = data.documents.map(mapAPIDocumentToUIDocument)
-      setDocuments(mappedDocs)
-    } catch (error) {
-      console.error('加载文档列表失败:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Stream task progress using SSE
+  // SSE task streaming
   const streamTaskProgress = async (taskId: string) => {
-    
     await apiClient.streamTaskProgress(
       taskId,
       (event: SSEEvent) => {
-        console.log('Task SSE event:', event)
-        
         switch (event.event) {
-          case 'metadata':
-            // metadata 暂时用不到
-            break
-            
           case 'progress':
-            // Progress updates
             if (event.data) {
               const progressData = event.data
-
               let progress = progressData.percentage || 0
-              let message = ""
-
+              let message = ''
               if (progressData.stats) {
                 const stats = typeof progressData.stats === 'string' ? JSON.parse(progressData.stats) : progressData.stats
-
                 if (stats.urls_crawled && stats.urls_crawl_total) {
-                  message += "已爬取网页: " + stats.urls_crawled + "/" + stats.urls_crawl_total
+                  message += '已爬取网页: ' + stats.urls_crawled + '/' + stats.urls_crawl_total
                 }
                 if (stats.files_processed && stats.files_total) {
-                  message += "已处理文件: " + stats.files_processed + "/" + stats.files_total
+                  message += '已处理文件: ' + stats.files_processed + '/' + stats.files_total
                 }
               }
-
-              setImportStatus((prev) => ({ ...prev, progress: progress, message: message }))
+              setImportStatus(prev => ({ ...prev, progress, message }))
             }
             break
-            
           case 'log':
-            // Log messages - add to log display
             if (event.data) {
               const logData = event.data
               const timestamp = logData.timestamp ? new Date(logData.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()
-              const logMessage = `[${timestamp}] ${logData.message}`
-              
-              setTaskLogs(prev => [...prev, logMessage])
-              
-              // Auto scroll to bottom after adding log
+              setTaskLogs(prev => [...prev, `[${timestamp}] ${logData.message}`])
               setTimeout(() => {
-                if (logTextAreaRef.current) {
-                  logTextAreaRef.current.scrollTop = logTextAreaRef.current.scrollHeight
-                }
+                if (logTextAreaRef.current) logTextAreaRef.current.scrollTop = logTextAreaRef.current.scrollHeight
               }, 0)
             }
             break
-            
           case 'done':
-            // Task completed successfully
             setTaskStatus('completed')
             setImportStatus(prev => ({ ...prev, progress: 100 }))
-            loadDocuments() // Refresh documents list
-            loadSitemap() // Refresh sitemap
+            loadDocuments()
+            loadReadme()
             break
-            
           case 'error':
-            // Task failed
             setTaskLogs(prev => [...prev, event.data?.message || '未知错误'])
             setTaskStatus('failed')
             setImportStatus(prev => ({ ...prev, progress: 100 }))
             break
-            
-          default:
-            console.log('Unknown SSE event type:', event.event)
         }
       },
       (error: Error) => {
@@ -358,363 +330,310 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     )
   }
 
-
-  // Load documents when component mounts or knowledge base changes
+  // Load on mount
   useEffect(() => {
-    if (currentKb) {
-      loadDocuments()
-      loadSitemap()
+    if (!currentKb) return
+    const loadData = async () => {
+      await loadDocuments()
+      await loadReadme()
     }
-  }, [currentKb])
+    loadData()
+  }, [currentKb?.id])
 
-  // Cleanup SSE connection on unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      console.log('Cleaning up SSE connection on unmount')
       apiClient.cancelRequests()
     }
   }, [])
 
+  // Determine right panel view
+  const showReader = selectedDoc !== null
+  const showDocList = !showReader && (activeCategory !== null || searchQuery.trim() !== '')
+  const showReadme = !showReader && !showDocList && readmeContent !== null
+  const showFallbackList = !showReader && !showDocList && !showReadme
+
+  if (!currentKb) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center text-gray-500">
+          <DocumentIcon className="w-16 h-16 mx-auto mb-4 opacity-50" />
+          <p>找不到知识库</p>
+          <div className="mt-4">
+            <button
+              onClick={() => setActiveKnowledgeBase(null)}
+              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
+            >
+              返回列表
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={clsx('h-full flex flex-col overflow-hidden', className)}>
       {/* Header */}
-      <div className="flex-shrink-0 p-6 bg-gradient-to-r from-white/90 to-white/70 backdrop-blur-sm border-b border-gray-200/50">
-        <div className="flex items-center space-x-4">
-          <button
-            onClick={handleBack}
-            className="p-2 hover:bg-gray-100/50 rounded-lg transition-colors"
-          >
-            <ArrowLeftIcon className="w-5 h-5 text-gray-600" />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{currentKb.name}</h1>
-            <p className="text-gray-600 mt-1">知识库管理</p>
+      <div className="flex-shrink-0 px-6 py-4 bg-gradient-to-r from-white/90 to-white/70 backdrop-blur-sm border-b border-gray-200/50">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setActiveKnowledgeBase(null)}
+              className="p-2 hover:bg-gray-100/50 rounded-lg transition-colors"
+            >
+              <ArrowLeftIcon className="w-5 h-5 text-gray-600" />
+            </button>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">{currentKb.name}</h1>
+            </div>
           </div>
+          <button
+            onClick={() => setImportCollapsed(!importCollapsed)}
+            className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+          >
+            {importCollapsed ? <ChevronRightIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+            导入文档
+          </button>
         </div>
-      </div>
 
-      {/* Content Area with Scroll */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="space-y-6 p-6">
-          {/* Import Area */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200/50 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">导入文档</h2>
-            
-            {/* Import Options */}
-            <div className="flex space-x-4 mb-6">
+        {/* Collapsible Import Area */}
+        {!importCollapsed && (
+          <div className="mt-4 pt-4 border-t border-gray-200/50">
+            <div className="flex gap-4 mb-4">
               <button
-                onClick={handleUrlImport}
+                onClick={() => setShowUrlDialog(true)}
                 disabled={importStatus.isActive}
-                className="flex-1 flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-lg transition-colors disabled:opacity-50"
               >
-                <GlobeAltIcon className="w-8 h-8 text-gray-400 mb-2" />
-                <span className="text-sm font-medium text-gray-700">🌐 网页URL</span>
-                <span className="text-xs text-gray-500 mt-1">输入链接地址</span>
+                <GlobeAltIcon className="w-5 h-5 text-gray-400" />
+                <span className="text-sm text-gray-700">网页 URL</span>
               </button>
-
               <button
-                onClick={handleFileUpload}
+                onClick={() => setShowFileUpload(true)}
                 disabled={importStatus.isActive}
-                className="flex-1 flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-lg transition-colors disabled:opacity-50"
               >
-                <DocumentIcon className="w-8 h-8 text-gray-400 mb-2" />
-                <span className="text-sm font-medium text-gray-700">📁 本地文件</span>
-                <span className="text-xs text-gray-500 mt-1">拖拽或点击</span>
+                <DocumentIcon className="w-5 h-5 text-gray-400" />
+                <span className="text-sm text-gray-700">本地文件</span>
               </button>
             </div>
 
-            {/* Task Progress and Status */}
+            {/* Task Progress */}
             {importStatus.isActive && (
-              <div className="space-y-4 border-t border-gray-200/50 pt-4">
-                {/* Status and Progress */}
+              <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <span className="text-sm font-medium text-gray-700">任务状态:</span>
-                    <div className="flex items-center space-x-2">
-                      {taskStatus === 'processing' && (
-                        <>
-                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                          <span className="text-sm text-blue-600 font-medium">处理中</span>
-                        </>
-                      )}
-                      {taskStatus === 'completed' && (
-                        <>
-                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                          <span className="text-sm text-green-600 font-medium">已完成</span>
-                        </>
-                      )}
-                      {taskStatus === 'failed' && (
-                        <>
-                          <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                          <span className="text-sm text-red-600 font-medium">失败</span>
-                        </>
-                      )}
-                    </div>
+                  <div className="flex items-center gap-2">
+                    {taskStatus === 'processing' && (
+                      <>
+                        <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                        <span className="text-sm text-blue-600">处理中 {importStatus.progress}%</span>
+                      </>
+                    )}
+                    {taskStatus === 'completed' && (
+                      <>
+                        <div className="w-2 h-2 bg-green-500 rounded-full" />
+                        <span className="text-sm text-green-600">已完成</span>
+                      </>
+                    )}
+                    {taskStatus === 'failed' && (
+                      <>
+                        <div className="w-2 h-2 bg-red-500 rounded-full" />
+                        <span className="text-sm text-red-600">失败</span>
+                      </>
+                    )}
                   </div>
-                  <div className="flex items-center space-x-3">
-                    <span className="text-sm text-gray-600">
-                      {importStatus.progress}%
-                    </span>
-                    <button
-                      onClick={() => {
-                        setTaskStatus("")
-                        setTaskLogs([])
-                        setImportStatus({ isActive: false, progress: 0, message: "" })
-                      }}
-                      className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded border border-gray-300 hover:border-gray-400 transition-colors"
-                    >
-                      清除
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => { setTaskStatus(''); setTaskLogs([]); setImportStatus({ isActive: false, progress: 0, message: '' }) }}
+                    className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded border border-gray-300"
+                  >
+                    清除
+                  </button>
                 </div>
-                
-                {/* Progress Bar */}
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${importStatus.progress}%` }}
-                  />
+                <div className="w-full bg-gray-200 rounded-full h-1.5">
+                  <div className="bg-blue-500 h-1.5 rounded-full transition-all" style={{ width: `${importStatus.progress}%` }} />
                 </div>
-                
-                {/* Task Logs */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">任务日志:</label>
+                {taskLogs.length > 0 && (
                   <textarea
                     ref={logTextAreaRef}
-                    className="w-full h-20 p-3 text-xs font-mono bg-gray-50 border border-gray-200 rounded-md resize-none overflow-y-auto focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full h-16 p-2 text-xs font-mono bg-gray-50 border border-gray-200 rounded-md resize-none"
                     value={taskLogs.join('\n')}
                     readOnly
-                    placeholder="任务日志将在此处显示..."
-                  />
-                </div>
-              </div>
-            )}
-
-            {!importStatus.isActive && !taskStatus && taskLogs.length === 0 && (
-              <div className="flex justify-end">
-                <button
-                  onClick={loadDocuments}
-                  disabled={importStatus.isActive}
-                  className="bg-gray-500 hover:bg-gray-600 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg transition-colors disabled:cursor-not-allowed"
-                >
-                  刷新列表
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Tab Switcher */}
-          <div className="flex space-x-1 bg-white/60 backdrop-blur-sm rounded-lg p-1 border border-gray-200/50">
-            <button
-              onClick={() => setActiveTab('documents')}
-              className={clsx(
-                'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors',
-                activeTab === 'documents'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-              )}
-            >
-              <ListBulletIcon className="w-4 h-4" />
-              文档列表
-            </button>
-            <button
-              onClick={() => setActiveTab('sitemap')}
-              className={clsx(
-                'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors',
-                activeTab === 'sitemap'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-              )}
-            >
-              <MapIcon className="w-4 h-4" />
-              站点结构
-            </button>
-          </div>
-
-          {/* Sitemap Tab */}
-          {activeTab === 'sitemap' && (
-            <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200/50">
-              <div className="p-6 border-b border-gray-200/50 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">站点结构</h2>
-                <button
-                  onClick={loadSitemap}
-                  disabled={loadingSitemap}
-                  className="bg-gray-500 hover:bg-gray-600 disabled:bg-gray-300 text-white px-3 py-1.5 rounded-lg text-sm transition-colors disabled:cursor-not-allowed"
-                >
-                  {loadingSitemap ? '加载中...' : '刷新'}
-                </button>
-              </div>
-              <div className="p-4 max-h-[600px] overflow-y-auto">
-                {loadingSitemap ? (
-                  <div className="flex items-center justify-center py-16">
-                    <div className="text-gray-500">加载中...</div>
-                  </div>
-                ) : (
-                  <SitemapView
-                    sitemapJson={sitemapJson}
-                    onPageClick={openPreviewByPath}
                   />
                 )}
               </div>
-            </div>
-          )}
-
-          {/* Document List Tab */}
-          {activeTab === 'documents' && (
-          <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200/50">
-            <div className="p-6 border-b border-gray-200/50">
-              <h2 className="text-lg font-semibold text-gray-900">文档列表</h2>
-            </div>
-            
-            <div className="min-h-[300px]">
-              {documents.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-gray-500">
-                  <DocumentIcon className="w-12 h-12 mb-2 opacity-50" />
-                  <p>暂无文档</p>
-                  <p className="text-sm">请使用上方导入区域添加文档</p>
-                </div>
-              ) : loading ? (
-                <div className="flex items-center justify-center py-16">
-                  <div className="text-gray-500">加载中...</div>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-50/50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          文档名称
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          来源
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          状态
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          创建时间
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          大小
-                        </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          操作
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200/50">
-                      {documents.map((doc) => (
-                        <tr key={doc.id} className="hover:bg-gray-50/30 transition-colors">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              {doc.type === 'website' ? (
-                                <GlobeAltIcon className="w-4 h-4 text-blue-500 mr-2 flex-shrink-0" />
-                              ) : (
-                                <DocumentIcon className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
-                              )}
-                              <span className="text-sm font-medium text-gray-900 truncate">
-                                {doc.name}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <div className="max-w-xs">
-                              <a
-                                href={doc.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-500 hover:text-blue-600 underline truncate block"
-                                title={doc.name}
-                              >
-                                {doc.url}
-                              </a>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={clsx(
-                              'inline-flex px-2 py-1 text-xs font-semibold rounded-full',
-                              {
-                                'bg-green-100 text-green-800': doc.status === 'indexed',
-                                'bg-yellow-100 text-yellow-800': doc.status === 'processing' || doc.status === 'pending',
-                                'bg-red-100 text-red-800': doc.status === 'failed'
-                              }
-                            )}>
-                              {({
-                                indexed: '已索引',
-                                processing: '处理中',
-                                pending: '等待中',
-                                failed: '失败'
-                              } as Record<'indexed' | 'processing' | 'pending' | 'failed', string>)[doc.status as 'indexed' | 'processing' | 'pending' | 'failed'] || doc.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {formatDate(doc.createdAt)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {doc.size}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <div className="flex items-center justify-end space-x-2">
-                              {doc.url && doc.status === 'indexed' && (
-                                <button
-                                  onClick={() => openPreview(doc)}
-                                  className="p-1 hover:bg-gray-100 rounded transition-colors"
-                                  title="预览"
-                                >
-                                  <EyeIcon className="w-4 h-4 text-gray-400 hover:text-green-500" />
-                                </button>
-                              )}
-                              <button
-                                onClick={() => handleDownload(doc)}
-                                className="p-1 hover:bg-gray-100 rounded transition-colors"
-                                title="下载"
-                              >
-                                <ArrowDownTrayIcon className="w-4 h-4 text-gray-400 hover:text-blue-500" />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(doc)}
-                                className="p-1 hover:bg-gray-100 rounded transition-colors"
-                                title="删除"
-                              >
-                                <TrashIcon className="w-4 h-4 text-gray-400 hover:text-red-500" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+            )}
           </div>
+        )}
+      </div>
+
+      {/* Search Bar */}
+      <div className="flex-shrink-0 px-6 py-3 border-b border-gray-200/50 bg-white/60 backdrop-blur-sm">
+        <div className="relative">
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="搜索文档..."
+            value={searchQuery}
+            onChange={e => {
+              setSearchQuery(e.target.value)
+              setSelectedDocId(null)
+              if (e.target.value.trim()) setActiveCategory(null)
+            }}
+            className="w-full pl-9 pr-4 py-2 text-sm bg-white/80 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          />
+          {searching && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">搜索中...</div>
           )}
         </div>
       </div>
-      
-      {/* URL Input Dialog */}
+
+      {/* Main Content: Sidebar + Right Panel */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Sidebar */}
+        <SidebarNav
+          categories={categories}
+          activeCategory={activeCategory}
+          onCategorySelect={handleCategorySelect}
+          highlightedCategory={highlightedCategory}
+          totalDocs={documents.length}
+        />
+
+        {/* Right Content Area */}
+        <div className="flex-1 flex flex-col overflow-hidden bg-gray-50/30">
+          {showReader && selectedDoc && (
+            <DocReader
+              doc={{ id: selectedDoc.id, name: selectedDoc.name, url: selectedDoc.url }}
+              previewUrl={previewUrl}
+              onBack={handleBackFromReader}
+            />
+          )}
+
+          {showReadme && readmeContent && (
+            <ReadmePanel
+              readmeContent={readmeContent}
+              onDocClick={handleReadmeDocClick}
+            />
+          )}
+
+          {(showDocList || showFallbackList) && (
+            <DocListPanel
+              docs={displayedDocs}
+              loading={loadingDocuments}
+              activeCategory={activeCategory}
+              hasSearch={searchQuery.trim() !== ''}
+              onDocClick={handleDocClick}
+              onDownload={handleDownload}
+              onDelete={handleDelete}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Modals */}
       <UrlInputDialog
         isOpen={showUrlDialog}
         onConfirm={handleUrlDialogConfirm}
-        onCancel={handleUrlDialogCancel}
+        onCancel={() => setShowUrlDialog(false)}
       />
-
-      {/* File Upload Modal */}
       <FileUploadModal
         isOpen={showFileUpload}
         onFilesSelected={handleFilesSelected}
-        onClose={handleFileUploadModalClose}
+        onClose={() => setShowFileUpload(false)}
         isProcessing={importStatus.isActive}
       />
+    </div>
+  )
+}
 
-      {/* Page Preview Modal */}
-      <PagePreview
-        isOpen={previewOpen}
-        onClose={() => setPreviewOpen(false)}
-        previewUrl={previewUrl}
-        pageTitle={previewTitle}
-        sourceUrl={previewSourceUrl}
-      />
+/**
+ * Document list panel - shown when filtering by category or search
+ */
+const DocListPanel: React.FC<{
+  docs: MappedDoc[]
+  loading: boolean
+  activeCategory: string | null
+  hasSearch: boolean
+  onDocClick: (doc: MappedDoc) => void
+  onDownload: (doc: MappedDoc) => void
+  onDelete: (doc: MappedDoc) => void
+}> = ({ docs, loading, activeCategory, hasSearch, onDocClick, onDownload, onDelete }) => {
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-gray-500">加载中...</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto">
+      <div className="p-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">
+            {hasSearch ? '搜索结果' : activeCategory || '全部文档'}
+          </h2>
+          <span className="text-sm text-gray-500">{docs.length} 个文档</span>
+        </div>
+
+        {docs.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-gray-500">
+            <DocumentIcon className="w-12 h-12 mb-2 opacity-50" />
+            <p>{hasSearch ? '未找到匹配的文档' : '暂无文档'}</p>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {docs.map(doc => (
+              <div
+                key={doc.id}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white hover:shadow-sm cursor-pointer transition-all group"
+                onClick={() => onDocClick(doc)}
+              >
+                <div className="flex-shrink-0">
+                  {doc.url ? (
+                    <GlobeAltIcon className="w-4 h-4 text-blue-500" />
+                  ) : (
+                    <DocumentIcon className="w-4 h-4 text-gray-400" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-gray-900 truncate">{doc.name}</div>
+                  {doc.url && (
+                    <div className="text-xs text-gray-400 truncate mt-0.5">{doc.url}</div>
+                  )}
+                </div>
+                <span className={clsx(
+                  'text-xs px-2 py-0.5 rounded-full flex-shrink-0',
+                  doc.status === 'indexed' ? 'bg-green-100 text-green-700' :
+                  doc.status === 'processing' ? 'bg-yellow-100 text-yellow-700' :
+                  doc.status === 'pending' ? 'bg-gray-100 text-gray-600' :
+                  'bg-red-100 text-red-700'
+                )}>
+                  {doc.status === 'indexed' ? '已索引' : doc.status === 'processing' ? '处理中' : doc.status === 'pending' ? '等待中' : '失败'}
+                </span>
+                <span className="text-xs text-gray-400 flex-shrink-0 w-16 text-right">{doc.size}</span>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                  <button
+                    onClick={e => { e.stopPropagation(); onDownload(doc) }}
+                    className="p-1 hover:bg-gray-100 rounded"
+                    title="下载"
+                  >
+                    <ArrowDownTrayIcon className="w-3.5 h-3.5 text-gray-400 hover:text-blue-500" />
+                  </button>
+                  <button
+                    onClick={e => { e.stopPropagation(); onDelete(doc) }}
+                    className="p-1 hover:bg-gray-100 rounded"
+                    title="删除"
+                  >
+                    <TrashIcon className="w-3.5 h-3.5 text-gray-400 hover:text-red-500" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

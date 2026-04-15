@@ -236,3 +236,9 @@ class RetrievalStrategiesResponse(BaseModel):
 class SitemapResponse(BaseModel):
     """Response model for collection sitemap"""
     sitemap_json: Optional[str] = Field(None, description="AI-generated sitemap JSON string")
+
+
+class ReadmeResponse(BaseModel):
+    """Response model for collection readme and categories"""
+    readme_content: Optional[str] = Field(None, description="AI-generated README markdown")
+    categories_json: Optional[str] = Field(None, description="AI-generated categories JSON")

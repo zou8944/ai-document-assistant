@@ -15,7 +15,7 @@ from models.requests import (
     CreateCollectionRequest,
     UpdateCollectionRequest,
 )
-from models.responses import ListCollectionsResponseV1, SitemapResponse
+from models.responses import ListCollectionsResponseV1, SitemapResponse, ReadmeResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -134,6 +134,18 @@ async def get_collection_sitemap(collection_id: str, request: Request):
         raise HTTPNotFoundException(f"Collection '{collection_id}' not found")
 
     return SitemapResponse(sitemap_json=sitemap_json)
+
+
+@router.get("/collections/{collection_id}/readme")
+async def get_collection_readme(collection_id: str, request: Request):
+    """Get the AI-generated README and categories for a collection"""
+    collection_service = get_app_state(request).collection_service
+
+    readme_content, categories_json = await collection_service.get_readme(collection_id)
+    if readme_content is None:
+        raise HTTPNotFoundException(f"Collection '{collection_id}' not found")
+
+    return ReadmeResponse(readme_content=readme_content, categories_json=categories_json)
 
 
 @router.get("/collections/{collection_id}/static/{path:path}")

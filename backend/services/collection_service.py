@@ -124,6 +124,17 @@ class CollectionService:
         """Store AI-generated sitemap JSON on the collection."""
         self.collection_repo.update(collection_id, sitemap_json=sitemap_json)
 
+    async def get_readme(self, collection_id: str) -> tuple[Optional[str], Optional[str]]:
+        """Get the AI-generated README content and categories for a collection."""
+        collection = self.collection_repo.get_by_id(collection_id)
+        if not collection:
+            return None, None
+        return collection.readme_content, collection.categories_json
+
+    async def update_readme(self, collection_id: str, readme_content: str, categories_json: str) -> None:
+        """Store AI-generated README and categories on the collection."""
+        self.collection_repo.update(collection_id, readme_content=readme_content, categories_json=categories_json)
+
     async def refresh_collection_summary(self, collection_id: str):
         docs = self.doc_repo.get_by_collection(collection_id)
         doc_summaries = [doc.summary for doc in docs if doc.summary]
