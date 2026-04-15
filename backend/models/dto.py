@@ -63,7 +63,6 @@ class CollectionDTO(DTOConvertible[Collection, "CollectionDTO"]):
     name: str | None = None
     summary: str | None = None
     description: str | None = None
-    sitemap_json: str | None = None
     readme_content: str | None = None
     categories_json: str | None = None
     document_count: int | None = None

@@ -13,7 +13,6 @@ export interface Collection {
   vector_count: number
   created_at: string
   updated_at: string
-  sitemap_json?: string
 }
 
 export interface CreateCollectionRequest {
@@ -299,15 +298,6 @@ export class DocumentAssistantAPI {
     return this.request<APIResponse<{}>>(`/api/v1/collections/${encodeURIComponent(collectionId)}`, {
       method: 'DELETE',
     })
-  }
-
-  /**
-   * Get sitemap for a collection
-   */
-  async getSitemap(collectionId: string): Promise<APIResponse<{ sitemap_json: string | null }>> {
-    return this.request<APIResponse<{ sitemap_json: string | null }>>(
-      `/api/v1/collections/${encodeURIComponent(collectionId)}/sitemap`
-    )
   }
 
   /**

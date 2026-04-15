@@ -113,17 +113,6 @@ class CollectionService:
 
         logger.info(f"Deleted collection '{collection_id}'")
 
-    async def get_sitemap(self, collection_id: str) -> Optional[str]:
-        """Get the AI-generated sitemap JSON for a collection."""
-        collection = self.collection_repo.get_by_id(collection_id)
-        if not collection:
-            return None
-        return collection.sitemap_json
-
-    async def update_sitemap(self, collection_id: str, sitemap_json: str) -> None:
-        """Store AI-generated sitemap JSON on the collection."""
-        self.collection_repo.update(collection_id, sitemap_json=sitemap_json)
-
     async def get_readme(self, collection_id: str) -> tuple[Optional[str], Optional[str]]:
         """Get the AI-generated README content and categories for a collection."""
         collection = self.collection_repo.get_by_id(collection_id)
