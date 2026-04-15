@@ -98,3 +98,22 @@ async def download_document(
         raise HTTPNotFoundException(f"Document '{document_id}' not found in collection '{collection_id}'")
 
     return file_response
+
+
+@router.get("/collections/{collection_id}/documents/{document_id}/preview")
+async def preview_document(
+    collection_id: str,
+    document_id: str,
+    request: Request
+):
+    """
+    Preview a crawled page as rewritten HTML (offline, with local assets)
+    """
+    document_service = get_app_state(request).document_service
+
+    html_response = await document_service.preview_document(collection_id, document_id)
+
+    if not html_response:
+        raise HTTPNotFoundException(f"Document '{document_id}' has no HTML preview available")
+
+    return html_response

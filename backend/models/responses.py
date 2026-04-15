@@ -231,3 +231,8 @@ class RetrievalStrategiesResponse(BaseModel):
     strategies: dict = Field(..., description="Available strategies with descriptions")
     default: str = Field(..., description="Default strategy")
     recommended: str = Field(..., description="Recommended strategy")
+
+
+class SitemapResponse(BaseModel):
+    """Response model for collection sitemap"""
+    sitemap_json: Optional[str] = Field(None, description="AI-generated sitemap JSON string")

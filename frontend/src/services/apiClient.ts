@@ -13,6 +13,7 @@ export interface Collection {
   vector_count: number
   created_at: string
   updated_at: string
+  sitemap_json?: string
 }
 
 export interface CreateCollectionRequest {
@@ -37,6 +38,8 @@ export interface Document {
   created_at: string
   updated_at: string
   error_message?: string
+  html_content?: string
+  source_path?: string
 }
 
 export interface DocumentListResponse {
@@ -296,6 +299,22 @@ export class DocumentAssistantAPI {
     return this.request<APIResponse<{}>>(`/api/v1/collections/${encodeURIComponent(collectionId)}`, {
       method: 'DELETE',
     })
+  }
+
+  /**
+   * Get sitemap for a collection
+   */
+  async getSitemap(collectionId: string): Promise<APIResponse<{ sitemap_json: string | null }>> {
+    return this.request<APIResponse<{ sitemap_json: string | null }>>(
+      `/api/v1/collections/${encodeURIComponent(collectionId)}/sitemap`
+    )
+  }
+
+  /**
+   * Get the URL for previewing a crawled document's HTML
+   */
+  getDocumentPreviewUrl(collectionId: string, documentId: string): string {
+    return `${this.baseURL}/api/v1/collections/${encodeURIComponent(collectionId)}/documents/${encodeURIComponent(documentId)}/preview`
   }
 
   // Document Management

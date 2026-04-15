@@ -177,6 +177,21 @@ class DocumentService:
             }
         )
 
+    async def preview_document(self, collection_id: str, document_id: str) -> Optional[Response]:
+        """Return rewritten HTML content for offline preview (crawled pages only)"""
+        document = self.doc_repo.get_by_id(document_id)
+
+        if not document or document.collection_id != collection_id:
+            return None
+
+        if not document.html_content:
+            return None
+
+        return Response(
+            content=document.html_content.encode('utf-8'),
+            media_type='text/html',
+        )
+
     def close(self):
         self.chroma_manager.close()
         logger.info("DocumentService resources closed")

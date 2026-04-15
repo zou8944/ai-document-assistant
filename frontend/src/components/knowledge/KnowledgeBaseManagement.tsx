@@ -8,7 +8,10 @@ import {
   DocumentIcon,
   GlobeAltIcon,
   ArrowDownTrayIcon,
-  TrashIcon
+  TrashIcon,
+  EyeIcon,
+  MapIcon,
+  ListBulletIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { useAppStore } from '../../store/appStore'
@@ -16,6 +19,8 @@ import { Document as APIDocument, useAPIClient, extractData, SSEEvent } from '..
 import { ImportStatus } from '../../types/app'
 import { UrlInputDialog } from '../InputDialog'
 import FileUploadModal from '../FileUploadModal'
+import SitemapView from './SitemapView'
+import PagePreview from './PagePreview'
 
 interface KnowledgeBaseManagementProps {
   className?: string
@@ -48,15 +53,56 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const [loading, setLoading] = useState(true)
   const [showUrlDialog, setShowUrlDialog] = useState(false)
   const [showFileUpload, setShowFileUpload] = useState(false)
-  
+
   // Import task progress tracking
   const [importStatus, setImportStatus] = useState<ImportStatus>({ isActive: false, progress: 0, message: ""})
   const [taskStatus, setTaskStatus] = useState<string>()
   const [taskLogs, setTaskLogs] = useState<string[]>([])
   const logTextAreaRef = useRef<HTMLTextAreaElement>(null)
 
+  // Tab and sitemap state
+  const [activeTab, setActiveTab] = useState<'documents' | 'sitemap'>('documents')
+  const [sitemapJson, setSitemapJson] = useState<string | null>(null)
+  const [loadingSitemap, setLoadingSitemap] = useState(false)
+
+  // Page preview state
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewTitle, setPreviewTitle] = useState('')
+  const [previewSourceUrl, setPreviewSourceUrl] = useState('')
+
   const handleBack = () => {
     setActiveKnowledgeBase(null)
+  }
+
+  const loadSitemap = async () => {
+    if (!currentKb) return
+    try {
+      setLoadingSitemap(true)
+      const response = await apiClient.getSitemap(currentKb.id)
+      const data = extractData(response)
+      setSitemapJson(data.sitemap_json)
+    } catch (error) {
+      console.error('加载站点结构失败:', error)
+    } finally {
+      setLoadingSitemap(false)
+    }
+  }
+
+  const openPreview = (doc: any) => {
+    if (!currentKb) return
+    setPreviewUrl(apiClient.getDocumentPreviewUrl(currentKb.id, doc.id))
+    setPreviewTitle(doc.name)
+    setPreviewSourceUrl(doc.url || '')
+    setPreviewOpen(true)
+  }
+
+  const openPreviewByPath = async (path: string) => {
+    if (!currentKb) return
+    const doc = documents.find(d => d.url && new URL(d.url).pathname === path)
+    if (doc) {
+      openPreview(doc)
+    }
   }
 
   const currentKb = getCurrentKnowledgeBase()
@@ -290,6 +336,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
             setTaskStatus('completed')
             setImportStatus(prev => ({ ...prev, progress: 100 }))
             loadDocuments() // Refresh documents list
+            loadSitemap() // Refresh sitemap
             break
             
           case 'error':
@@ -316,6 +363,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   useEffect(() => {
     if (currentKb) {
       loadDocuments()
+      loadSitemap()
     }
   }, [currentKb])
 
@@ -455,7 +503,64 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
             )}
           </div>
 
-          {/* Document List */}
+          {/* Tab Switcher */}
+          <div className="flex space-x-1 bg-white/60 backdrop-blur-sm rounded-lg p-1 border border-gray-200/50">
+            <button
+              onClick={() => setActiveTab('documents')}
+              className={clsx(
+                'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors',
+                activeTab === 'documents'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+              )}
+            >
+              <ListBulletIcon className="w-4 h-4" />
+              文档列表
+            </button>
+            <button
+              onClick={() => setActiveTab('sitemap')}
+              className={clsx(
+                'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors',
+                activeTab === 'sitemap'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+              )}
+            >
+              <MapIcon className="w-4 h-4" />
+              站点结构
+            </button>
+          </div>
+
+          {/* Sitemap Tab */}
+          {activeTab === 'sitemap' && (
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200/50">
+              <div className="p-6 border-b border-gray-200/50 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900">站点结构</h2>
+                <button
+                  onClick={loadSitemap}
+                  disabled={loadingSitemap}
+                  className="bg-gray-500 hover:bg-gray-600 disabled:bg-gray-300 text-white px-3 py-1.5 rounded-lg text-sm transition-colors disabled:cursor-not-allowed"
+                >
+                  {loadingSitemap ? '加载中...' : '刷新'}
+                </button>
+              </div>
+              <div className="p-4 max-h-[600px] overflow-y-auto">
+                {loadingSitemap ? (
+                  <div className="flex items-center justify-center py-16">
+                    <div className="text-gray-500">加载中...</div>
+                  </div>
+                ) : (
+                  <SitemapView
+                    sitemapJson={sitemapJson}
+                    onPageClick={openPreviewByPath}
+                  />
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Document List Tab */}
+          {activeTab === 'documents' && (
           <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200/50">
             <div className="p-6 border-b border-gray-200/50">
               <h2 className="text-lg font-semibold text-gray-900">文档列表</h2>
@@ -550,6 +655,15 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex items-center justify-end space-x-2">
+                              {doc.url && doc.status === 'indexed' && (
+                                <button
+                                  onClick={() => openPreview(doc)}
+                                  className="p-1 hover:bg-gray-100 rounded transition-colors"
+                                  title="预览"
+                                >
+                                  <EyeIcon className="w-4 h-4 text-gray-400 hover:text-green-500" />
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleDownload(doc)}
                                 className="p-1 hover:bg-gray-100 rounded transition-colors"
@@ -574,6 +688,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
               )}
             </div>
           </div>
+          )}
         </div>
       </div>
       
@@ -590,6 +705,15 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
         onFilesSelected={handleFilesSelected}
         onClose={handleFileUploadModalClose}
         isProcessing={importStatus.isActive}
+      />
+
+      {/* Page Preview Modal */}
+      <PagePreview
+        isOpen={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        previewUrl={previewUrl}
+        pageTitle={previewTitle}
+        sourceUrl={previewSourceUrl}
       />
     </div>
   )
