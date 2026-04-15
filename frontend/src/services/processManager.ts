@@ -74,7 +74,7 @@ export class ProcessManager extends EventEmitter<ProcessManagerEvents> {
   constructor() {
     super()
     // Get API URL from environment variables
-    const apiUrl = import.meta.env.VITE_API_URL || '/api'
+    const apiUrl = import.meta.env.VITE_API_URL || ''
     this.currentServerInfo = {
       baseURL: apiUrl,
       isConnected: false
