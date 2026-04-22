@@ -207,10 +207,10 @@ class SimpleWebCrawler:
         # URL discovery — prefer sitemap.xml, fall back to BFS seed
         sitemap_urls = self._try_sitemap(urls[0] if urls else recursive_prefix, recursive_prefix)
         if sitemap_urls:
-            to_crawl = list(dict.fromkeys(sitemap_urls))  # deduplicate, preserve order
-            logger.info(f"Using sitemap.xml: {len(to_crawl)} URLs founded")
-            to_crawl = [url for url in to_crawl if url not in skip_urls]
-            logger.info(f"Skipping {len(skip_urls)} urls, remain {len(to_crawl)} urls")
+            # Merge user-provided URLs (priority) with sitemap-discovered URLs
+            merged = list(dict.fromkeys(list(urls) + sitemap_urls))
+            to_crawl = [url for url in merged if url not in skip_urls]
+            logger.info(f"Using sitemap.xml: {len(merged)} URLs found, {len(to_crawl)} after skip")
         else:
             to_crawl = list(urls)
             logger.info("No sitemap.xml found, starting BFS from provided URLs")

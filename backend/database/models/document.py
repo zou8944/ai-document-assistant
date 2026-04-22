@@ -141,7 +141,7 @@ class Document(Base):
     # Constraints
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending', 'processing', 'indexed', 'failed')",
+            "status IN ('pending', 'processing', 'indexed', 'failed', 'not_found')",
             name="chk_document_status"
         ),
         CheckConstraint(
