@@ -678,7 +678,15 @@ class TaskService:
     ):
         """Store a single crawled page. No RAG chunking or embedding."""
         if not crawl_result.success:
-            self._log_err_task(task_id, f"Crawl failed for page: {crawl_result.url}")
+            is_not_found = bool(
+                crawl_result.error
+                and ("404" in crawl_result.error or "Not Found" in crawl_result.error)
+            )
+            doc_status = "not_found" if is_not_found else "failed"
+            if is_not_found:
+                self._log_info_task(task_id, f"Page not found (404): {crawl_result.url}")
+            else:
+                self._log_err_task(task_id, f"Crawl failed for page: {crawl_result.url}")
             await self._store_crawled_page(
                 collection_id=collection_id,
                 url=crawl_result.url,
@@ -686,7 +694,7 @@ class TaskService:
                 content=crawl_result.content,
                 html_content=crawl_result.html_content,
                 summary="",
-                doc_status="failed",
+                doc_status=doc_status,
                 error_message=crawl_result.error,
             )
             return
@@ -1019,7 +1027,7 @@ class TaskService:
         from bs4 import BeautifulSoup
 
         self._log_info_task(task_id, "Mirroring static assets and rewriting HTML links...")
-        docs = self.doc_repo.get_by_collection(collection_id)
+        docs = self.doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
         crawled_docs = [d for d in docs if d.uri and d.source_path and d.html_content]
         if not crawled_docs:
             self._log_info_task(task_id, "No crawled HTML pages found, skipping link rewriting")
@@ -1238,7 +1246,7 @@ class TaskService:
     async def _generate_readme(self, task_id: str, collection_id: str):
         """Phase 4: generate AI README navigation guide and categories data."""
         self._log_info_task(task_id, "Generating AI README...")
-        docs = self.doc_repo.get_by_collection(collection_id)
+        docs = self.doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
         crawled = [d for d in docs if d.source_path]
 
         if not crawled:

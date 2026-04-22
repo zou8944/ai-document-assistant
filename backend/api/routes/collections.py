@@ -149,7 +149,7 @@ async def serve_static_file(collection_id: str, path: str, request: Request):
     # Find domain_key from any document in this collection that has a source_path (crawled doc)
     from repository.document import DocumentRepository
     doc_repo = DocumentRepository()
-    docs = doc_repo.get_by_collection(collection_id)
+    docs = doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
 
     domain_key = None
     for doc in docs:

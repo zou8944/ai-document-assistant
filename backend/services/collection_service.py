@@ -125,7 +125,7 @@ class CollectionService:
         self.collection_repo.update(collection_id, readme_content=readme_content, categories_json=categories_json)
 
     async def refresh_collection_summary(self, collection_id: str):
-        docs = self.doc_repo.get_by_collection(collection_id)
+        docs = self.doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
         doc_summaries = [doc.summary for doc in docs if doc.summary]
         if not doc_summaries:
             return

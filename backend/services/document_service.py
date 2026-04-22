@@ -108,19 +108,21 @@ class DocumentService:
         """List documents in a collection with pagination and filters"""
         offset = (page - 1) * page_size
 
-        # Get documents
+        # Get documents (hide not_found pages by default)
         documents = self.doc_repo.get_by_collection(
             collection_id=collection_id,
             status=status,
+            exclude_statuses=["not_found"] if not status else None,
             search=search,
             offset=offset,
             limit=page_size
         )
 
-        # Get total count
+        # Get total count (hide not_found pages by default)
         total = self.doc_repo.count_by_collection(
             collection_id=collection_id,
             status=status,
+            exclude_statuses=["not_found"] if not status else None,
             search=search
         )
 

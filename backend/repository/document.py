@@ -20,6 +20,7 @@ class DocumentRepository(BaseRepository[Document, DocumentDTO]):
         self,
         collection_id: str,
         status: Optional[str] = None,
+        exclude_statuses: Optional[list[str]] = None,
         search: Optional[str] = None,
         offset: int = 0,
         limit: Optional[int] = None
@@ -29,6 +30,9 @@ class DocumentRepository(BaseRepository[Document, DocumentDTO]):
 
             if status:
                 query = query.where(Document.status == status)
+
+            if exclude_statuses:
+                query = query.where(Document.status.notin_(exclude_statuses))
 
             if search:
                 query = query.where(Document.name.ilike(f"%{search}%"))
@@ -44,6 +48,7 @@ class DocumentRepository(BaseRepository[Document, DocumentDTO]):
         self,
         collection_id: str,
         status: Optional[str] = None,
+        exclude_statuses: Optional[list[str]] = None,
         search: Optional[str] = None
     ) -> int:
         with session_context() as session:
@@ -53,6 +58,9 @@ class DocumentRepository(BaseRepository[Document, DocumentDTO]):
 
             if status:
                 query = query.where(Document.status == status)
+
+            if exclude_statuses:
+                query = query.where(Document.status.notin_(exclude_statuses))
 
             if search:
                 query = query.where(Document.name.ilike(f"%{search}%"))
