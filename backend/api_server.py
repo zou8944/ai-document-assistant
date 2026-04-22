@@ -49,7 +49,7 @@ if __name__ == "__main__":
             host=args.host,
             port=args.port,
             log_level=conf.system.log_level,
-            access_log=True
+            access_log=True,
         )
     except Exception as e:
         logger.error(f"Failed to start API server: {e}", exc_info=True)

@@ -81,6 +81,7 @@ class DocumentResponse(BaseModel):
     mime_type: Optional[str] = Field(None, description="MIME type")
     chunk_count: int = Field(..., description="Number of chunks")
     status: str = Field(..., description="Processing status")
+    source_path: Optional[str] = Field(None, description="Source path for crawled documents")
     created_at: str = Field(..., description="Creation timestamp")
     updated_at: str = Field(..., description="Last update timestamp")
 

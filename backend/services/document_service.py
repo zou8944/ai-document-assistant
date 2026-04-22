@@ -92,6 +92,7 @@ class DocumentService:
             mime_type=document.mime_type or "",
             chunk_count=document.chunk_count or 0,
             status=document.status or "",
+            source_path=document.source_path,
             created_at=document.created_at.isoformat() if document.created_at else "",
             updated_at=document.updated_at.isoformat() if document.updated_at else ""
         )
