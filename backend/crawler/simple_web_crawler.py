@@ -134,6 +134,11 @@ class SimpleWebCrawler:
 
         return title, markdown_content, links
 
+    def extract_links_from_html(self, html: str, base_url: str) -> list[str]:
+        """Extract same-domain links from stored HTML (used for resuming interrupted crawls)."""
+        _, _, links = self._extract_content(html, base_url)
+        return links
+
     def _fetch_page(self, url: str) -> SimpleCrawlResult:
         """Fetch a page from the network and return its content."""
         response = self.session.get(url, timeout=30)

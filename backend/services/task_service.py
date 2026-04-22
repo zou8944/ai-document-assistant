@@ -631,10 +631,29 @@ class TaskService:
             d.uri for d in existing_docs if d.uri
         }
 
+        # Recover URLs discovered by previously crawled pages so that an
+        # interrupted crawl does not lose newly-found links.
+        recovered_urls: set[str] = set()
+        indexed_docs = self.doc_repo.get_by_collection(collection_id, status="indexed")
+        for doc in indexed_docs:
+            if doc.html_content and doc.uri:
+                links = self.web_crawler.extract_links_from_html(doc.html_content, doc.uri)
+                for link in links:
+                    if link in skip_urls:
+                        continue
+                    if recursive_prefix and not link.startswith(recursive_prefix):
+                        continue
+                    recovered_urls.add(link)
+
+        if recovered_urls:
+            self._log_info_task(task_id, f"Recovered {len(recovered_urls)} URLs from previously crawled pages")
+
+        seed_urls = list(dict.fromkeys(urls + list(recovered_urls)))
+
         # Stream crawl results and persist each page immediately.
         crawl_count = 0
         for crawl_result in self.web_crawler.crawl_recursive_stream(
-            urls=urls,
+            urls=seed_urls,
             recursive_prefix=recursive_prefix,
             skip_urls=skip_urls,
             progress_callback=progress_callback,
