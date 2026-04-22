@@ -650,18 +650,46 @@ class TaskService:
 
         seed_urls = list(dict.fromkeys(urls + list(recovered_urls)))
 
-        # Stream crawl results and persist each page immediately.
+        # Stream crawl results and process pages concurrently.
+        # The synchronous crawler runs in a background thread so its
+        # rate-limit sleeps and HTTP requests do not block the event loop.
+        # Storage and LLM summarizing run on the loop in parallel.
         crawl_count = 0
-        for crawl_result in self.web_crawler.crawl_recursive_stream(
+        sem = asyncio.Semaphore(5)
+        stats_lock = asyncio.Lock()
+
+        async def process_bg(crawl_result: SimpleCrawlResult) -> None:
+            async with sem:
+                await self._process_single_page(task_id, collection_id, crawl_result)
+            async with stats_lock:
+                stats.pages_processed += 1
+                self.update_url_task_progress(task_id, stats)
+
+        pending_tasks: list[asyncio.Task] = []
+
+        def _next_crawl_result(gen):
+            try:
+                return next(gen)
+            except StopIteration:
+                return None
+
+        crawl_gen = self.web_crawler.crawl_recursive_stream(
             urls=seed_urls,
             recursive_prefix=recursive_prefix,
             skip_urls=skip_urls,
             progress_callback=progress_callback,
-        ):
+        )
+
+        while True:
+            crawl_result = await asyncio.to_thread(_next_crawl_result, crawl_gen)
+            if crawl_result is None:
+                break
             crawl_count += 1
-            await self._process_single_page(task_id, collection_id, crawl_result)
-            stats.pages_processed += 1
-            self.update_url_task_progress(task_id, stats)
+            task = asyncio.create_task(process_bg(crawl_result))
+            pending_tasks.append(task)
+
+        if pending_tasks:
+            await asyncio.gather(*pending_tasks)
         self._log_info_task(task_id, f"Incremental crawl/store completed: {crawl_count} pages processed in this run")
 
         # Phase 2: rewrite in-page links to local routes
@@ -708,7 +736,10 @@ class TaskService:
             self._log_info_task(task_id, f"Storing page: {page_url}")
 
         self._log_info_task(task_id, f"Summarizing: {page_url}")
-        summary = self.llm_service.summarize_document(crawl_result.content) if crawl_result.content else ""
+        if crawl_result.content:
+            summary = await asyncio.to_thread(self.llm_service.summarize_document, crawl_result.content)
+        else:
+            summary = ""
 
         try:
             await self._store_crawled_page(
