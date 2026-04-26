@@ -119,9 +119,17 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     if (!currentKb) return
     try {
       setLoadingDocuments(true)
-      const response = await apiClient.listDocuments(currentKb.id)
-      const data = extractData(response)
-      setDocuments(data.documents.map(mapAPIDocument))
+      const allDocs: APIDocument[] = []
+      let page = 1
+      let total = 0
+      do {
+        const response = await apiClient.listDocuments(currentKb.id, page, 200)
+        const data = extractData(response)
+        allDocs.push(...data.documents)
+        total = data.total
+        page += 1
+      } while (allDocs.length < total)
+      setDocuments(allDocs.map(mapAPIDocument))
     } catch (error) {
       console.error('加载文档列表失败:', error)
     } finally {

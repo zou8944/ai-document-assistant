@@ -86,15 +86,16 @@ export const ReadmePanel: React.FC<ReadmePanelProps> = ({
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
-      const target = e.target as HTMLElement
-      if (target.tagName === 'A' && target.getAttribute('data-doc-link')) {
+      const link = (e.target as HTMLElement).closest('a[data-doc-link]')
+      if (link instanceof HTMLAnchorElement) {
         e.preventDefault()
-        const href = target.getAttribute('href')
+        const href = link.getAttribute('href')
         if (href) {
-          // Parse doc:///path or doc://path
-          const match = href.match(/^doc:\/\/\/?(.+)$/)
+          // Parse doc:///path, doc://path, or doc:/// (home)
+          const match = href.match(/^doc:\/\/\/?(.*)$/)
           if (match) {
-            onDocClick('/' + match[1])
+            const path = match[1] || '/'
+            onDocClick('/' + path)
           }
         }
       }
