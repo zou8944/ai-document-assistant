@@ -63,7 +63,7 @@ open http://ai-assist.zou8944.com
 | 服务 | 端口 | 说明 |
 |------|------|------|
 | 前端 | 80 | 通过 nginx 访问 |
-| 后端 API | 8888 | 内部使用，不对外暴露 |
+| 后端 API | 18888 | 内部使用，不对外暴露 |
 | ChromaDB | 18000 | 如需外部连接 |
 | PostgreSQL | 15432 | 如需外部连接 |
 
@@ -200,14 +200,14 @@ cat backup.sql | docker compose exec -T postgres psql -U postgres ai_document_as
 
 **端口被占用**
 ```bash
-lsof -i :80   # 或 :8888 / :18000 / :15432
+lsof -i :80   # 或 :18888 / :18000 / :15432
 # 修改 docker-compose.yml 中的端口映射
 ```
 
 **后端启动失败**
 ```bash
 docker compose logs backend
-curl http://localhost:8888/api/v1/health
+curl http://localhost:18888/api/v1/health
 ```
 
 **ChromaDB 连接失败**

@@ -20,7 +20,7 @@ services:
       dockerfile: Dockerfile
     container_name: ai-doc-assistant-backend
     ports:
-      - "8888:8888"
+      - "18888:8888"
     env_file:
       - .env.deploy
     environment:
