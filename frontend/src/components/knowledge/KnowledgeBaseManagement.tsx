@@ -14,15 +14,14 @@ import {
   ChevronRightIcon,
   MagnifyingGlassIcon,
   PlayIcon,
+  ArrowPathIcon,
   StopIcon,
-  ClipboardDocumentListIcon,
   XMarkIcon,
   ClockIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { useAppStore } from '../../store/appStore'
 import { Document as APIDocument, Task as APITask, TaskLog as APITaskLog, useAPIClient, extractData, SSEEvent } from '../../services/apiClient'
-import { ImportStatus } from '../../types/app'
 import { UrlInputDialog } from '../InputDialog'
 import FileUploadModal from '../FileUploadModal'
 import SidebarNav from './SidebarNav'
@@ -59,6 +58,21 @@ const mapAPIDocument = (doc: APIDocument) => ({
 
 type MappedDoc = ReturnType<typeof mapAPIDocument>
 
+const getTaskBgClass = (task: APITask, isSelected: boolean): string => {
+  if (isSelected) {
+    if (task.status === 'processing') return 'bg-yellow-100/60 border-yellow-300'
+    if (task.status === 'success') return 'bg-green-100/60 border-green-300'
+    if (task.status === 'failed') return 'bg-red-100/60 border-red-300'
+    if (task.status === 'stopped') return 'bg-blue-100/60 border-blue-300'
+    return 'bg-gray-100/60 border-gray-300'
+  }
+  if (task.status === 'processing') return 'bg-yellow-50/40 border-yellow-200/60 hover:bg-yellow-50/60'
+  if (task.status === 'success') return 'bg-green-50/40 border-green-200/60 hover:bg-green-50/60'
+  if (task.status === 'failed') return 'bg-red-50/40 border-red-200/60 hover:bg-red-50/60'
+  if (task.status === 'stopped') return 'bg-blue-50/40 border-blue-200/60 hover:bg-blue-50/60'
+  return 'bg-gray-50/40 border-gray-200/60 hover:bg-gray-50/60'
+}
+
 export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = ({
   className,
 }) => {
@@ -82,18 +96,15 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const [searchResults, setSearchResults] = useState<MappedDoc[] | null>(null)
   const [searching, setSearching] = useState(false)
 
-  // Import state
+  // Import & Task state
   const [importCollapsed, setImportCollapsed] = useState(true)
   const [showUrlDialog, setShowUrlDialog] = useState(false)
   const [showFileUpload, setShowFileUpload] = useState(false)
-  const [importStatus, setImportStatus] = useState<ImportStatus>({ isActive: false, progress: 0, message: '' })
-  const [taskStatus, setTaskStatus] = useState<string>()
-  const [taskLogs, setTaskLogs] = useState<string[]>([])
-  const logTextAreaRef = useRef<HTMLTextAreaElement>(null)
-
-  // Task management state
   const [tasks, setTasks] = useState<APITask[]>([])
-  const [showTaskPanel, setShowTaskPanel] = useState(false)
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
+  const [taskLogs, setTaskLogs] = useState<string[]>([])
+  const [isStreaming, setIsStreaming] = useState(false)
+  const logTextAreaRef = useRef<HTMLTextAreaElement>(null)
   const [taskLogsModal, setTaskLogsModal] = useState<APITaskLog[]>([])
   const [showLogModal, setShowLogModal] = useState(false)
   const [logModalTaskId, setLogModalTaskId] = useState<string | null>(null)
@@ -270,13 +281,14 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
         recursive_prefix: config.recursivePrefix,
       })
       const taskData = extractData(response)
-      setImportStatus({ isActive: true, progress: 0, message: '' })
-      setTaskStatus('processing')
+      setSelectedTaskId(taskData.task_id)
       setTaskLogs([])
+      setIsStreaming(true)
+      apiClient.cancelRequests()
       streamTaskProgress(taskData.task_id)
+      loadTasks()
     } catch (error) {
       console.error('导入失败:', error)
-      setImportStatus({ isActive: false, progress: 0, message: '' })
       alert('导入失败: ' + (error as Error).message)
     }
   }
@@ -287,13 +299,14 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     try {
       const response = await apiClient.ingestFiles(currentKb.id, { files: filePaths })
       const taskData = extractData(response)
-      setTaskStatus('processing')
+      setSelectedTaskId(taskData.task_id)
       setTaskLogs([])
-      setImportStatus({ isActive: true, progress: 0, message: '' })
+      setIsStreaming(true)
+      apiClient.cancelRequests()
       streamTaskProgress(taskData.task_id)
+      loadTasks()
     } catch (error) {
       console.error('文件导入失败:', error)
-      setImportStatus({ isActive: false, progress: 0, message: '' })
       alert('文件导入失败: ' + (error as Error).message)
     }
   }
@@ -345,7 +358,11 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const handleStopTask = async (taskId: string) => {
     try {
       await apiClient.stopTask(taskId)
-      loadTasks()
+      // Immediately update local state
+      setTasks(prev => prev.map(t => t.task_id === taskId ? { ...t, status: 'stopped' as const } : t))
+      if (selectedTaskId === taskId) {
+        setIsStreaming(false)
+      }
     } catch (error) {
       console.error('停止任务失败:', error)
       alert('停止任务失败: ' + (error as Error).message)
@@ -355,7 +372,13 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const handleRestartTask = async (taskId: string) => {
     try {
       await apiClient.restartTask(taskId)
-      loadTasks()
+      // Immediately update local state
+      setTasks(prev => prev.map(t => t.task_id === taskId ? { ...t, status: 'pending' as const } : t))
+      setSelectedTaskId(taskId)
+      setTaskLogs([])
+      setIsStreaming(true)
+      apiClient.cancelRequests()
+      streamTaskProgress(taskId)
     } catch (error) {
       console.error('重跑任务失败:', error)
       alert('重跑任务失败: ' + (error as Error).message)
@@ -429,6 +452,31 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     }
   }
 
+  const handleSelectTask = async (taskId: string) => {
+    if (selectedTaskId === taskId) return
+    setSelectedTaskId(taskId)
+    setTaskLogs([])
+    apiClient.cancelRequests()
+
+    const task = tasks.find(t => t.task_id === taskId)
+    if (task?.status === 'processing') {
+      setIsStreaming(true)
+      streamTaskProgress(taskId)
+    } else {
+      setIsStreaming(false)
+      try {
+        const response = await apiClient.getTaskLogs(taskId, 200)
+        const data = extractData(response)
+        setTaskLogs(data.logs.map((log: APITaskLog) => {
+          const timestamp = new Date(log.timestamp).toLocaleTimeString()
+          return `[${timestamp}] ${log.message}`
+        }))
+      } catch (error) {
+        console.error('获取日志失败:', error)
+      }
+    }
+  }
+
   // SSE task streaming
   const streamTaskProgress = async (taskId: string) => {
     await apiClient.streamTaskProgress(
@@ -436,21 +484,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       (event: SSEEvent) => {
         switch (event.event) {
           case 'progress':
-            if (event.data) {
-              const progressData = event.data
-              let progress = progressData.percentage || 0
-              let message = ''
-              if (progressData.stats) {
-                const stats = typeof progressData.stats === 'string' ? JSON.parse(progressData.stats) : progressData.stats
-                if (stats.urls_crawled && stats.urls_crawl_total) {
-                  message += '已爬取网页: ' + stats.urls_crawled + '/' + stats.urls_crawl_total
-                }
-                if (stats.files_processed && stats.files_total) {
-                  message += '已处理文件: ' + stats.files_processed + '/' + stats.files_total
-                }
-              }
-              setImportStatus(prev => ({ ...prev, progress, message }))
-            }
+            // Progress updates now come through task list polling, ignore here
             break
           case 'log':
             if (event.data) {
@@ -463,25 +497,35 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
             }
             break
           case 'done':
-            setTaskStatus('completed')
-            setImportStatus(prev => ({ ...prev, progress: 100 }))
+            setIsStreaming(false)
             loadDocuments()
             loadReadme()
+            loadTasks()
             break
           case 'error':
             setTaskLogs(prev => [...prev, event.data?.message || '未知错误'])
-            setTaskStatus('failed')
-            setImportStatus(prev => ({ ...prev, progress: 100 }))
+            setIsStreaming(false)
+            loadTasks()
             break
         }
       },
       (error: Error) => {
         console.error('Task streaming error:', error)
         setTaskLogs(prev => [...prev, error.message || '未知错误'])
-        setImportStatus(prev => ({ ...prev, progress: 100 }))
+        setIsStreaming(false)
+        loadTasks()
       }
     )
   }
+
+  // Auto-refresh task list when panel is open
+  useEffect(() => {
+    if (!currentKb || importCollapsed) return
+    const interval = setInterval(() => {
+      loadTasks()
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [currentKb?.id, importCollapsed, loadTasks])
 
   // Load on mount
   useEffect(() => {
@@ -541,35 +585,47 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
               <h1 className="text-xl font-bold text-gray-900">{currentKb.name}</h1>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => { setShowTaskPanel(!showTaskPanel); if (!showTaskPanel) loadTasks() }}
-              className={clsx(
-                "flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg transition-colors",
-                showTaskPanel
-                  ? "text-purple-700 bg-purple-50"
-                  : "text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-              )}
-            >
-              <ClipboardDocumentListIcon className="w-4 h-4" />
-              任务管理
-              {tasks.filter(t => t.status === 'processing').length > 0 && (
-                <span className="ml-1 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-              )}
-            </button>
-            <button
-              onClick={() => setImportCollapsed(!importCollapsed)}
-              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
-            >
-              {importCollapsed ? <ChevronRightIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
-              导入文档
-            </button>
-          </div>
+          <button
+            onClick={() => { setImportCollapsed(!importCollapsed); if (importCollapsed) loadTasks() }}
+            className={clsx(
+              "flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg transition-colors",
+              !importCollapsed
+                ? "text-blue-700 bg-blue-50"
+                : "text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+            )}
+          >
+            {importCollapsed ? <ChevronRightIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+            导入与任务
+            {tasks.filter(t => t.status === 'processing').length > 0 && (
+              <span className="ml-1 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+            )}
+          </button>
         </div>
 
-        {/* Task Panel */}
-        {showTaskPanel && (
+        {/* Import & Task Panel */}
+        {!importCollapsed && (
           <div className="mt-4 pt-4 border-t border-gray-200/50">
+            {/* Import Buttons */}
+            <div className="flex gap-4 mb-4">
+              <button
+                onClick={() => setShowUrlDialog(true)}
+                disabled={isStreaming}
+                className="flex-1 flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <GlobeAltIcon className="w-5 h-5 text-gray-400" />
+                <span className="text-sm text-gray-700">网页 URL</span>
+              </button>
+              <button
+                onClick={() => setShowFileUpload(true)}
+                disabled={isStreaming}
+                className="flex-1 flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <DocumentIcon className="w-5 h-5 text-gray-400" />
+                <span className="text-sm text-gray-700">本地文件</span>
+              </button>
+            </div>
+
+            {/* Task List */}
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-gray-700">任务列表</h3>
               <button
@@ -584,27 +640,57 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
             ) : (
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {tasks.map(task => (
-                  <div key={task.task_id} className="flex items-center justify-between p-2 bg-white/60 rounded-lg border border-gray-200/50">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className={clsx(
-                        "w-2 h-2 rounded-full flex-shrink-0",
-                        task.status === 'processing' && "bg-blue-500 animate-pulse",
-                        task.status === 'success' && "bg-green-500",
-                        task.status === 'failed' && "bg-red-500",
-                        task.status === 'stopped' && "bg-yellow-500",
-                        task.status === 'pending' && "bg-gray-400",
-                      )} />
-                      <div className="min-w-0">
-                        <p className="text-sm text-gray-800 truncate">
+                  <div
+                    key={task.task_id}
+                    onClick={() => handleSelectTask(task.task_id)}
+                    className={clsx(
+                      "flex items-center justify-between p-2 rounded-lg border cursor-pointer transition-colors",
+                      getTaskBgClass(task, selectedTaskId === task.task_id),
+                    )}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={clsx(
+                          "w-2 h-2 rounded-full flex-shrink-0",
+                          task.status === 'processing' && "bg-yellow-500 animate-pulse",
+                          task.status === 'success' && "bg-green-500",
+                          task.status === 'failed' && "bg-red-500",
+                          task.status === 'stopped' && "bg-blue-500",
+                          task.status === 'pending' && "bg-gray-400",
+                        )} />
+                        <span className="text-sm font-medium text-gray-800">
                           {task.task_type === 'ingest_urls' ? '网页抓取' : '文件上传'}
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          {new Date(task.created_at).toLocaleString()}
-                          {task.progress !== undefined && task.status === 'processing' && ` · ${task.progress}%`}
-                        </p>
+                        </span>
+                        {task.status === 'processing' && task.progress !== undefined && (
+                          <span className="text-xs text-blue-600 ml-1">
+                            {typeof task.progress === 'number' ? task.progress : (task.progress as any)?.percentage ?? 0}%
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-10 gap-2 text-xs text-gray-500 mt-1">
+                        <span className="col-span-1 truncate" title={`创建: ${new Date(task.created_at).toLocaleString()}`}>
+                          创建: {new Date(task.created_at).toLocaleString()}
+                        </span>
+                        <span className="col-span-1 truncate" title={task.started_at ? '已运行' : ''}>
+                          {task.started_at
+                            ? `运行: ${task.completed_at
+                                ? `${Math.round((new Date(task.completed_at).getTime() - new Date(task.started_at).getTime()) / 1000)}秒`
+                                : `${Math.round((Date.now() - new Date(task.started_at).getTime()) / 1000)}秒`}`
+                            : ''}
+                        </span>
+                        <span className="col-span-4 truncate" title={task.urls?.join(', ') || ''}>
+                          {task.urls?.length
+                            ? `URL: ${task.urls[0]}${task.urls.length > 1 ? ` 等${task.urls.length}个` : ''}`
+                            : ''}
+                        </span>
+                        <span className="col-span-4 truncate" title={task.recursive_prefix || ''}>
+                          {task.recursive_prefix ? `前缀: ${task.recursive_prefix}` : ''}
+                        </span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
+                    <div className="flex items-center gap-1 flex-shrink-0 ml-2"
+                      onClick={e => e.stopPropagation()}
+                    >
                       {task.status === 'processing' && (
                         <button
                           onClick={() => handleStopTask(task.task_id)}
@@ -614,23 +700,23 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                           <StopIcon className="w-4 h-4" />
                         </button>
                       )}
+                      {(task.status === 'success' || task.status === 'failed' || task.status === 'stopped') && !tasks.some(t => t.status === 'processing') && (
+                        <button
+                          onClick={() => handleRestartTask(task.task_id)}
+                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                          title={task.status === 'success' ? '重新运行' : '重跑'}
+                        >
+                          {task.status === 'success' ? <ArrowPathIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4" />}
+                        </button>
+                      )}
                       {(task.status === 'success' || task.status === 'failed' || task.status === 'stopped') && (
-                        <>
-                          <button
-                            onClick={() => handleRestartTask(task.task_id)}
-                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                            title="重跑"
-                          >
-                            <PlayIcon className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleCleanupTask(task.task_id)}
-                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                            title="清理"
-                          >
-                            <TrashIcon className="w-4 h-4" />
-                          </button>
-                        </>
+                        <button
+                          onClick={() => handleCleanupTask(task.task_id)}
+                          className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                          title="清理"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
                       )}
                       <button
                         onClick={() => handleViewLogs(task.task_id)}
@@ -644,73 +730,30 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                 ))}
               </div>
             )}
-          </div>
-        )}
 
-        {/* Collapsible Import Area */}
-        {!importCollapsed && (
-          <div className="mt-4 pt-4 border-t border-gray-200/50">
-            <div className="flex gap-4 mb-4">
-              <button
-                onClick={() => setShowUrlDialog(true)}
-                disabled={importStatus.isActive}
-                className="flex-1 flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-lg transition-colors disabled:opacity-50"
-              >
-                <GlobeAltIcon className="w-5 h-5 text-gray-400" />
-                <span className="text-sm text-gray-700">网页 URL</span>
-              </button>
-              <button
-                onClick={() => setShowFileUpload(true)}
-                disabled={importStatus.isActive}
-                className="flex-1 flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-lg transition-colors disabled:opacity-50"
-              >
-                <DocumentIcon className="w-5 h-5 text-gray-400" />
-                <span className="text-sm text-gray-700">本地文件</span>
-              </button>
-            </div>
-
-            {/* Task Progress */}
-            {importStatus.isActive && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {taskStatus === 'processing' && (
-                      <>
-                        <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                        <span className="text-sm text-blue-600">处理中 {importStatus.progress}%</span>
-                      </>
+            {/* Unified Log Area */}
+            {selectedTaskId && (
+              <div className="mt-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-gray-500">
+                    {tasks.find(t => t.task_id === selectedTaskId)?.task_type === 'ingest_urls' ? '网页抓取' : '文件上传'} 日志
+                    {isStreaming && (
+                      <span className="ml-1 text-blue-600">(实时)</span>
                     )}
-                    {taskStatus === 'completed' && (
-                      <>
-                        <div className="w-2 h-2 bg-green-500 rounded-full" />
-                        <span className="text-sm text-green-600">已完成</span>
-                      </>
-                    )}
-                    {taskStatus === 'failed' && (
-                      <>
-                        <div className="w-2 h-2 bg-red-500 rounded-full" />
-                        <span className="text-sm text-red-600">失败</span>
-                      </>
-                    )}
-                  </div>
+                  </span>
                   <button
-                    onClick={() => { setTaskStatus(''); setTaskLogs([]); setImportStatus({ isActive: false, progress: 0, message: '' }) }}
-                    className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded border border-gray-300"
+                    onClick={() => { setSelectedTaskId(null); setTaskLogs([]); setIsStreaming(false); apiClient.cancelRequests() }}
+                    className="text-xs text-gray-400 hover:text-gray-600"
                   >
-                    清除
+                    关闭
                   </button>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-1.5">
-                  <div className="bg-blue-500 h-1.5 rounded-full transition-all" style={{ width: `${importStatus.progress}%` }} />
-                </div>
-                {taskLogs.length > 0 && (
-                  <textarea
-                    ref={logTextAreaRef}
-                    className="w-full h-16 p-2 text-xs font-mono bg-gray-50 border border-gray-200 rounded-md resize-none"
-                    value={taskLogs.join('\n')}
-                    readOnly
-                  />
-                )}
+                <textarea
+                  ref={logTextAreaRef}
+                  className="w-full h-24 p-2 text-xs font-mono bg-gray-50 border border-gray-200 rounded-md resize-none"
+                  value={taskLogs.join('\n')}
+                  readOnly
+                />
               </div>
             )}
           </div>
@@ -801,7 +844,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
         isOpen={showFileUpload}
         onFilesSelected={handleFilesSelected}
         onClose={() => setShowFileUpload(false)}
-        isProcessing={importStatus.isActive}
+        isProcessing={isStreaming}
       />
 
       {/* Log Modal */}

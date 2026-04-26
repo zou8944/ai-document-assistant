@@ -80,21 +80,28 @@ class TaskService:
     def _to_response(self, task: TaskDTO) -> TaskResponse:
         """Convert Task model to response model"""
         try:
-            progress = json.loads(task.stats) if task.stats else {}
-            stats = json.loads(task.input_params) if task.input_params else {}
+            input_params = json.loads(task.input_params) if task.input_params else {}
         except json.JSONDecodeError:
-            progress = {}
-            stats = {}
+            input_params = {}
+
+        urls = input_params.get("urls", [])
+        if isinstance(urls, str):
+            urls = [urls]
+        recursive_prefix = input_params.get("recursive_prefix", "")
 
         return TaskResponse(
             task_id=task.id or "",
             type=task.type or "",
             status=task.status or "",
-            progress={"percentage": task.progress_percentage, **progress},
-            stats=stats,
+            progress=task.progress_percentage or 0,
+            stats=input_params,
             collection_id=task.collection_id or "",
             created_at=task.created_at.isoformat() if task.created_at else "",
             updated_at=task.updated_at.isoformat() if task.updated_at else "",
+            started_at=task.started_at.isoformat() if task.started_at else None,
+            completed_at=task.completed_at.isoformat() if task.completed_at else None,
+            urls=urls,
+            recursive_prefix=recursive_prefix,
             error=task.error_message
         )
 
@@ -162,6 +169,8 @@ class TaskService:
             from exception import HTTPBadRequestException
             raise HTTPBadRequestException("只能重跑已完成或已停止的任务")
 
+        # Delete old logs before restarting
+        self.task_log_repo.delete_by_task(task_id)
         self.task_repo.reset_task(task_id)
         await self.task_queue.put(task_id)
         logger.info(f"Restarted task {task_id}")

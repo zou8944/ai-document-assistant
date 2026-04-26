@@ -111,11 +111,15 @@ class TaskResponse(BaseModel):
     task_id: str = Field(..., description="Task ID")
     type: str = Field(..., description="Task type")
     status: str = Field(..., description="Task status")
-    progress: dict = Field(..., description="Progress information")
+    progress: int = Field(..., description="Progress percentage (0-100)")
     stats: dict = Field(..., description="Task statistics")
     collection_id: Optional[str] = Field(None, description="Associated collection ID")
     created_at: str = Field(..., description="Creation timestamp")
     updated_at: str = Field(..., description="Last update timestamp")
+    started_at: Optional[str] = Field(None, description="Task start timestamp")
+    completed_at: Optional[str] = Field(None, description="Task completion timestamp")
+    urls: list[str] = Field(default=[], description="URLs to crawl")
+    recursive_prefix: str = Field(default="", description="Recursive prefix for crawling")
     error: Optional[str] = Field(None, description="Error message if failed")
 
 

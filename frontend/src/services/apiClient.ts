@@ -71,6 +71,10 @@ export interface Task {
   error_message?: string
   created_at: string
   updated_at: string
+  started_at?: string
+  completed_at?: string
+  urls?: string[]
+  recursive_prefix?: string
 }
 
 export interface TaskLog {
