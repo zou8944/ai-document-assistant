@@ -105,6 +105,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const [taskLogs, setTaskLogs] = useState<string[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const logTextAreaRef = useRef<HTMLTextAreaElement>(null)
+  const [logsExpanded, setLogsExpanded] = useState(false)
   const [taskLogsModal, setTaskLogsModal] = useState<APITaskLog[]>([])
   const [showLogModal, setShowLogModal] = useState(false)
   const [logModalTaskId, setLogModalTaskId] = useState<string | null>(null)
@@ -733,24 +734,35 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
 
             {/* Unified Log Area */}
             {selectedTaskId && (
-              <div className="mt-3">
-                <div className="flex items-center justify-between mb-2">
+              <div className={clsx("mt-3 flex flex-col", logsExpanded && "h-[50vh]")}>
+                <div className="flex items-center justify-between mb-2 flex-shrink-0">
                   <span className="text-xs text-gray-500">
                     {tasks.find(t => t.task_id === selectedTaskId)?.task_type === 'ingest_urls' ? '网页抓取' : '文件上传'} 日志
                     {isStreaming && (
                       <span className="ml-1 text-blue-600">(实时)</span>
                     )}
                   </span>
-                  <button
-                    onClick={() => { setSelectedTaskId(null); setTaskLogs([]); setIsStreaming(false); apiClient.cancelRequests() }}
-                    className="text-xs text-gray-400 hover:text-gray-600"
-                  >
-                    关闭
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setLogsExpanded(v => !v)}
+                      className="text-xs text-blue-600 hover:text-blue-700 px-2 py-0.5 rounded hover:bg-blue-50 transition-colors"
+                    >
+                      {logsExpanded ? '收起' : '展开'}
+                    </button>
+                    <button
+                      onClick={() => { setSelectedTaskId(null); setTaskLogs([]); setIsStreaming(false); setLogsExpanded(false); apiClient.cancelRequests() }}
+                      className="text-xs text-gray-400 hover:text-gray-600 px-2 py-0.5 rounded hover:bg-gray-100 transition-colors"
+                    >
+                      关闭
+                    </button>
+                  </div>
                 </div>
                 <textarea
                   ref={logTextAreaRef}
-                  className="w-full h-24 p-2 text-xs font-mono bg-gray-50 border border-gray-200 rounded-md resize-none"
+                  className={clsx(
+                    "w-full p-2 text-xs font-mono bg-gray-50 border border-gray-200 rounded-md resize-none",
+                    logsExpanded ? "flex-1 min-h-0" : "h-24"
+                  )}
                   value={taskLogs.join('\n')}
                   readOnly
                 />
