@@ -9,12 +9,16 @@ import { AppState, KnowledgeBase, ChatSession, AppSettings, SidebarSection } fro
 interface AppStore extends AppState {
   // Layout state
   sidebarWidth: number
-  
+
+  // Language display preference: 'source' = original language, 'zh' = Chinese
+  displayLanguage: 'source' | 'zh'
+
   // Actions
   setActiveSidebarSection: (section: SidebarSection) => void
   setActiveKnowledgeBase: (id: string | null) => void
   setActiveChat: (id: string | null) => void
   setSidebarWidth: (width: number) => void
+  setDisplayLanguage: (lang: 'source' | 'zh') => void
   addKnowledgeBase: (kb: KnowledgeBase) => void
   updateKnowledgeBase: (id: string, updates: Partial<KnowledgeBase>) => void
   deleteKnowledgeBase: (id: string) => void
@@ -23,7 +27,7 @@ interface AppStore extends AppState {
   deleteChatSession: (id: string) => void
   reorderChatSessions: (fromIndex: number, toIndex: number) => void
   updateSettings: (settings: Partial<AppSettings>) => void
-  
+
   // Computed getters
   getCurrentKnowledgeBase: () => KnowledgeBase | null
   getCurrentChat: () => ChatSession | null
@@ -57,6 +61,7 @@ export const useAppStore = create<AppStore>()(
         // Initial state
         activeSidebarSection: 'knowledge',
         sidebarWidth: 256, // 16rem equivalent
+        displayLanguage: 'zh',
         knowledgeBases: [],
         chatSessions: [],
         activeKnowledgeBase: null,
@@ -75,6 +80,9 @@ export const useAppStore = create<AppStore>()(
 
         setSidebarWidth: (width) =>
           set({ sidebarWidth: Math.max(200, Math.min(400, width)) }),
+
+        setDisplayLanguage: (lang) =>
+          set({ displayLanguage: lang }),
 
         addKnowledgeBase: (kb) =>
           set((state) => ({
@@ -163,7 +171,8 @@ export const useAppStore = create<AppStore>()(
           knowledgeBases: state.knowledgeBases,
           chatSessions: state.chatSessions,
           settings: state.settings,
-          sidebarWidth: state.sidebarWidth
+          sidebarWidth: state.sidebarWidth,
+          displayLanguage: state.displayLanguage,
         })
       }
     )

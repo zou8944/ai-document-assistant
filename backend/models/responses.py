@@ -60,6 +60,7 @@ class CollectionResponse(BaseModel):
     id: str = Field(..., description="Collection ID")
     name: str = Field(..., description="Display name")
     description: str = Field(..., description="Description")
+    source_language: Optional[str] = Field(None, description="Detected source language (zh, en)")
     document_count: int = Field(..., description="Number of documents")
     vector_count: int = Field(..., description="Number of vectors")
     created_at: str = Field(..., description="Creation timestamp")
@@ -76,6 +77,7 @@ class DocumentResponse(BaseModel):
     """Response model for document operations"""
     id: str = Field(..., description="Document ID")
     name: str = Field(..., description="File name or page title")
+    name_translated: Optional[str] = Field(None, description="Chinese translation of page title")
     uri: str = Field(..., description="Document URI")
     size_bytes: int = Field(..., description="File size in bytes")
     mime_type: Optional[str] = Field(None, description="MIME type")
@@ -238,3 +240,6 @@ class ReadmeResponse(BaseModel):
     """Response model for collection readme and categories"""
     readme_content: Optional[str] = Field(None, description="AI-generated README markdown")
     categories_json: Optional[str] = Field(None, description="AI-generated categories JSON")
+    readme_content_zh: Optional[str] = Field(None, description="Chinese translation of README markdown")
+    categories_json_zh: Optional[str] = Field(None, description="Chinese translation of categories JSON")
+    source_language: Optional[str] = Field(None, description="Detected source language")

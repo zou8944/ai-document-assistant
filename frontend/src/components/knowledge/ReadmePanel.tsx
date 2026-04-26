@@ -6,6 +6,9 @@ import React, { useCallback, useMemo } from 'react'
 
 interface ReadmePanelProps {
   readmeContent: string
+  readmeContentZh?: string | null
+  displayLanguage: 'source' | 'zh'
+  isBilingual: boolean
   onDocClick: (path: string) => void
 }
 
@@ -80,9 +83,15 @@ function processInline(text: string): string {
 
 export const ReadmePanel: React.FC<ReadmePanelProps> = ({
   readmeContent,
+  readmeContentZh,
+  displayLanguage,
+  isBilingual,
   onDocClick,
 }) => {
-  const html = useMemo(() => markdownToHtml(readmeContent), [readmeContent])
+  const effectiveContent = isBilingual && displayLanguage === 'zh' && readmeContentZh
+    ? readmeContentZh
+    : readmeContent
+  const html = useMemo(() => markdownToHtml(effectiveContent), [effectiveContent])
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {

@@ -50,6 +50,11 @@ class Document(Base):
         nullable=False,
         doc="File name or page title"
     )
+    name_translated: Mapped[Optional[str]] = mapped_column(
+        String(500),
+        nullable=True,
+        doc="Chinese translation of page title (for English source documents)"
+    )
     summary: Mapped[Optional[str]] = mapped_column(
         Text,
         nullable=True,

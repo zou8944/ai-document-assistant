@@ -3,7 +3,7 @@ Collection management service.
 """
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from database.connection import transaction
 from models.dto import CollectionDTO
@@ -40,6 +40,7 @@ class CollectionService:
             id=collection.id or "",
             name=collection.name or "",
             description=collection.description or "",
+            source_language=collection.source_language,
             document_count=collection.document_count or 0,
             vector_count=collection.vector_count or 0,
             created_at=collection.created_at.isoformat() if collection.created_at else "",
@@ -113,16 +114,43 @@ class CollectionService:
 
         logger.info(f"Deleted collection '{collection_id}'")
 
-    async def get_readme(self, collection_id: str) -> tuple[Optional[str], Optional[str]]:
-        """Get the AI-generated README content and categories for a collection."""
+    async def get_readme(self, collection_id: str) -> tuple[Optional[str], Optional[str], Optional[str], Optional[str], Optional[str]]:
+        """Get the AI-generated README content and categories for a collection.
+
+        Returns: (readme_content, categories_json, readme_content_zh, categories_json_zh, source_language)
+        """
         collection = self.collection_repo.get_by_id(collection_id)
         if not collection:
-            return None, None
-        return collection.readme_content, collection.categories_json
+            return None, None, None, None, None
+        return (
+            collection.readme_content,
+            collection.categories_json,
+            collection.readme_content_zh,
+            collection.categories_json_zh,
+            collection.source_language,
+        )
 
-    async def update_readme(self, collection_id: str, readme_content: str, categories_json: str) -> None:
+    async def update_readme(
+        self,
+        collection_id: str,
+        readme_content: str,
+        categories_json: str,
+        readme_content_zh: str = "",
+        categories_json_zh: str = "",
+        source_language: str = ""
+    ) -> None:
         """Store AI-generated README and categories on the collection."""
-        self.collection_repo.update(collection_id, readme_content=readme_content, categories_json=categories_json)
+        update_data: dict[str, Any] = {
+            "readme_content": readme_content,
+            "categories_json": categories_json
+        }
+        if readme_content_zh:
+            update_data["readme_content_zh"] = readme_content_zh
+        if categories_json_zh:
+            update_data["categories_json_zh"] = categories_json_zh
+        if source_language:
+            update_data["source_language"] = source_language
+        self.collection_repo.update(collection_id, **update_data)
 
     async def refresh_collection_summary(self, collection_id: str):
         docs = self.doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])

@@ -65,6 +65,9 @@ class CollectionDTO(DTOConvertible[Collection, "CollectionDTO"]):
     description: str | None = None
     readme_content: str | None = None
     categories_json: str | None = None
+    readme_content_zh: str | None = None
+    categories_json_zh: str | None = None
+    source_language: str | None = None
     document_count: int | None = None
     vector_count: int | None = None
     created_at: datetime | None = None
@@ -78,6 +81,7 @@ class DocumentDTO(DTOConvertible[Document, "DocumentDTO"]):
     id: str | None = None
     collection_id: str | None = None
     name: str | None = None
+    name_translated: str | None = None
     content: str | None = None
     html_content: str | None = None
     summary: str | None = None

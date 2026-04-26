@@ -129,11 +129,17 @@ async def get_collection_readme(collection_id: str, request: Request):
     """Get the AI-generated README and categories for a collection"""
     collection_service = get_app_state(request).collection_service
 
-    readme_content, categories_json = await collection_service.get_readme(collection_id)
+    readme_content, categories_json, readme_content_zh, categories_json_zh, source_language = await collection_service.get_readme(collection_id)
     if readme_content is None:
         raise HTTPNotFoundException(f"Collection '{collection_id}' not found")
 
-    return ReadmeResponse(readme_content=readme_content, categories_json=categories_json)
+    return ReadmeResponse(
+        readme_content=readme_content,
+        categories_json=categories_json,
+        readme_content_zh=readme_content_zh,
+        categories_json_zh=categories_json_zh,
+        source_language=source_language,
+    )
 
 
 @router.get("/collections/{collection_id}/static/{path:path}")

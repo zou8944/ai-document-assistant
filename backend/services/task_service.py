@@ -1274,6 +1274,25 @@ class TaskService:
             summary_msg
         )
 
+    @staticmethod
+    def _detect_source_language(pages: list[dict]) -> str:
+        """Detect if page titles are primarily Chinese or English."""
+        total_chars = 0
+        chinese_chars = 0
+        for p in pages:
+            title = p.get("title", "")
+            for char in title:
+                if "\u4e00" <= char <= "\u9fff":
+                    chinese_chars += 1
+                if char.isalpha():
+                    total_chars += 1
+        if total_chars == 0:
+            return "unknown"
+        ratio = chinese_chars / total_chars
+        if ratio > 0.5:
+            return "zh"
+        return "en"
+
     async def _generate_readme(self, task_id: str, collection_id: str):
         """Phase 4: generate AI README navigation guide and categories data."""
         self._log_info_task(task_id, "Generating AI README...")
@@ -1288,21 +1307,68 @@ class TaskService:
 
         try:
             import json as json_lib
-            raw = await self.llm_service.generate_readme(pages)
+            import re
+
+            source_language = self._detect_source_language(pages)
+            self._log_info_task(task_id, f"Detected source language: {source_language}")
+
+            raw = await self.llm_service.generate_readme(pages, source_language)
 
             # Strip markdown fences if LLM wraps the response
             cleaned = raw.strip()
             if cleaned.startswith("```"):
-                import re
                 cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
                 cleaned = re.sub(r"\n?```$", "", cleaned)
                 cleaned = cleaned.strip()
 
             parsed = json_lib.loads(cleaned)
             readme_content = parsed.get("readme", "")
-            categories_json = json_lib.dumps(parsed.get("categories", []), ensure_ascii=False)
+            categories = parsed.get("categories", [])
+            categories_json = json_lib.dumps(categories, ensure_ascii=False)
 
-            await self.collection_service.update_readme(collection_id, readme_content, categories_json)
+            # For English source, also extract Chinese translations
+            readme_content_zh = parsed.get("readme_zh", "") if source_language == "en" else ""
+            categories_json_zh = ""
+            if source_language == "en" and categories:
+                categories_zh = []
+                for cat in categories:
+                    cat_zh = {
+                        "category": cat.get("category_zh", cat.get("category", "")),
+                        "pages": []
+                    }
+                    for page in cat.get("pages", []):
+                        cat_zh["pages"].append({
+                            "path": page.get("path", ""),
+                            "title": page.get("title_zh", page.get("title", "")),
+                            "description": page.get("description_zh", page.get("description", ""))
+                        })
+                    categories_zh.append(cat_zh)
+                categories_json_zh = json_lib.dumps(categories_zh, ensure_ascii=False)
+
+            # Update collection with README and source language
+            await self.collection_service.update_readme(
+                collection_id,
+                readme_content=readme_content,
+                categories_json=categories_json,
+                readme_content_zh=readme_content_zh,
+                categories_json_zh=categories_json_zh,
+                source_language=source_language
+            )
+
+            # Update document name_translated for English source documents
+            if source_language == "en":
+                title_zh_map = {}
+                for cat in categories:
+                    for page in cat.get("pages", []):
+                        path = page.get("path", "")
+                        title_zh = page.get("title_zh", "")
+                        if path and title_zh:
+                            title_zh_map[path] = title_zh
+
+                for doc in crawled:
+                    if doc.source_path and doc.source_path in title_zh_map:
+                        self.doc_repo.update(doc.id, name_translated=title_zh_map[doc.source_path])
+
             self._log_info_task(task_id, "README stored successfully")
         except Exception as e:
             self._log_err_task(task_id, f"README generation failed: {e}")

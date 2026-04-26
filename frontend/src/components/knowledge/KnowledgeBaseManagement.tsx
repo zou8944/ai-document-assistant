@@ -44,6 +44,7 @@ const formatFileSize = (bytes: number): string => {
 const mapAPIDocument = (doc: APIDocument) => ({
   id: doc.id,
   name: doc.name,
+  nameTranslated: doc.name_translated,
   url: doc.uri,
   source_path: doc.source_path,
   createdAt: doc.created_at,
@@ -56,7 +57,7 @@ type MappedDoc = ReturnType<typeof mapAPIDocument>
 export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = ({
   className,
 }) => {
-  const { getCurrentKnowledgeBase, setActiveKnowledgeBase } = useAppStore()
+  const { getCurrentKnowledgeBase, setActiveKnowledgeBase, displayLanguage, setDisplayLanguage } = useAppStore()
   const apiClient = useAPIClient()
   const currentKb = getCurrentKnowledgeBase()
 
@@ -65,6 +66,9 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const [loadingDocuments, setLoadingDocuments] = useState(true)
   const [readmeContent, setReadmeContent] = useState<string | null>(null)
   const [categoriesJson, setCategoriesJson] = useState<string | null>(null)
+  const [readmeContentZh, setReadmeContentZh] = useState<string | null>(null)
+  const [categoriesJsonZh, setCategoriesJsonZh] = useState<string | null>(null)
+  const [sourceLanguage, setSourceLanguage] = useState<string | null>(null)
 
   // Navigation state
   const [activeTab, setActiveTab] = useState<'overview' | 'all' | string>('overview')
@@ -82,8 +86,27 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const [taskLogs, setTaskLogs] = useState<string[]>([])
   const logTextAreaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Parse categories
+  // Whether this collection supports bilingual display
+  const isBilingual = sourceLanguage === 'en' && !!categoriesJsonZh
+
+  // Parse categories (English for internal logic)
   const categories = useMemo(() => parseCategories(categoriesJson), [categoriesJson])
+
+  // Parse Chinese categories for display
+  const categoriesZh = useMemo(() => parseCategories(categoriesJsonZh), [categoriesJsonZh])
+
+  // Build category name mapping: en -> zh
+  const categoryNameMap = useMemo(() => {
+    const map = new Map<string, string>()
+    if (!isBilingual) return map
+    for (const enCat of categories) {
+      const zhCat = categoriesZh.find(c => c.pages.length > 0 && enCat.pages.some(ep => c.pages.some(zp => zp.path === ep.path)))
+      if (zhCat) {
+        map.set(enCat.category, zhCat.category)
+      }
+    }
+    return map
+  }, [categories, categoriesZh, isBilingual])
 
   // README doc count
   const readmeDocCount = useMemo(() => {
@@ -150,10 +173,16 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       const data = extractData(response)
       setReadmeContent(data.readme_content)
       setCategoriesJson(data.categories_json)
+      setReadmeContentZh(data.readme_content_zh)
+      setCategoriesJsonZh(data.categories_json_zh)
+      setSourceLanguage(data.source_language)
     } catch {
       // No readme available - fallback
       setReadmeContent(null)
       setCategoriesJson(null)
+      setReadmeContentZh(null)
+      setCategoriesJsonZh(null)
+      setSourceLanguage(null)
     }
   }, [currentKb?.id])
 
@@ -513,13 +542,17 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
           highlightedCategory={highlightedCategory}
           totalDocs={documents.length}
           readmeDocCount={readmeDocCount}
+          displayLanguage={displayLanguage}
+          isBilingual={isBilingual}
+          categoryNameMap={categoryNameMap}
+          onLanguageToggle={() => setDisplayLanguage(displayLanguage === 'source' ? 'zh' : 'source')}
         />
 
         {/* Right Content Area */}
         <div className="flex-1 flex flex-col overflow-hidden bg-gray-50/30">
           {showReader && selectedDoc && (
             <DocReader
-              doc={{ id: selectedDoc.id, name: selectedDoc.name, url: selectedDoc.url }}
+              doc={{ id: selectedDoc.id, name: selectedDoc.name, nameTranslated: selectedDoc.nameTranslated, url: selectedDoc.url }}
               previewUrl={previewUrl}
               onBack={handleBackFromReader}
             />
@@ -528,6 +561,9 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
           {showReadme && readmeContent && (
             <ReadmePanel
               readmeContent={readmeContent}
+              readmeContentZh={readmeContentZh}
+              displayLanguage={displayLanguage}
+              isBilingual={isBilingual}
               onDocClick={handleReadmeDocClick}
             />
           )}
@@ -538,6 +574,9 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
               loading={loadingDocuments}
               activeTab={activeTab}
               hasSearch={searchQuery.trim() !== ''}
+              isBilingual={isBilingual}
+              displayLanguage={displayLanguage}
+              categoryNameMap={categoryNameMap}
               onDocClick={handleDocClick}
               onDownload={handleDownload}
               onDelete={handleDelete}
@@ -570,10 +609,13 @@ const DocListPanel: React.FC<{
   loading: boolean
   activeTab: 'overview' | 'all' | string
   hasSearch: boolean
+  isBilingual: boolean
+  displayLanguage: 'source' | 'zh'
+  categoryNameMap: Map<string, string>
   onDocClick: (doc: MappedDoc) => void
   onDownload: (doc: MappedDoc) => void
   onDelete: (doc: MappedDoc) => void
-}> = ({ docs, loading, activeTab, hasSearch, onDocClick, onDownload, onDelete }) => {
+}> = ({ docs, loading, activeTab, hasSearch, isBilingual, displayLanguage, categoryNameMap, onDocClick, onDownload, onDelete }) => {
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -588,7 +630,7 @@ const DocListPanel: React.FC<{
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900">
-            {hasSearch ? '搜索结果' : activeTab === 'all' ? '全部文档' : activeTab}
+            {hasSearch ? '搜索结果' : activeTab === 'all' ? '全部文档' : (isBilingual && displayLanguage === 'zh' ? (categoryNameMap.get(activeTab) || activeTab) : activeTab)}
           </h2>
           <span className="text-sm text-gray-500">{docs.length} 个文档</span>
         </div>
@@ -614,7 +656,12 @@ const DocListPanel: React.FC<{
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-gray-900 truncate">{doc.name}</div>
+                  <div className="text-sm font-medium text-gray-900 truncate">
+                    {doc.name}
+                    {isBilingual && doc.nameTranslated && (
+                      <span className="text-gray-500 font-normal"> ({doc.nameTranslated})</span>
+                    )}
+                  </div>
                   {doc.url && (
                     <div className="text-xs text-gray-400 truncate mt-0.5">{doc.url}</div>
                   )}

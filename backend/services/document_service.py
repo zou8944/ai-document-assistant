@@ -104,6 +104,7 @@ class DocumentService:
         return DocumentResponse(
             id=document.id or "",
             name=document.name or "",
+            name_translated=document.name_translated,
             uri=document.uri or "",
             size_bytes=document.size_bytes or 0,
             mime_type=document.mime_type or "",

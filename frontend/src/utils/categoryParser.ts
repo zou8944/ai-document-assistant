@@ -5,11 +5,13 @@
 export interface SitemapPage {
   path: string
   title: string
+  title_zh?: string
   description?: string
 }
 
 export interface CategoryGroup {
   category: string
+  category_zh?: string
   pages: SitemapPage[]
 }
 

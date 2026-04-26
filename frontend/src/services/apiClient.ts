@@ -9,6 +9,7 @@ export interface Collection {
   id: string
   name: string
   description?: string
+  source_language?: string
   document_count: number
   vector_count: number
   created_at: string
@@ -30,6 +31,7 @@ export interface UpdateCollectionRequest {
 export interface Document {
   id: string
   name: string
+  name_translated?: string
   uri: string
   mime_type: string
   size_bytes: number
@@ -303,8 +305,20 @@ export class DocumentAssistantAPI {
   /**
    * Get README and categories for a collection
    */
-  async getReadme(collectionId: string): Promise<APIResponse<{ readme_content: string | null, categories_json: string | null }>> {
-    return this.request<APIResponse<{ readme_content: string | null, categories_json: string | null }>>(
+  async getReadme(collectionId: string): Promise<APIResponse<{
+    readme_content: string | null
+    categories_json: string | null
+    readme_content_zh: string | null
+    categories_json_zh: string | null
+    source_language: string | null
+  }>> {
+    return this.request<APIResponse<{
+      readme_content: string | null
+      categories_json: string | null
+      readme_content_zh: string | null
+      categories_json_zh: string | null
+      source_language: string | null
+    }>>(
       `/api/v1/collections/${encodeURIComponent(collectionId)}/readme`
     )
   }

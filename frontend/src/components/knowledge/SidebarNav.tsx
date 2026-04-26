@@ -14,6 +14,10 @@ interface SidebarNavProps {
   highlightedCategory: string | null
   totalDocs: number
   readmeDocCount: number
+  displayLanguage: 'source' | 'zh'
+  isBilingual: boolean
+  categoryNameMap: Map<string, string>
+  onLanguageToggle: () => void
 }
 
 export const SidebarNav: React.FC<SidebarNavProps> = ({
@@ -23,14 +27,23 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   highlightedCategory,
   totalDocs,
   readmeDocCount,
+  displayLanguage,
+  isBilingual,
+  categoryNameMap,
+  onLanguageToggle,
 }) => {
   const effectiveActive = (activeTab !== 'overview' && activeTab !== 'all')
     ? activeTab
     : (highlightedCategory || null)
 
+  const getDisplayCategory = (enName: string) => {
+    if (!isBilingual || displayLanguage === 'source') return enName
+    return categoryNameMap.get(enName) || enName
+  }
+
   return (
-    <div className="w-60 flex-shrink-0 border-r border-gray-200/50 bg-white/50 backdrop-blur-sm overflow-y-auto">
-      <div className="py-2">
+    <div className="w-60 flex-shrink-0 border-r border-gray-200/50 bg-white/50 backdrop-blur-sm overflow-y-auto flex flex-col">
+      <div className="py-2 flex-1">
         {/* Overview (README) */}
         <button
           onClick={() => onTabSelect('overview')}
@@ -89,7 +102,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
                   : 'text-gray-700 hover:bg-gray-50/80'
               )}
             >
-              <span className="truncate">{group.category}</span>
+              <span className="truncate">{getDisplayCategory(group.category)}</span>
               <span className={clsx(
                 'text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 ml-2',
                 isActive ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'
@@ -100,6 +113,22 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
           )
         })}
       </div>
+
+      {/* Language toggle for bilingual collections */}
+      {isBilingual && (
+        <div className="px-4 py-3 border-t border-gray-200/50">
+          <button
+            onClick={onLanguageToggle}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <span>{displayLanguage === 'source' ? 'English' : '中文'}</span>
+            <svg className="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+            <span>{displayLanguage === 'source' ? '中文' : 'English'}</span>
+          </button>
+        </div>
+      )}
     </div>
   )
 }

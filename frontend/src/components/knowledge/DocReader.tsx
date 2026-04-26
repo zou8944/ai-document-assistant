@@ -8,6 +8,7 @@ import { ArrowLeftIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/ou
 interface DocInfo {
   id: string
   name: string
+  nameTranslated?: string
   url?: string
 }
 
@@ -31,6 +32,9 @@ export const DocReader: React.FC<DocReaderProps> = ({ doc, previewUrl, onBack })
         </button>
         <h3 className="text-sm font-semibold text-gray-900 truncate flex-1">
           {doc.name}
+          {doc.nameTranslated && (
+            <span className="text-gray-500 font-normal"> ({doc.nameTranslated})</span>
+          )}
         </h3>
         {doc.url && (
           <a

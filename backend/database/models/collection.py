@@ -53,6 +53,21 @@ class Collection(Base):
         nullable=True,
         doc="AI-generated categories data (JSON) for sidebar navigation"
     )
+    readme_content_zh: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        doc="Chinese translation of AI-generated README markdown"
+    )
+    categories_json_zh: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        doc="Chinese translation of AI-generated categories data (JSON)"
+    )
+    source_language: Mapped[str | None] = mapped_column(
+        String(10),
+        nullable=True,
+        doc="Detected source language of documents (zh, en, mixed)"
+    )
 
     # Statistics (cached values)
     document_count: Mapped[int] = mapped_column(
