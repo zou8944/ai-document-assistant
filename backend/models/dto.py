@@ -93,6 +93,7 @@ class DocumentDTO(DTOConvertible[Document, "DocumentDTO"]):
     status: str | None = None
     error_message: str | None = None
     hash_md5: str | None = None
+    source_task_id: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

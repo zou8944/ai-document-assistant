@@ -57,6 +57,31 @@ class TaskRepository(BaseRepository[Task, TaskDTO]):
             session.flush()
             return True
 
+    def update_status(self, task_id: str, status: str) -> bool:
+        with session_context() as session:
+            task = session.get(Task, task_id)
+            if not task:
+                return False
+
+            task.status = status
+            session.flush()
+            return True
+
+    def reset_task(self, task_id: str) -> bool:
+        with session_context() as session:
+            task = session.get(Task, task_id)
+            if not task:
+                return False
+
+            task.status = "pending"
+            task.progress_percentage = 0
+            task.stats = "{}"
+            task.error_message = None
+            task.started_at = None
+            task.completed_at = None
+            session.flush()
+            return True
+
     def mark_started(self, task_id: str) -> bool:
         with session_context() as session:
             task = session.get(Task, task_id)
@@ -81,19 +106,6 @@ class TaskRepository(BaseRepository[Task, TaskDTO]):
             if error_message:
                 task.error_message = error_message
 
-            session.flush()
-            return True
-
-    def mark_cancelled(self, task_id: str) -> bool:
-        with session_context() as session:
-            task = session.get(Task, task_id)
-            if not task:
-                return False
-
-            if task.status not in ["pending", "processing"]:
-                return False
-
-            task.status = "cancelled"
             session.flush()
             return True
 
@@ -202,6 +214,16 @@ class TaskLogRepository(BaseRepository[TaskLog, TaskLogDTO]):
                 query = query.where(TaskLog.level == level)
 
             return session.scalar(query) or 0
+
+    def delete_by_task(self, task_id: str) -> int:
+        from sqlalchemy import delete
+
+        with session_context() as session:
+            stmt = delete(TaskLog).where(TaskLog.task_id == task_id)
+            result = session.execute(stmt)
+            session.flush()
+
+        return result.rowcount or 0
 
     def delete_old_logs(self, days: int = 30) -> int:
         from datetime import timedelta

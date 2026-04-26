@@ -114,7 +114,7 @@ class Task(Base):
             name="chk_task_type"
         ),
         CheckConstraint(
-            "status IN ('pending', 'processing', 'success', 'failed')",
+            "status IN ('pending', 'processing', 'success', 'failed', 'stopped')",
             name="chk_task_status"
         ),
         CheckConstraint(

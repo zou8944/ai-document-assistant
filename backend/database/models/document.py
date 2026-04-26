@@ -106,6 +106,14 @@ class Document(Base):
         doc="Rewritten HTML content for offline preview (crawled pages only)"
     )
 
+    # Task tracking
+    source_task_id: Mapped[Optional[str]] = mapped_column(
+        String(32),
+        ForeignKey("tasks.id", ondelete="SET NULL"),
+        nullable=True,
+        doc="Task ID that created this document"
+    )
+
     # Crawler metadata (crawled pages only)
     source_path: Mapped[Optional[str]] = mapped_column(
         Text,
@@ -165,6 +173,7 @@ class Document(Base):
         Index("idx_documents_status", "status"),
         Index("idx_documents_hash", "hash_md5"),
         Index("idx_documents_updated_at", "updated_at"),
+        Index("idx_documents_source_task_id", "source_task_id"),
     )
 
     def __repr__(self) -> str:

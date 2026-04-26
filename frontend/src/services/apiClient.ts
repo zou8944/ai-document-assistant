@@ -68,12 +68,21 @@ export interface Task {
   task_id: string
   task_type: string
   collection_id: string
-  status: 'pending' | 'processing' | 'completed' | 'failed'
+  status: 'pending' | 'processing' | 'success' | 'failed' | 'stopped'
   progress?: number
   result?: any
   error_message?: string
   created_at: string
   updated_at: string
+}
+
+export interface TaskLog {
+  id: number
+  task_id: string
+  level: string
+  message: string
+  details: Record<string, any>
+  timestamp: string
 }
 
 // Chat types
@@ -465,9 +474,61 @@ export class DocumentAssistantAPI {
     const params = new URLSearchParams()
     if (status) params.append('status', status)
     if (taskType) params.append('task_type', taskType)
-    
+
     const url = params.toString() ? `/api/v1/tasks?${params}` : '/api/v1/tasks'
     return this.request<APIResponse<{ tasks: Task[], total: number }>>(url)
+  }
+
+  /**
+   * List tasks by collection
+   */
+  async listTasksByCollection(collectionId: string): Promise<APIResponse<{ tasks: Task[], total: number }>> {
+    return this.request<APIResponse<{ tasks: Task[], total: number }>>(
+      `/api/v1/tasks?collection_id=${encodeURIComponent(collectionId)}`
+    )
+  }
+
+  /**
+   * Stop a running task
+   */
+  async stopTask(taskId: string): Promise<APIResponse<{ success: boolean }>> {
+    return this.request<APIResponse<{ success: boolean }>>(
+      `/api/v1/tasks/${encodeURIComponent(taskId)}/stop`,
+      { method: 'POST' }
+    )
+  }
+
+  /**
+   * Restart a completed or stopped task
+   */
+  async restartTask(taskId: string): Promise<APIResponse<Task>> {
+    return this.request<APIResponse<Task>>(
+      `/api/v1/tasks/${encodeURIComponent(taskId)}/restart`,
+      { method: 'POST' }
+    )
+  }
+
+  /**
+   * Cleanup task resources and reset to pending
+   */
+  async cleanupTask(taskId: string): Promise<APIResponse<{ success: boolean }>> {
+    return this.request<APIResponse<{ success: boolean }>>(
+      `/api/v1/tasks/${encodeURIComponent(taskId)}/cleanup`,
+      { method: 'POST' }
+    )
+  }
+
+  /**
+   * Get task logs (non-streaming)
+   */
+  async getTaskLogs(
+    taskId: string,
+    limit: number = 100,
+    offset: number = 0
+  ): Promise<APIResponse<{ logs: TaskLog[], total: number }>> {
+    return this.request<APIResponse<{ logs: TaskLog[], total: number }>>(
+      `/api/v1/tasks/${encodeURIComponent(taskId)}/logs?limit=${limit}&offset=${offset}`
+    )
   }
 
   /**

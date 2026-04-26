@@ -13,10 +13,15 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   MagnifyingGlassIcon,
+  PlayIcon,
+  StopIcon,
+  ClipboardDocumentListIcon,
+  XMarkIcon,
+  ClockIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { useAppStore } from '../../store/appStore'
-import { Document as APIDocument, useAPIClient, extractData, SSEEvent } from '../../services/apiClient'
+import { Document as APIDocument, Task as APITask, TaskLog as APITaskLog, useAPIClient, extractData, SSEEvent } from '../../services/apiClient'
 import { ImportStatus } from '../../types/app'
 import { UrlInputDialog } from '../InputDialog'
 import FileUploadModal from '../FileUploadModal'
@@ -85,6 +90,15 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const [taskStatus, setTaskStatus] = useState<string>()
   const [taskLogs, setTaskLogs] = useState<string[]>([])
   const logTextAreaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Task management state
+  const [tasks, setTasks] = useState<APITask[]>([])
+  const [showTaskPanel, setShowTaskPanel] = useState(false)
+  const [taskLogsModal, setTaskLogsModal] = useState<APITaskLog[]>([])
+  const [showLogModal, setShowLogModal] = useState(false)
+  const [logModalTaskId, setLogModalTaskId] = useState<string | null>(null)
+  const [logModalStreaming, setLogModalStreaming] = useState(false)
+  const logModalRef = useRef<HTMLDivElement>(null)
 
   // Whether this collection supports bilingual display
   const isBilingual = sourceLanguage === 'en' && !!categoriesJsonZh
@@ -320,6 +334,105 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     }
   }
 
+  // Task management
+  const loadTasks = useCallback(async () => {
+    if (!currentKb) return
+    try {
+      const response = await apiClient.listTasksByCollection(currentKb.id)
+      const data = extractData(response)
+      setTasks(data.tasks)
+    } catch (error) {
+      console.error('加载任务列表失败:', error)
+    }
+  }, [currentKb?.id])
+
+  const handleStopTask = async (taskId: string) => {
+    try {
+      await apiClient.stopTask(taskId)
+      loadTasks()
+    } catch (error) {
+      console.error('停止任务失败:', error)
+      alert('停止任务失败: ' + (error as Error).message)
+    }
+  }
+
+  const handleRestartTask = async (taskId: string) => {
+    try {
+      await apiClient.restartTask(taskId)
+      loadTasks()
+    } catch (error) {
+      console.error('重跑任务失败:', error)
+      alert('重跑任务失败: ' + (error as Error).message)
+    }
+  }
+
+  const handleCleanupTask = async (taskId: string) => {
+    if (!confirm('确定要清理该任务吗？这会删除该任务产生的所有文档和日志。')) return
+    try {
+      await apiClient.cleanupTask(taskId)
+      loadTasks()
+      loadDocuments()
+      loadReadme()
+    } catch (error) {
+      console.error('清理任务失败:', error)
+      alert('清理任务失败: ' + (error as Error).message)
+    }
+  }
+
+  const handleViewLogs = async (taskId: string) => {
+    setLogModalTaskId(taskId)
+    setShowLogModal(true)
+    setTaskLogsModal([])
+
+    const task = tasks.find(t => t.task_id === taskId)
+    if (task?.status === 'processing') {
+      setLogModalStreaming(true)
+      await apiClient.streamTaskProgress(
+        taskId,
+        (event: SSEEvent) => {
+          if (event.event === 'log' && event.data) {
+            const logData = event.data
+            const timestamp = logData.timestamp
+              ? new Date(logData.timestamp).toLocaleTimeString()
+              : new Date().toLocaleTimeString()
+            setTaskLogsModal(prev => [...prev, {
+              id: Date.now(),
+              task_id: taskId,
+              level: logData.level || 'info',
+              message: `[${timestamp}] ${logData.message}`,
+              details: logData.details || {},
+              timestamp: logData.timestamp || new Date().toISOString(),
+            }])
+            setTimeout(() => {
+              if (logModalRef.current) {
+                logModalRef.current.scrollTop = logModalRef.current.scrollHeight
+              }
+            }, 0)
+          } else if (event.event === 'done' || event.event === 'error') {
+            setLogModalStreaming(false)
+            loadTasks()
+          }
+        },
+        (error: Error) => {
+          console.error('日志流错误:', error)
+          setLogModalStreaming(false)
+        }
+      )
+    } else {
+      setLogModalStreaming(false)
+      try {
+        const response = await apiClient.getTaskLogs(taskId, 200)
+        const data = extractData(response)
+        setTaskLogsModal(data.logs.map((log: APITaskLog) => ({
+          ...log,
+          message: `[${new Date(log.timestamp).toLocaleTimeString()}] ${log.message}`,
+        })))
+      } catch (error) {
+        console.error('获取日志失败:', error)
+      }
+    }
+  }
+
   // SSE task streaming
   const streamTaskProgress = async (taskId: string) => {
     await apiClient.streamTaskProgress(
@@ -432,14 +545,111 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
               <h1 className="text-xl font-bold text-gray-900">{currentKb.name}</h1>
             </div>
           </div>
-          <button
-            onClick={() => setImportCollapsed(!importCollapsed)}
-            className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
-          >
-            {importCollapsed ? <ChevronRightIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
-            导入文档
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setShowTaskPanel(!showTaskPanel); if (!showTaskPanel) loadTasks() }}
+              className={clsx(
+                "flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg transition-colors",
+                showTaskPanel
+                  ? "text-purple-700 bg-purple-50"
+                  : "text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+              )}
+            >
+              <ClipboardDocumentListIcon className="w-4 h-4" />
+              任务管理
+              {tasks.filter(t => t.status === 'processing').length > 0 && (
+                <span className="ml-1 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+              )}
+            </button>
+            <button
+              onClick={() => setImportCollapsed(!importCollapsed)}
+              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+            >
+              {importCollapsed ? <ChevronRightIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+              导入文档
+            </button>
+          </div>
         </div>
+
+        {/* Task Panel */}
+        {showTaskPanel && (
+          <div className="mt-4 pt-4 border-t border-gray-200/50">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-700">任务列表</h3>
+              <button
+                onClick={loadTasks}
+                className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded border border-gray-300"
+              >
+                刷新
+              </button>
+            </div>
+            {tasks.length === 0 ? (
+              <p className="text-sm text-gray-400 py-4 text-center">暂无任务</p>
+            ) : (
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {tasks.map(task => (
+                  <div key={task.task_id} className="flex items-center justify-between p-2 bg-white/60 rounded-lg border border-gray-200/50">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className={clsx(
+                        "w-2 h-2 rounded-full flex-shrink-0",
+                        task.status === 'processing' && "bg-blue-500 animate-pulse",
+                        task.status === 'success' && "bg-green-500",
+                        task.status === 'failed' && "bg-red-500",
+                        task.status === 'stopped' && "bg-yellow-500",
+                        task.status === 'pending' && "bg-gray-400",
+                      )} />
+                      <div className="min-w-0">
+                        <p className="text-sm text-gray-800 truncate">
+                          {task.task_type === 'ingest_urls' ? '网页抓取' : '文件上传'}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          {new Date(task.created_at).toLocaleString()}
+                          {task.progress !== undefined && task.status === 'processing' && ` · ${task.progress}%`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {task.status === 'processing' && (
+                        <button
+                          onClick={() => handleStopTask(task.task_id)}
+                          className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                          title="停止"
+                        >
+                          <StopIcon className="w-4 h-4" />
+                        </button>
+                      )}
+                      {(task.status === 'success' || task.status === 'failed' || task.status === 'stopped') && (
+                        <>
+                          <button
+                            onClick={() => handleRestartTask(task.task_id)}
+                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                            title="重跑"
+                          >
+                            <PlayIcon className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleCleanupTask(task.task_id)}
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                            title="清理"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => handleViewLogs(task.task_id)}
+                        className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+                        title="查看日志"
+                      >
+                        <ClockIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Collapsible Import Area */}
         {!importCollapsed && (
@@ -597,6 +807,63 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
         onClose={() => setShowFileUpload(false)}
         isProcessing={importStatus.isActive}
       />
+
+      {/* Log Modal */}
+      {showLogModal && logModalTaskId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setShowLogModal(false)}
+        >
+          <div
+            className="w-full max-w-2xl max-h-[80vh] bg-white rounded-xl shadow-2xl flex flex-col mx-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200"
+            >
+              <h3 className="text-sm font-semibold text-gray-800"
+              >
+                任务日志
+                {logModalStreaming && (
+                  <span className="ml-2 text-xs text-blue-600"
+                  >
+                    (实时)
+                    <span className="inline-block w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse ml-1" />
+                  </span>
+                )}
+              </h3>
+              <button
+                onClick={() => setShowLogModal(false)}
+                className="p-1 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                <XMarkIcon className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div
+              ref={logModalRef}
+              className="flex-1 overflow-y-auto p-4 space-y-1 min-h-[300px] max-h-[60vh]"
+            >
+              {taskLogsModal.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-8"
+                >暂无日志</p>
+              ) : (
+                taskLogsModal.map((log, idx) => (
+                  <div
+                    key={`${log.id}-${idx}`}
+                    className={clsx(
+                      "text-xs font-mono py-0.5 px-1 rounded",
+                      log.level === 'error' && "text-red-700 bg-red-50",
+                      log.level === 'warning' && "text-yellow-700 bg-yellow-50",
+                      log.level === 'debug' && "text-gray-500",
+                      (log.level === 'info' || !log.level) && "text-gray-700"
+                    )}
+                  >
+                    {log.message}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

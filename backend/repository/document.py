@@ -110,6 +110,11 @@ class DocumentRepository(BaseRepository[Document, DocumentDTO]):
             sql = select(Document).where(Document.status == status)
             return [self.dto_class.from_orm(item) for item in session.scalars(sql)]
 
+    def get_by_task(self, task_id: str) -> list[DocumentDTO]:
+        with session_context() as session:
+            sql = select(Document).where(Document.source_task_id == task_id)
+            return [self.dto_class.from_orm(item) for item in session.scalars(sql)]
+
 
 class DocumentChunkRepository(BaseRepository[DocumentChunk, DocumentChunkDTO]):
     """Repository for DocumentChunk operations."""

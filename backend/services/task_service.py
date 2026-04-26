@@ -58,6 +58,7 @@ class TaskService:
         self.task_queue: asyncio.Queue = asyncio.Queue(maxsize=100)
         self.executor = ThreadPoolExecutor(max_workers=5)
         self.running = False
+        self._stop_flags: set[str] = set()  # Task IDs marked for stopping
 
         # Initialize repositories
         self.task_repo = TaskRepository()
@@ -144,8 +145,96 @@ class TaskService:
     async def get_task_logs(self, task_id: str, limit: int, offset: int = 0) -> list[TaskLogDTO]:
         return self.task_log_repo.list_by_task(task_id=task_id, limit=limit, offset=offset)
 
-    async def cancel_task(self, task_id: str) -> bool:
-        return self.task_repo.mark_cancelled(task_id)
+    async def stop_task(self, task_id: str) -> bool:
+        """Mark a running task for graceful stop."""
+        task = self.task_repo.get_by_id(task_id)
+        if not task or task.status != "processing":
+            return False
+        self._stop_flags.add(task_id)
+        return True
+
+    async def restart_task(self, task_id: str) -> TaskResponse:
+        """Restart a completed or stopped task from scratch."""
+        task = self.task_repo.get_by_id(task_id)
+        if not task:
+            raise HTTPNotFoundException(f"Task {task_id} not found")
+        if task.status not in ("success", "failed", "stopped"):
+            from exception import HTTPBadRequestException
+            raise HTTPBadRequestException("只能重跑已完成或已停止的任务")
+
+        self.task_repo.reset_task(task_id)
+        await self.task_queue.put(task_id)
+        logger.info(f"Restarted task {task_id}")
+
+        return self._to_response(self.task_repo.get_by_id(task_id))
+
+    async def cleanup_task(self, task_id: str) -> bool:
+        """Cleanup all resources produced by a task and reset it to pending."""
+        task = self.task_repo.get_by_id(task_id)
+        if not task:
+            return False
+        if task.status == "processing":
+            from exception import HTTPBadRequestException
+            raise HTTPBadRequestException("不能清理正在执行的任务")
+
+        collection_id = task.collection_id
+
+        # 1. Delete all documents produced by this task
+        docs = self.doc_repo.get_by_task(task_id)
+        if docs and collection_id:
+            chroma_collection = await self.chroma_manager.get_collection(collection_id)
+            for doc in docs:
+                if chroma_collection and doc.id:
+                    try:
+                        chroma_collection.delete(where={"document_id": doc.id})
+                    except Exception as e:
+                        logger.warning(f"Failed to delete vectors for doc {doc.id}: {e}")
+                self.doc_chunk_repo.delete_by_document(doc.id)
+                self.doc_repo.delete_by_id(doc.id)
+
+        # 2. Delete local crawl cache for URL tasks
+        if task.type == "ingest_urls" and collection_id:
+            self._delete_crawl_cache(collection_id)
+
+        # 3. Clear task logs
+        self.task_log_repo.delete_by_task(task_id)
+
+        # 4. Reset task state
+        self.task_repo.reset_task(task_id)
+
+        # 5. Regenerate collection summary if documents remain
+        if collection_id:
+            remaining = self.doc_repo.count_by_collection(collection_id)
+            if remaining > 0:
+                await self.collection_service.refresh_collection_summary(collection_id)
+            else:
+                self.collection_service.collection_repo.update(
+                    collection_id,
+                    readme_content=None,
+                    categories_json=None,
+                    readme_content_zh=None,
+                    categories_json_zh=None,
+                    source_language=None,
+                )
+
+        logger.info(f"Cleaned up task {task_id}")
+        return True
+
+    def _delete_crawl_cache(self, collection_id: str) -> None:
+        """Delete local crawl cache directory for a collection."""
+        cache_root = Path(self.config.get_crawl_cache_dir())
+        # Find domain dirs that belong to this collection's documents
+        docs = self.doc_repo.get_by_collection(collection_id)
+        domains = set()
+        for doc in docs:
+            if doc.uri and doc.uri.startswith("http"):
+                domains.add(self._domain_key(doc.uri))
+        for domain in domains:
+            domain_dir = cache_root / domain
+            if domain_dir.exists():
+                import shutil
+                shutil.rmtree(domain_dir)
+                logger.info(f"Deleted crawl cache: {domain_dir}")
 
     async def get_task_stream_generator(self, task_id: str):
         task = self.task_repo.get_by_id(task_id)
@@ -347,6 +436,13 @@ class TaskService:
             logger.error(error_msg)
             self.task_repo.mark_completed(task_id, False, error_msg)
 
+        # Check if task was stopped
+        if task_id in self._stop_flags:
+            self._stop_flags.discard(task_id)
+            self.task_repo.update_status(task_id, "stopped")
+            self._log_info_task(task_id, "任务已停止")
+            return
+
         # 重新为目标知识库生成摘要
         await self.collection_service.refresh_collection_summary(task.collection_id)
 
@@ -386,7 +482,8 @@ class TaskService:
         doc_status: str,
         doc_error_message: str | None,
         chunks,
-        chunk_embeddings
+        chunk_embeddings,
+        source_task_id: str | None = None,
     ):
         """Store document chunks in database and vector store"""
         collection = await self.chroma_manager.get_collection(collection_id)
@@ -420,7 +517,8 @@ class TaskService:
             chunk_count=len(chunks),
             status=doc_status,
             error_message=doc_error_message,
-            hash_md5=hashlib.md5(f"{doc_page_uri}:{doc_title}:{doc_content}".encode()).hexdigest()
+            hash_md5=hashlib.md5(f"{doc_page_uri}:{doc_title}:{doc_content}".encode()).hexdigest(),
+            source_task_id=source_task_id,
         )
 
         # Safety check: ensure chunks and embeddings have same length
@@ -513,6 +611,13 @@ class TaskService:
         await self.update_file_task_progress(task_id, stats)
 
         for file_path in all_files:
+            # Check stop flag before processing next file
+            if task_id in self._stop_flags:
+                self._stop_flags.discard(task_id)
+                self.task_repo.update_status(task_id, "stopped")
+                self._log_info_task(task_id, "任务已停止")
+                return
+
             try:
                 await self._process_single_file(task_id, collection_id, file_path, override)
             except Exception as e:
@@ -562,7 +667,8 @@ class TaskService:
                 doc_status="failed",
                 doc_error_message=result.error,
                 chunks=[],
-                chunk_embeddings=[]
+                chunk_embeddings=[],
+                source_task_id=task_id,
             )
             return
 
@@ -594,7 +700,8 @@ class TaskService:
                 doc_status=doc_status,
                 doc_error_message=error_message,
                 chunks=chunks,
-                chunk_embeddings=chunk_embeddings
+                chunk_embeddings=chunk_embeddings,
+                source_task_id=task_id,
             )
         except Exception as e:
             self._log_err_task(task_id, f"Storage failed for {file_uri}: {str(e)}")
@@ -681,6 +788,16 @@ class TaskService:
         )
 
         while True:
+            # Check stop flag before fetching next crawl result
+            if task_id in self._stop_flags:
+                self._stop_flags.discard(task_id)
+                self.task_repo.update_status(task_id, "stopped")
+                self._log_info_task(task_id, "任务已停止")
+                # Cancel pending background tasks
+                for pt in pending_tasks:
+                    pt.cancel()
+                return
+
             crawl_result = await asyncio.to_thread(_next_crawl_result, crawl_gen)
             if crawl_result is None:
                 break
@@ -693,9 +810,19 @@ class TaskService:
         self._log_info_task(task_id, f"Incremental crawl/store completed: {crawl_count} pages processed in this run")
 
         # Phase 2: rewrite in-page links to local routes
+        if task_id in self._stop_flags:
+            self._stop_flags.discard(task_id)
+            self.task_repo.update_status(task_id, "stopped")
+            self._log_info_task(task_id, "任务已停止")
+            return
         await self._rewrite_html_links(task_id, collection_id)
 
         # Phase 3: generate AI README
+        if task_id in self._stop_flags:
+            self._stop_flags.discard(task_id)
+            self.task_repo.update_status(task_id, "stopped")
+            self._log_info_task(task_id, "任务已停止")
+            return
         await self._generate_readme(task_id, collection_id)
 
         self.task_repo.mark_completed(task_id, True)
@@ -724,6 +851,7 @@ class TaskService:
                 summary="",
                 doc_status=doc_status,
                 error_message=crawl_result.error,
+                source_task_id=task_id,
             )
             return
 
@@ -751,6 +879,7 @@ class TaskService:
                 summary=summary,
                 doc_status="indexed",
                 error_message=None,
+                source_task_id=task_id,
             )
         except Exception as e:
             self._log_err_task(task_id, f"Storage failed for {page_url}: {e}")
@@ -765,6 +894,7 @@ class TaskService:
         summary: str,
         doc_status: str,
         error_message: str | None,
+        source_task_id: str | None = None,
     ):
         """Persist a crawled page to the database. No Chroma / no chunks."""
         from urllib.parse import urlparse as _urlparse
@@ -793,6 +923,7 @@ class TaskService:
             status=doc_status,
             error_message=error_message,
             hash_md5=hashlib.md5(f"{url}:{title}:{content}".encode()).hexdigest(),
+            source_task_id=source_task_id,
         )
         self.doc_repo.create_by_model(doc_record)
 
