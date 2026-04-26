@@ -3,6 +3,8 @@ Collection management service.
 """
 
 import logging
+import shutil
+from pathlib import Path
 from typing import Any, Optional
 
 from database.connection import transaction
@@ -106,13 +108,30 @@ class CollectionService:
         return self._to_response(updated_collection)
 
     async def delete_collection(self, collection_id: str):
-        """Delete a collection"""
-        # delete collection, document, document_chunk; delete chroma collection
+        """Delete a collection and all associated data including crawl cache."""
+        # Get domain info before deleting docs (for crawl cache cleanup)
+        docs = self.doc_repo.get_by_collection(collection_id)
+        domains = set()
+        for doc in docs:
+            if doc.uri and doc.uri.startswith("http"):
+                from urllib.parse import urlparse
+                domains.add(urlparse(doc.uri).netloc.lower().replace(":", "_"))
+
+        # Delete all database records in transaction
         async with transaction():
-            self.collection_repo.delete(collection_id)
+            self.task_repo.delete_by_collection(collection_id)
             self.doc_repo.delete_by_collection(collection_id)
             self.doc_chunk_repo.delete_by_collection(collection_id)
+            self.collection_repo.delete(collection_id)
             await self.chroma_manager.delete_collection(collection_id)
+
+        # Delete crawl cache
+        cache_root = Path(self.config.get_crawl_cache_dir())
+        for domain in domains:
+            domain_dir = cache_root / domain
+            if domain_dir.exists():
+                shutil.rmtree(domain_dir)
+                logger.info(f"Deleted crawl cache: {domain_dir}")
 
         logger.info(f"Deleted collection '{collection_id}'")
 
@@ -122,12 +141,11 @@ class CollectionService:
         if not collection:
             raise ValueError(f"Collection '{collection_id}' not found")
 
-        # Check for processing tasks
+        # Cancel any processing tasks before clearing
         tasks = self.task_repo.get_by_collection(collection_id)
         for task in tasks:
             if task.status == "processing":
-                from exception import HTTPBadRequestException
-                raise HTTPBadRequestException("不能清空存在正在执行任务的知识库")
+                self.task_repo.update_status(task.id, "stopped")
 
         # Get domain info before deleting docs (for crawl cache cleanup)
         docs = self.doc_repo.get_by_collection(collection_id)
@@ -162,9 +180,6 @@ class CollectionService:
             )
 
         # Delete crawl cache
-        from pathlib import Path
-        import shutil
-
         cache_root = Path(self.config.get_crawl_cache_dir())
         for domain in domains:
             domain_dir = cache_root / domain
