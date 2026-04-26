@@ -67,7 +67,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const [categoriesJson, setCategoriesJson] = useState<string | null>(null)
 
   // Navigation state
-  const [activeCategory, setActiveCategory] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'overview' | 'all' | string>('overview')
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<MappedDoc[] | null>(null)
@@ -85,16 +85,22 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   // Parse categories
   const categories = useMemo(() => parseCategories(categoriesJson), [categoriesJson])
 
+  // README doc count
+  const readmeDocCount = useMemo(() => {
+    return categories.reduce((sum, cat) => sum + cat.pages.length, 0)
+  }, [categories])
+
   // Determine which docs to show in list
   const displayedDocs = useMemo(() => {
     if (searchResults !== null) return searchResults
-    if (activeCategory) {
-      const catPages = getPagesForCategory(categories, activeCategory)
+    if (activeTab === 'all') return documents
+    if (activeTab !== 'overview') {
+      const catPages = getPagesForCategory(categories, activeTab)
       const paths = new Set(catPages.map(p => p.path))
       return documents.filter(d => d.source_path && paths.has(d.source_path))
     }
-    return documents
-  }, [searchResults, activeCategory, categories, documents])
+    return []
+  }, [searchResults, activeTab, categories, documents])
 
   // Find selected document
   const selectedDoc = useMemo(
@@ -156,6 +162,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     if (!currentKb) return
     if (!query.trim()) {
       setSearchResults(null)
+      setActiveTab('overview')
       return
     }
     try {
@@ -199,9 +206,9 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     setSelectedDocId(null)
   }, [])
 
-  // Category select from sidebar
-  const handleCategorySelect = useCallback((category: string | null) => {
-    setActiveCategory(category)
+  // Tab select from sidebar
+  const handleTabSelect = useCallback((tab: 'overview' | 'all' | string) => {
+    setActiveTab(tab)
     setSelectedDocId(null)
     setSearchQuery('')
     setSearchResults(null)
@@ -357,8 +364,8 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
 
   // Determine right panel view
   const showReader = selectedDoc !== null
-  const showDocList = !showReader && (activeCategory !== null || searchQuery.trim() !== '')
-  const showReadme = !showReader && !showDocList && readmeContent !== null
+  const showDocList = !showReader && (activeTab !== 'overview' || searchQuery.trim() !== '')
+  const showReadme = !showReader && !showDocList && activeTab === 'overview' && readmeContent !== null
   const showFallbackList = !showReader && !showDocList && !showReadme
 
   if (!currentKb) {
@@ -486,7 +493,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
             onChange={e => {
               setSearchQuery(e.target.value)
               setSelectedDocId(null)
-              if (e.target.value.trim()) setActiveCategory(null)
+              if (e.target.value.trim()) setActiveTab('all')
             }}
             className="w-full pl-9 pr-4 py-2 text-sm bg-white/80 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
           />
@@ -501,10 +508,11 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
         {/* Left Sidebar */}
         <SidebarNav
           categories={categories}
-          activeCategory={activeCategory}
-          onCategorySelect={handleCategorySelect}
+          activeTab={activeTab}
+          onTabSelect={handleTabSelect}
           highlightedCategory={highlightedCategory}
           totalDocs={documents.length}
+          readmeDocCount={readmeDocCount}
         />
 
         {/* Right Content Area */}
@@ -528,7 +536,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
             <DocListPanel
               docs={displayedDocs}
               loading={loadingDocuments}
-              activeCategory={activeCategory}
+              activeTab={activeTab}
               hasSearch={searchQuery.trim() !== ''}
               onDocClick={handleDocClick}
               onDownload={handleDownload}
@@ -560,12 +568,12 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
 const DocListPanel: React.FC<{
   docs: MappedDoc[]
   loading: boolean
-  activeCategory: string | null
+  activeTab: 'overview' | 'all' | string
   hasSearch: boolean
   onDocClick: (doc: MappedDoc) => void
   onDownload: (doc: MappedDoc) => void
   onDelete: (doc: MappedDoc) => void
-}> = ({ docs, loading, activeCategory, hasSearch, onDocClick, onDownload, onDelete }) => {
+}> = ({ docs, loading, activeTab, hasSearch, onDocClick, onDownload, onDelete }) => {
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -580,7 +588,7 @@ const DocListPanel: React.FC<{
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900">
-            {hasSearch ? '搜索结果' : activeCategory || '全部文档'}
+            {hasSearch ? '搜索结果' : activeTab === 'all' ? '全部文档' : activeTab}
           </h2>
           <span className="text-sm text-gray-500">{docs.length} 个文档</span>
         </div>
