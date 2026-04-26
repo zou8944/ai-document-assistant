@@ -13,8 +13,6 @@ from chromadb.config import Settings
 from chromadb.errors import NotFoundError
 from pydantic import BaseModel
 
-from models.config import AppConfig
-
 logger = logging.getLogger(__name__)
 
 
@@ -213,4 +211,4 @@ class ChromaManager:
 # Convenience function for creating manager instance
 def create_chroma_manager() -> ChromaManager:
     """Create and return a ChromaManager instance"""
-    return ChromaManager(persist_directory=AppConfig.get_chroma_db_path().as_posix())
+    return ChromaManager()

@@ -1,4 +1,4 @@
-.PHONY: help install clean build test lint dev dev-frontend dev-backend migrate
+.PHONY: help install clean build test lint dev dev-frontend dev-backend migrate deploy-local
 
 help:
 	@echo "AI Document Assistant - Build Commands"
@@ -13,6 +13,7 @@ help:
 	@echo "  dev-backend    - Start backend dev server"
 	@echo "  dev-frontend   - Start frontend dev server"
 	@echo "  migrate        - Run database migrations (alembic upgrade head)"
+	@echo "  deploy-local   - Deploy to local Docker environment"
 	@echo ""
 
 install: install-frontend install-backend
@@ -98,3 +99,30 @@ dev:
 	fi
 	@sleep 2
 	cd frontend && npm run dev
+
+deploy-local: build-frontend
+	@echo "🚀 Deploying to local environment..."
+	@if [ ! -f .env.deploy ]; then \
+		echo ""; \
+		echo "❌ .env.deploy not found!"; \
+		echo ""; \
+		echo "Please create .env.deploy from .env.deploy.example and set your API key."; \
+		echo ""; \
+		exit 1; \
+	fi
+	@mkdir -p $(HOME)/.ai-document-assistant/data
+	@echo "📝 Checking hosts file..."
+	@if ! grep -q "ai-assist.zou8944.com" /etc/hosts 2>/dev/null; then \
+		echo "Adding ai-assist.zou8944.com to /etc/hosts (requires sudo)..."; \
+		echo "127.0.0.1 ai-assist.zou8944.com" | sudo tee -a /etc/hosts > /dev/null; \
+		echo "✅ Hosts entry added"; \
+	else \
+		echo "✅ Hosts entry already exists"; \
+	fi
+	docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+	@echo "⏳ Running database migrations..."
+	@sleep 5
+	docker compose exec backend uv run alembic upgrade head
+	@echo "✅ Deployment complete!"
+	@echo ""
+	@echo "🌐 Access your app at: http://ai-assist.zou8944.com"

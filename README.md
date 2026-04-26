@@ -45,25 +45,27 @@ ai-document-assistant/
 ## 快速开始（Docker）
 
 ```bash
-# 1. 配置后端环境变量
-cp backend/.env.example backend/.env
-# 编辑 backend/.env，至少填写 OPENAI_API_KEY
+# 1. 配置 AI 环境变量
+cp .env.deploy.example .env.deploy
+# 编辑 .env.deploy，至少填写 OPENAI_API_KEY
 
-# 2. 启动所有服务
-docker compose --env-file backend/.env up -d
+# 2. 部署
+make deploy-local
 
 # 3. 访问应用
-open http://localhost
+open http://ai-assist.zou8944.com
 ```
 
-服务启动后端口：
+首次部署会自动将 `ai-assist.zou8944.com` 写入 `/etc/hosts`。部署时使用的域名和端口可在 [frontend/nginx.conf](frontend/nginx.conf) 和 [docker-compose.yml](docker-compose.yml) 中修改。
 
-| 服务 | 端口 |
-|------|------|
-| 前端 | 80 |
-| 后端 API | 8888 |
-| ChromaDB | 8000 |
-| PostgreSQL | 5432 |
+服务端口：
+
+| 服务 | 端口 | 说明 |
+|------|------|------|
+| 前端 | 80 | 通过 nginx 访问 |
+| 后端 API | 8888 | 内部使用，不对外暴露 |
+| ChromaDB | 18000 | 如需外部连接 |
+| PostgreSQL | 15432 | 如需外部连接 |
 
 ## 本地开发
 
@@ -73,9 +75,9 @@ docker compose up postgres chroma -d
 
 # 后端
 cd backend
+cp .env.example .env
+# 编辑 .env 填入 OPENAI_API_KEY
 uv sync
-export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/ai_document_assistant"
-export OPENAI_API_KEY="your_key"
 uv run python api_server.py
 
 # 前端（另开终端）
@@ -85,17 +87,34 @@ npm run dev
 # 访问 http://localhost:5173
 ```
 
+或使用 `make dev` 一键启动（macOS）：
+```bash
+make dev
+```
+
 ## 环境变量
 
-完整说明见 [backend/.env.example](backend/.env.example)，核心变量：
+### 部署（Docker）
+
+部署专用配置位于项目根目录的 `.env.deploy`，模板见 [.env.deploy.example](.env.deploy.example)。**只包含 AI 相关配置**，数据库和 Chroma 配置已硬编码在 docker-compose.yml 中：
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
 | `OPENAI_API_KEY` | 是 | LLM / Embedding API Key |
 | `OPENAI_BASE_URL` | 是 | API Base URL |
-| `POSTGRES_USER` | 否 | 默认 `postgres` |
-| `POSTGRES_PASSWORD` | 否 | 默认 `postgres` |
-| `POSTGRES_DB` | 否 | 默认 `ai_document_assistant` |
+| `LOG_LEVEL` | 否 | 默认 `info` |
+
+### 本地开发
+
+开发环境配置见 [backend/.env.example](backend/.env.example)，除 AI 配置外还包含数据库连接信息：
+
+| 变量 | 说明 |
+|------|------|
+| `POSTGRES_HOST` | 本地开发填 `localhost` |
+| `POSTGRES_PORT` | 默认 `5432` |
+| `POSTGRES_USER` | 默认 `postgres` |
+| `POSTGRES_PASSWORD` | 默认 `postgres` |
+| `POSTGRES_DB` | 默认 `ai_document_assistant` |
 
 ## Docker 常用命令
 
@@ -123,30 +142,35 @@ docker compose down -v
 
 ```bash
 # 使用生产配置（含资源限制）
-docker compose --env-file backend/.env -f docker-compose.yml -f docker-compose.prod.yml up -d
+make deploy-local
+```
+
+或手动：
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
 生产环境注意事项：
 - 必须配置 HTTPS（推荐用 Traefik 或 Caddy 作反向代理）
-- 修改 `backend/.env` 中的默认数据库密码
-- 定期备份数据卷（见下方备份命令）
+- 修改 `docker-compose.yml` 中的默认数据库密码
+- 定期备份数据目录（见下方备份命令）
 
 ### 数据备份与恢复
 
+所有数据存储在宿主机 `~/.ai-document-assistant/data/` 下：
+
 ```bash
+# 备份整个数据目录
+tar czf ~/ai-doc-backup.tar.gz ~/.ai-document-assistant/data/
+
+# 恢复
+tar xzf ~/ai-doc-backup.tar.gz -C /
+
 # 备份 PostgreSQL
 docker compose exec postgres pg_dump -U postgres ai_document_assistant > backup.sql
 
 # 恢复 PostgreSQL
 cat backup.sql | docker compose exec -T postgres psql -U postgres ai_document_assistant
-
-# 备份 ChromaDB 数据卷
-docker run --rm -v ai-doc-assistant_chroma-data:/data -v $(pwd):/backup \
-  alpine tar czf /backup/chroma-backup.tar.gz /data
-
-# 恢复 ChromaDB 数据卷
-docker run --rm -v ai-doc-assistant_chroma-data:/data -v $(pwd):/backup \
-  alpine tar xzf /backup/chroma-backup.tar.gz -C /
 ```
 
 ## 使用指南
@@ -176,7 +200,7 @@ docker run --rm -v ai-doc-assistant_chroma-data:/data -v $(pwd):/backup \
 
 **端口被占用**
 ```bash
-lsof -i :80   # 或 :8888 / :8000 / :5432
+lsof -i :80   # 或 :8888 / :18000 / :15432
 # 修改 docker-compose.yml 中的端口映射
 ```
 
@@ -188,7 +212,7 @@ curl http://localhost:8888/api/v1/health
 
 **ChromaDB 连接失败**
 ```bash
-curl http://localhost:8000/api/v1/heartbeat
+curl http://localhost:18000/api/v1/heartbeat
 ```
 
 **问答结果不准确**

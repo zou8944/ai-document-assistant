@@ -6,13 +6,15 @@ WORKDIR /app
 # 复制依赖文件
 COPY package*.json ./
 
-# 安装依赖
+# 安装依赖（包含 devDependencies，Vite 需要）
 RUN npm ci
 
 # 复制源代码
 COPY . .
 
 # 构建生产版本
+ARG NODE_ENV=production
+ENV NODE_ENV=${NODE_ENV}
 RUN npm run build
 
 # 生产阶段

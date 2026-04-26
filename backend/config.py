@@ -12,8 +12,6 @@ from models.config import AppConfig
 # Fixed paths and configuration
 DATA_DIR_PATH = AppConfig.get_user_config_dir()
 CONFIG_FILE_PATH = AppConfig.get_config_file_path()
-APP_DB_PATH = AppConfig.get_app_db_path()
-CHROMA_DB_PATH = AppConfig.get_chroma_db_path()
 CRAWL_CACHE_DIR = AppConfig.get_crawl_cache_dir()
 LOG_FILE_PATH = AppConfig.get_log_file_path()
 

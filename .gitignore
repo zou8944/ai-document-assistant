@@ -56,3 +56,5 @@ examples/
 PRPs/
 prePRPs/
 *.code-workspace
+
+.env.deploy

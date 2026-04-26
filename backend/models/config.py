@@ -119,14 +119,6 @@ class AppConfig:
         return cls.get_user_config_dir() / "config.toml"
 
     @classmethod
-    def get_app_db_path(cls) -> Path:
-        return cls.get_user_config_dir() / "app.db"
-
-    @classmethod
-    def get_chroma_db_path(cls) -> Path:
-        return cls.get_user_config_dir() / "chroma.db"
-
-    @classmethod
     def get_crawl_cache_dir(cls) -> Path:
         return cls.get_user_config_dir() / "crawl-cache"
 
