@@ -44,6 +44,9 @@ class UrlTaskStats:
     urls_crawl_total: int = 0
     pages_processed: int = 0
     pages_total: int = 0
+    phase: str = "crawl"          # crawl | rewrite | readme
+    rewrite_done: int = 0
+    rewrite_total: int = 0
 
 class TaskService:
     """Service for managing async tasks"""
@@ -322,13 +325,20 @@ class TaskService:
     def update_url_task_progress(self, task_id: str, stats: UrlTaskStats) -> bool:
         stats_json = json.dumps(asdict(stats))
         progress = 0
-        if stats.pages_total == 0:
-            if stats.urls_crawl_total == 0:
-                progress = 0
+
+        if stats.phase == "crawl":
+            if stats.pages_total == 0:
+                progress = stats.urls_crawled * 50 // stats.urls_crawl_total if stats.urls_crawl_total > 0 else 0
             else:
-                progress = stats.urls_crawled * 50 // stats.urls_crawl_total
-        else:
-            progress = 50 + (stats.pages_processed * 50 // stats.pages_total)
+                progress = min(50, stats.pages_processed * 50 // stats.pages_total)
+        elif stats.phase == "rewrite":
+            if stats.rewrite_total > 0:
+                progress = 50 + stats.rewrite_done * 35 // stats.rewrite_total
+            else:
+                progress = 50
+        elif stats.phase == "readme":
+            progress = 85
+
         return self.task_repo.update_progress(task_id, progress, stats_json)
 
     async def requeue_processing_task(self):
@@ -824,7 +834,14 @@ class TaskService:
             self.task_repo.update_status(task_id, "stopped")
             self._log_info_task(task_id, "任务已停止")
             return
-        await self._rewrite_html_links(task_id, collection_id)
+
+        docs = self.doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
+        crawled_docs = [d for d in docs if d.uri and d.source_path and d.html_content]
+        stats.phase = "rewrite"
+        stats.rewrite_total = len(crawled_docs)
+        stats.rewrite_done = 0
+        self.update_url_task_progress(task_id, stats)
+        await self._rewrite_html_links(task_id, collection_id, stats)
 
         # Phase 3: generate AI README
         if task_id in self._stop_flags:
@@ -832,8 +849,12 @@ class TaskService:
             self.task_repo.update_status(task_id, "stopped")
             self._log_info_task(task_id, "任务已停止")
             return
-        await self._generate_readme(task_id, collection_id)
 
+        stats.phase = "readme"
+        self.update_url_task_progress(task_id, stats)
+        await self._generate_readme(task_id, collection_id, stats)
+
+        self.task_repo.update_progress(task_id, 100)
         self.task_repo.mark_completed(task_id, True)
         self._log_info_task(task_id, "URL ingestion completed")
 
@@ -1193,7 +1214,7 @@ class TaskService:
             f"{markdown_content or ''}"
         )
 
-    async def _rewrite_html_links(self, task_id: str, collection_id: str):
+    async def _rewrite_html_links(self, task_id: str, collection_id: str, stats: UrlTaskStats):
         """Phase 2: mirror static assets and rewrite links to local relative paths."""
         from bs4 import BeautifulSoup
 
@@ -1369,6 +1390,9 @@ class TaskService:
                     self.doc_repo.update(doc.id, html_content=rewritten_html)
                     rewritten_pages += 1
 
+                stats.rewrite_done += 1
+                self.update_url_task_progress(task_id, stats)
+
                 page_file = domain_dir / page_rel_path
                 page_file.parent.mkdir(parents=True, exist_ok=True)
                 page_file.write_text(rewritten_html, encoding="utf-8")
@@ -1433,7 +1457,7 @@ class TaskService:
             return "zh"
         return "en"
 
-    async def _generate_readme(self, task_id: str, collection_id: str):
+    async def _generate_readme(self, task_id: str, collection_id: str, stats: UrlTaskStats):
         """Phase 4: generate AI README navigation guide and categories data."""
         self._log_info_task(task_id, "Generating AI README...")
         docs = self.doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
