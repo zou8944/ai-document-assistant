@@ -4,6 +4,8 @@ Document processing service for handling files and web content.
 
 import logging
 import mimetypes
+import re
+from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import Response
@@ -23,9 +25,16 @@ logger = logging.getLogger(__name__)
 class ProcessResult:
     """Result object for processing operations"""
 
-    def __init__(self, success: bool, collection_name: str, processed_count: int,
-                 total_count: int, total_chunks: int, indexed_count: int,
-                 message: Optional[str] = None):
+    def __init__(
+        self,
+        success: bool,
+        collection_name: str,
+        processed_count: int,
+        total_count: int,
+        total_chunks: int,
+        indexed_count: int,
+        message: Optional[str] = None,
+    ):
         self.success = success
         self.collection_name = collection_name
         self.processed_count = processed_count
@@ -38,9 +47,17 @@ class ProcessResult:
 class CrawlResult:
     """Result object for crawling operations"""
 
-    def __init__(self, success: bool, collection_name: str, crawled_pages: int,
-                 failed_pages: int, total_chunks: int, indexed_count: int,
-                 stats: Optional[dict[str, Any]] = None, message: Optional[str] = None):
+    def __init__(
+        self,
+        success: bool,
+        collection_name: str,
+        crawled_pages: int,
+        failed_pages: int,
+        total_chunks: int,
+        indexed_count: int,
+        stats: Optional[dict[str, Any]] = None,
+        message: Optional[str] = None,
+    ):
         self.success = success
         self.collection_name = collection_name
         self.crawled_pages = crawled_pages
@@ -94,7 +111,7 @@ class DocumentService:
             status=document.status or "",
             source_path=document.source_path,
             created_at=document.created_at.isoformat() if document.created_at else "",
-            updated_at=document.updated_at.isoformat() if document.updated_at else ""
+            updated_at=document.updated_at.isoformat() if document.updated_at else "",
         )
 
     async def list_documents(
@@ -103,7 +120,7 @@ class DocumentService:
         page: int = 1,
         page_size: int = 50,
         search: Optional[str] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
     ) -> ListDocumentsResponse:
         """List documents in a collection with pagination and filters"""
         offset = (page - 1) * page_size
@@ -115,7 +132,7 @@ class DocumentService:
             exclude_statuses=["not_found"] if not status else None,
             search=search,
             offset=offset,
-            limit=page_size
+            limit=page_size,
         )
 
         # Get total count (hide not_found pages by default)
@@ -123,17 +140,19 @@ class DocumentService:
             collection_id=collection_id,
             status=status,
             exclude_statuses=["not_found"] if not status else None,
-            search=search
+            search=search,
         )
 
         return ListDocumentsResponse(
             documents=[self._to_response(doc) for doc in documents],
             page=page,
             page_size=page_size,
-            total=total
+            total=total,
         )
 
-    async def get_document(self, collection_id: str, document_id: str) -> Optional[DocumentResponse]:
+    async def get_document(
+        self, collection_id: str, document_id: str
+    ) -> Optional[DocumentResponse]:
         """Get a specific document"""
         document = self.doc_repo.get_by_id(document_id)
 
@@ -167,18 +186,73 @@ class DocumentService:
 
         # 需要检查 filename 是否有后缀，如果没有，根据 mime_type 添加
         filename = document.name or ""
-        suffix = mimetypes.guess_extension(document.mime_type or 'text/plain')
+        suffix = mimetypes.guess_extension(document.mime_type or "text/plain")
         if suffix:
             filename += suffix
 
         # wrap the document content as FileResponse
         return Response(
-            content=document.content.encode('utf-8') if document.content else b'',
-            media_type=document.mime_type or 'text/plain',
-            headers={
-                'Content-Disposition': f'attachment; filename="{filename}"'
-            }
+            content=document.content.encode("utf-8") if document.content else b"",
+            media_type=document.mime_type or "text/plain",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
+
+    @staticmethod
+    def _source_path_to_page_rel_path(source_path: str) -> str:
+        """Map URL source_path to local HTML path under pages/."""
+        clean = source_path.split("?", 1)[0].split("#", 1)[0].strip().lstrip("/")
+        if not clean:
+            return "pages/index.html"
+
+        suffix = Path(clean).suffix.lower()
+        if suffix in {".html", ".htm"}:
+            return f"pages/{clean}"
+        return f"pages/{clean}.html"
+
+    def _compute_preview_base_href(self, document: DocumentDTO, collection_id: str) -> str | None:
+        """Compute the <base> href for previewing a crawled page in the browser."""
+        if not document.source_path:
+            return None
+
+        page_rel_path = self._source_path_to_page_rel_path(document.source_path)
+        page_dir = str(Path(page_rel_path).parent)
+        if page_dir == ".":
+            page_dir = ""
+
+        base = f"/api/v1/collections/{collection_id}/static/"
+        if page_dir:
+            base += page_dir + "/"
+        return base
+
+    @staticmethod
+    def _inject_base_tag(html: str, base_href: str) -> str:
+        """Inject or replace a <base> tag in the HTML."""
+        base_tag = f'<base href="{base_href}">'
+
+        # If a <base> tag already exists, replace its href attribute
+        if re.search(r"<base\b", html, re.IGNORECASE):
+            return re.sub(
+                r"<base\b[^>]*>",
+                base_tag,
+                html,
+                count=1,
+                flags=re.IGNORECASE,
+            )
+
+        # Try to insert after <head> tag
+        head_match = re.search(r"<head\b[^>]*>", html, re.IGNORECASE)
+        if head_match:
+            insert_pos = head_match.end()
+            return html[:insert_pos] + "\n" + base_tag + html[insert_pos:]
+
+        # Try to insert after <html> tag (wrap with <head>)
+        html_match = re.search(r"<html\b[^>]*>", html, re.IGNORECASE)
+        if html_match:
+            insert_pos = html_match.end()
+            return html[:insert_pos] + "\n<head>\n" + base_tag + "\n</head>" + html[insert_pos:]
+
+        # Fallback: prepend to the beginning
+        return base_tag + "\n" + html
 
     async def preview_document(self, collection_id: str, document_id: str) -> Optional[Response]:
         """Return rewritten HTML content for offline preview (crawled pages only)"""
@@ -190,9 +264,15 @@ class DocumentService:
         if not document.html_content:
             return None
 
+        base_href = self._compute_preview_base_href(document, collection_id)
+        if base_href:
+            html = self._inject_base_tag(document.html_content, base_href)
+        else:
+            html = document.html_content
+
         return Response(
-            content=document.html_content.encode('utf-8'),
-            media_type='text/html',
+            content=html.encode("utf-8"),
+            media_type="text/html",
         )
 
     def close(self):
