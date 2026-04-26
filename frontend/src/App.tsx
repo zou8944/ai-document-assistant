@@ -29,7 +29,7 @@ export const App: React.FC = () => {
         <div className="flex items-center justify-between h-full">
           {/* Left side - reserve space for system buttons (about 78px) */}
           <div className="flex items-center space-x-3 pl-20">
-            <div className="w-6 h-6 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full" />
+            <img src="/logo.png" alt="Logo" className="w-6 h-6 rounded-md object-cover" />
             <h1 className="text-lg font-semibold text-gray-900">
               AI 文档助手
             </h1>
