@@ -260,8 +260,6 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   // Import handlers
   const handleUrlDialogConfirm = async (config: {
     urls: string[]
-    excludeUrls: string[]
-    maxDepth: number
     recursivePrefix: string
   }) => {
     setShowUrlDialog(false)
@@ -269,8 +267,6 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     try {
       const response = await apiClient.ingestUrls(currentKb.id, {
         urls: config.urls,
-        exclude_urls: config.excludeUrls,
-        max_depth: config.maxDepth,
         recursive_prefix: config.recursivePrefix,
       })
       const taskData = extractData(response)

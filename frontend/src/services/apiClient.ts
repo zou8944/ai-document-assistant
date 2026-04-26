@@ -57,10 +57,7 @@ export interface IngestFilesRequest {
 
 export interface IngestUrlsRequest {
   urls: string[]
-  exclude_urls: string[]
-  max_depth: number
   recursive_prefix: string
-  override?: boolean
 }
 
 // Task types

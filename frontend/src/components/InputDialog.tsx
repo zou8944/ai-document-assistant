@@ -8,8 +8,6 @@ import clsx from 'clsx'
 
 interface UrlCrawlConfig {
   urls: string[]
-  excludeUrls: string[]
-  maxDepth: number
   recursivePrefix: string
 }
 
@@ -27,8 +25,6 @@ export const UrlInputDialog: React.FC<UrlInputDialogProps> = ({
   className
 }) => {
   const [urls, setUrls] = useState<string[]>([''])
-  const [excludeUrls, setExcludeUrls] = useState<string[]>([''])
-  const [maxDepth, setMaxDepth] = useState<number>(0)
   const [recursivePrefix, setRecursivePrefix] = useState<string>('')
   const [errors, setErrors] = useState<string[]>([])
 
@@ -44,75 +40,46 @@ export const UrlInputDialog: React.FC<UrlInputDialogProps> = ({
     }
   }
 
-  const addUrlField = (type: 'urls' | 'excludeUrls') => {
-    if (type === 'urls') {
-      setUrls([...urls, ''])
-    } else {
-      setExcludeUrls([...excludeUrls, ''])
+  const addUrlField = () => {
+    setUrls([...urls, ''])
+  }
+
+  const removeUrlField = (index: number) => {
+    if (urls.length > 1) {
+      setUrls(urls.filter((_, i) => i !== index))
     }
   }
 
-  const removeUrlField = (type: 'urls' | 'excludeUrls', index: number) => {
-    if (type === 'urls') {
-      if (urls.length > 1) {
-        setUrls(urls.filter((_, i) => i !== index))
-      }
-    } else {
-      if (excludeUrls.length > 1) {
-        setExcludeUrls(excludeUrls.filter((_, i) => i !== index))
-      }
-    }
-  }
-
-  const updateUrl = (type: 'urls' | 'excludeUrls', index: number, value: string) => {
-    if (type === 'urls') {
-      const newUrls = [...urls]
-      newUrls[index] = value
-      setUrls(newUrls)
-    } else {
-      const newExcludeUrls = [...excludeUrls]
-      newExcludeUrls[index] = value
-      setExcludeUrls(newExcludeUrls)
-    }
+  const updateUrl = (index: number, value: string) => {
+    const newUrls = [...urls]
+    newUrls[index] = value
+    setUrls(newUrls)
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    
-    // 验证 URLs
+
     const validUrls = urls.filter(url => url.trim())
-    const validExcludeUrls = excludeUrls.filter(url => url.trim())
-    
     const newErrors: string[] = []
-    
-    // 检查是否有有效的 URL
+
     if (validUrls.length === 0) {
       newErrors.push('至少需要输入一个 URL')
     }
-    
-    // 验证 URL 格式
+
     for (const url of validUrls) {
       if (!validateUrl(url)) {
         newErrors.push(`无效的 URL 格式: ${url}`)
       }
     }
-    
-    for (const url of validExcludeUrls) {
-      if (!validateUrl(url)) {
-        newErrors.push(`无效的排除 URL 格式: ${url}`)
-      }
-    }
-    
+
     if (newErrors.length > 0) {
       setErrors(newErrors)
       return
     }
-    
+
     setErrors([])
     onConfirm({
       urls: validUrls,
-      excludeUrls: validExcludeUrls,
-      maxDepth,
       recursivePrefix: recursivePrefix.trim()
     })
   }
@@ -126,14 +93,14 @@ export const UrlInputDialog: React.FC<UrlInputDialogProps> = ({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
-      <div 
+      <div
         className="fixed inset-0 bg-black/30 backdrop-blur-sm transition-opacity"
         onClick={onCancel}
       />
-      
+
       {/* Dialog */}
       <div className="flex min-h-full items-center justify-center p-4">
-        <div 
+        <div
           className={clsx(
             'glass-morph rounded-xl border border-white/20 p-6 w-full max-w-2xl',
             'bg-white/90 backdrop-blur-xl shadow-xl',
@@ -179,7 +146,7 @@ export const UrlInputDialog: React.FC<UrlInputDialogProps> = ({
                     <input
                       type="url"
                       value={url}
-                      onChange={(e) => updateUrl('urls', index, e.target.value)}
+                      onChange={(e) => updateUrl(index, e.target.value)}
                       placeholder="https://example.com"
                       className={clsx(
                         'flex-1 px-4 py-2 border border-macos-gray-300 rounded-lg',
@@ -191,7 +158,7 @@ export const UrlInputDialog: React.FC<UrlInputDialogProps> = ({
                     {urls.length > 1 && (
                       <button
                         type="button"
-                        onClick={() => removeUrlField('urls', index)}
+                        onClick={() => removeUrlField(index)}
                         className="p-2 text-macos-gray-400 hover:text-red-500 transition-colors"
                       >
                         <MinusIcon className="w-4 h-4" />
@@ -201,7 +168,7 @@ export const UrlInputDialog: React.FC<UrlInputDialogProps> = ({
                 ))}
                 <button
                   type="button"
-                  onClick={() => addUrlField('urls')}
+                  onClick={addUrlField}
                   className="flex items-center gap-1 text-sm text-macos-blue hover:text-blue-600 transition-colors"
                 >
                   <PlusIcon className="w-4 h-4" />
@@ -210,76 +177,10 @@ export const UrlInputDialog: React.FC<UrlInputDialogProps> = ({
               </div>
             </div>
 
-            {/* Exclude URLs */}
-            <div>
-              <label className="block text-sm font-medium text-macos-gray-900 mb-3">
-                需要排除的 URL
-              </label>
-              <div className="space-y-2">
-                {excludeUrls.map((url, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <input
-                      type="url"
-                      value={url}
-                      onChange={(e) => updateUrl('excludeUrls', index, e.target.value)}
-                      placeholder="https://example.com/exclude"
-                      className={clsx(
-                        'flex-1 px-4 py-2 border border-macos-gray-300 rounded-lg',
-                        'focus:ring-2 focus:ring-macos-blue focus:border-macos-blue',
-                        'bg-white/70 backdrop-blur-sm text-macos-gray-900 placeholder-macos-gray-500',
-                        'transition-all duration-200'
-                      )}
-                    />
-                    {excludeUrls.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeUrlField('excludeUrls', index)}
-                        className="p-2 text-macos-gray-400 hover:text-red-500 transition-colors"
-                      >
-                        <MinusIcon className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => addUrlField('excludeUrls')}
-                  className="flex items-center gap-1 text-sm text-macos-blue hover:text-blue-600 transition-colors"
-                >
-                  <PlusIcon className="w-4 h-4" />
-                  添加排除 URL
-                </button>
-              </div>
-            </div>
-
-            {/* Max Depth */}
-            <div>
-              <label htmlFor="maxDepth" className="block text-sm font-medium text-macos-gray-900 mb-2">
-                递归爬取层数 <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                id="maxDepth"
-                value={maxDepth}
-                onChange={(e) => setMaxDepth(parseInt(e.target.value) || 0)}
-                min="0"
-                max="10"
-                className={clsx(
-                  'w-full px-4 py-2 border border-macos-gray-300 rounded-lg',
-                  'focus:ring-2 focus:ring-macos-blue focus:border-macos-blue',
-                  'bg-white/70 backdrop-blur-sm text-macos-gray-900',
-                  'transition-all duration-200'
-                )}
-              />
-              <p className="mt-1 text-xs text-macos-gray-500">
-                0 表示不递归爬取，只爬取指定的 URL
-              </p>
-            </div>
-
             {/* Recursive Prefix */}
             <div>
               <label htmlFor="recursivePrefix" className="block text-sm font-medium text-macos-gray-900 mb-2">
-                递归爬取前缀匹配
+                爬取前缀匹配
               </label>
               <input
                 type="text"
@@ -298,7 +199,7 @@ export const UrlInputDialog: React.FC<UrlInputDialogProps> = ({
                 只爬取以此前缀开头的链接，为空则爬取同域名下的所有链接
               </p>
             </div>
-            
+
             {/* Actions */}
             <div className="flex justify-end space-x-3 pt-4 border-t border-macos-gray-200">
               <button
