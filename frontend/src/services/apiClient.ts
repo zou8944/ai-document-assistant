@@ -313,6 +313,15 @@ export class DocumentAssistantAPI {
   }
 
   /**
+   * Clear all data in a collection but keep the collection itself
+   */
+  async clearCollection(collectionId: string): Promise<APIResponse<{}>> {
+    return this.request<APIResponse<{}>>(`/api/v1/collections/${encodeURIComponent(collectionId)}/clear`, {
+      method: 'POST',
+    })
+  }
+
+  /**
    * Get README and categories for a collection
    */
   async getReadme(collectionId: string): Promise<APIResponse<{

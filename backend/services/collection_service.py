@@ -10,6 +10,7 @@ from models.dto import CollectionDTO
 from models.responses import CollectionResponse
 from repository.collection import CollectionRepository
 from repository.document import DocumentChunkRepository, DocumentRepository
+from repository.task import TaskRepository
 from services.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ class CollectionService:
         self.collection_repo = CollectionRepository()
         self.doc_repo = DocumentRepository()
         self.doc_chunk_repo = DocumentChunkRepository()
+        self.task_repo = TaskRepository()
 
         # LLM service
         self.llm_service = llm_service
@@ -113,6 +115,64 @@ class CollectionService:
             await self.chroma_manager.delete_collection(collection_id)
 
         logger.info(f"Deleted collection '{collection_id}'")
+
+    async def clear_collection(self, collection_id: str):
+        """Clear all data in a collection but keep the collection itself."""
+        collection = self.collection_repo.get_by_id(collection_id)
+        if not collection:
+            raise ValueError(f"Collection '{collection_id}' not found")
+
+        # Check for processing tasks
+        tasks = self.task_repo.get_by_collection(collection_id)
+        for task in tasks:
+            if task.status == "processing":
+                from exception import HTTPBadRequestException
+                raise HTTPBadRequestException("不能清空存在正在执行任务的知识库")
+
+        # Get domain info before deleting docs (for crawl cache cleanup)
+        docs = self.doc_repo.get_by_collection(collection_id)
+        domains = set()
+        for doc in docs:
+            if doc.uri and doc.uri.startswith("http"):
+                from urllib.parse import urlparse
+                domains.add(urlparse(doc.uri).netloc.lower().replace(":", "_"))
+
+        # Delete all vectors from ChromaDB
+        chroma_collection = await self.chroma_manager.get_collection(collection_id)
+        if chroma_collection:
+            try:
+                chroma_collection.delete()
+            except Exception as e:
+                logger.warning(f"Failed to clear vectors for collection {collection_id}: {e}")
+
+        # Delete all database records and update collection
+        async with transaction():
+            self.doc_repo.delete_by_collection(collection_id)
+            self.doc_chunk_repo.delete_by_collection(collection_id)
+            self.task_repo.delete_by_collection(collection_id)
+            self.collection_repo.update(
+                collection_id,
+                readme_content=None,
+                categories_json=None,
+                readme_content_zh=None,
+                categories_json_zh=None,
+                source_language=None,
+                document_count=0,
+                vector_count=0,
+            )
+
+        # Delete crawl cache
+        from pathlib import Path
+        import shutil
+
+        cache_root = Path(self.config.get_crawl_cache_dir())
+        for domain in domains:
+            domain_dir = cache_root / domain
+            if domain_dir.exists():
+                shutil.rmtree(domain_dir)
+                logger.info(f"Deleted crawl cache: {domain_dir}")
+
+        logger.info(f"Cleared collection '{collection_id}'")
 
     async def get_readme(self, collection_id: str) -> tuple[Optional[str], Optional[str], Optional[str], Optional[str], Optional[str]]:
         """Get the AI-generated README content and categories for a collection.

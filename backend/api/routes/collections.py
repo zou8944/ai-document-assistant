@@ -124,6 +124,20 @@ async def delete_collection(collection_id: str, request: Request):
     return {}
 
 
+@router.post("/collections/{collection_id}/clear")
+async def clear_collection_data(collection_id: str, request: Request):
+    """Clear all data in a collection but keep the collection itself"""
+    app_state = get_app_state(request)
+    collection_service = app_state.collection_service
+
+    collection = await collection_service.get_collection(collection_id)
+    if not collection:
+        raise HTTPNotFoundException(f"Collection '{collection_id}' not found")
+
+    await collection_service.clear_collection(collection_id)
+    return {}
+
+
 @router.get("/collections/{collection_id}/readme")
 async def get_collection_readme(collection_id: str, request: Request):
     """Get the AI-generated README and categories for a collection"""

@@ -140,6 +140,16 @@ class TaskRepository(BaseRepository[Task, TaskDTO]):
 
             return [self.dto_class.from_orm(item) for item in session.scalars(query)]
 
+    def delete_by_collection(self, collection_id: str) -> int:
+        from sqlalchemy import delete
+
+        with session_context() as session:
+            stmt = delete(Task).where(Task.collection_id == collection_id)
+            result = session.execute(stmt)
+            session.flush()
+
+        return result.rowcount or 0
+
     def count_tasks_with_filters(
         self,
         status: Optional[str] = None,

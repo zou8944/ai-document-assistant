@@ -18,6 +18,8 @@ import {
   StopIcon,
   XMarkIcon,
   ClockIcon,
+  EllipsisVerticalIcon,
+  XCircleIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { useAppStore } from '../../store/appStore'
@@ -76,7 +78,7 @@ const getTaskBgClass = (task: APITask, isSelected: boolean): string => {
 export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = ({
   className,
 }) => {
-  const { getCurrentKnowledgeBase, setActiveKnowledgeBase, displayLanguage, setDisplayLanguage } = useAppStore()
+  const { getCurrentKnowledgeBase, setActiveKnowledgeBase, displayLanguage, setDisplayLanguage, deleteKnowledgeBase } = useAppStore()
   const apiClient = useAPIClient()
   const currentKb = getCurrentKnowledgeBase()
 
@@ -106,7 +108,12 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const [isStreaming, setIsStreaming] = useState(false)
   const logTextAreaRef = useRef<HTMLTextAreaElement>(null)
   const [logsExpanded, setLogsExpanded] = useState(false)
+  const [showActionsMenu, setShowActionsMenu] = useState(false)
+  const [clearModalOpen, setClearModalOpen] = useState(false)
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [confirmName, setConfirmName] = useState('')
   const [taskLogsModal, setTaskLogsModal] = useState<APITaskLog[]>([])
+  const actionsMenuRef = useRef<HTMLDivElement>(null)
   const [showLogModal, setShowLogModal] = useState(false)
   const [logModalTaskId, setLogModalTaskId] = useState<string | null>(null)
   const [logModalStreaming, setLogModalStreaming] = useState(false)
@@ -399,6 +406,69 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     }
   }
 
+  // Collection actions
+  const handleClearCollection = () => {
+    setShowActionsMenu(false)
+    setConfirmName('')
+    setClearModalOpen(true)
+  }
+
+  const handleConfirmClear = async () => {
+    if (!currentKb) return
+    if (confirmName !== currentKb.name) {
+      alert('输入的名称与知识库名称不匹配')
+      return
+    }
+    try {
+      await apiClient.clearCollection(currentKb.id)
+      setClearModalOpen(false)
+      setConfirmName('')
+      loadDocuments()
+      loadReadme()
+      loadTasks()
+    } catch (error) {
+      console.error('清空知识库失败:', error)
+      alert('清空知识库失败: ' + (error as Error).message)
+    }
+  }
+
+  const handleDeleteCollection = () => {
+    setShowActionsMenu(false)
+    setConfirmName('')
+    setDeleteModalOpen(true)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!currentKb) return
+    if (confirmName !== currentKb.name) {
+      alert('输入的名称与知识库名称不匹配')
+      return
+    }
+    try {
+      await apiClient.deleteCollection(currentKb.id)
+      setDeleteModalOpen(false)
+      setConfirmName('')
+      deleteKnowledgeBase(currentKb.id)
+      setActiveKnowledgeBase(null)
+    } catch (error) {
+      console.error('删除知识库失败:', error)
+      alert('删除知识库失败: ' + (error as Error).message)
+    }
+  }
+
+  // Close actions menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target as Node)) {
+        setShowActionsMenu(false)
+      }
+    }
+    if (showActionsMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showActionsMenu])
+
   const handleViewLogs = async (taskId: string) => {
     setLogModalTaskId(taskId)
     setShowLogModal(true)
@@ -573,7 +643,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   return (
     <div className={clsx('h-full flex flex-col overflow-hidden', className)}>
       {/* Header */}
-      <div className="flex-shrink-0 px-6 py-4 bg-gradient-to-r from-white/90 to-white/70 backdrop-blur-sm border-b border-gray-200/50">
+      <div className="relative z-50 flex-shrink-0 px-6 py-4 bg-gradient-to-r from-white/90 to-white/70 backdrop-blur-sm border-b border-gray-200/50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
@@ -586,21 +656,50 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
               <h1 className="text-xl font-bold text-gray-900">{currentKb.name}</h1>
             </div>
           </div>
-          <button
-            onClick={() => { setImportCollapsed(!importCollapsed); if (importCollapsed) loadTasks() }}
-            className={clsx(
-              "flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg transition-colors",
-              !importCollapsed
-                ? "text-blue-700 bg-blue-50"
-                : "text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-            )}
-          >
-            {importCollapsed ? <ChevronRightIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
-            导入与任务
-            {tasks.filter(t => t.status === 'processing').length > 0 && (
-              <span className="ml-1 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setImportCollapsed(!importCollapsed); if (importCollapsed) loadTasks() }}
+              className={clsx(
+                "flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg transition-colors",
+                !importCollapsed
+                  ? "text-blue-700 bg-blue-50"
+                  : "text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+              )}
+            >
+              {importCollapsed ? <ChevronRightIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+              导入与任务
+              {tasks.filter(t => t.status === 'processing').length > 0 && (
+                <span className="ml-1 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+              )}
+            </button>
+            <div className="relative z-50" ref={actionsMenuRef}>
+              <button
+                onClick={() => setShowActionsMenu(!showActionsMenu)}
+                className="p-2 hover:bg-gray-100/50 rounded-lg transition-colors text-gray-500"
+                title="更多操作"
+              >
+                <EllipsisVerticalIcon className="w-5 h-5" />
+              </button>
+              {showActionsMenu && (
+                <div className="absolute right-0 mt-1 w-40 bg-white rounded-lg shadow-lg border border-gray-200/50 py-1 z-50">
+                  <button
+                    onClick={handleClearCollection}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-yellow-700 hover:bg-yellow-50 transition-colors"
+                  >
+                    <XCircleIcon className="w-4 h-4" />
+                    清空知识库
+                  </button>
+                  <button
+                    onClick={handleDeleteCollection}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                    删除知识库
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Import & Task Panel */}
@@ -911,6 +1010,112 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear Collection Confirm Modal */}
+      {clearModalOpen && currentKb && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => { setClearModalOpen(false); setConfirmName('') }}
+        >
+          <div
+            className="w-full max-w-md bg-white rounded-xl shadow-2xl flex flex-col mx-4 overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">清空知识库</h3>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <p className="text-sm text-gray-600">
+                此操作将删除知识库
+                <span className="font-semibold text-gray-900">&nbsp;"{currentKb.name}"&nbsp;</span>
+                中的所有文档、向量和任务数据，但保留知识库本身。
+                此操作<span className="text-red-600 font-semibold">无法撤销</span>。
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  请输入知识库名称以确认：
+                </label>
+                <input
+                  type="text"
+                  value={confirmName}
+                  onChange={e => setConfirmName(e.target.value)}
+                  placeholder={currentKb.name}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all text-sm"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={() => { setClearModalOpen(false); setConfirmName('') }}
+                className="px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleConfirmClear}
+                disabled={confirmName !== currentKb.name}
+                className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors"
+              >
+                确认清空
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Collection Confirm Modal */}
+      {deleteModalOpen && currentKb && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => { setDeleteModalOpen(false); setConfirmName('') }}
+        >
+          <div
+            className="w-full max-w-md bg-white rounded-xl shadow-2xl flex flex-col mx-4 overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">删除知识库</h3>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <p className="text-sm text-gray-600">
+                此操作将
+                <span className="text-red-600 font-semibold">永久删除</span>
+                知识库
+                <span className="font-semibold text-gray-900">&nbsp;"{currentKb.name}"&nbsp;</span>
+                及其所有文档、向量和任务数据。
+                此操作<span className="text-red-600 font-semibold">无法撤销</span>。
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  请输入知识库名称以确认：
+                </label>
+                <input
+                  type="text"
+                  value={confirmName}
+                  onChange={e => setConfirmName(e.target.value)}
+                  placeholder={currentKb.name}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all text-sm"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={() => { setDeleteModalOpen(false); setConfirmName('') }}
+                className="px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={confirmName !== currentKb.name}
+                className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors"
+              >
+                确认删除
+              </button>
             </div>
           </div>
         </div>
