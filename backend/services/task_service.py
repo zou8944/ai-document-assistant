@@ -161,6 +161,8 @@ class TaskService:
         if not task or task.status != "processing":
             return False
         self._stop_flags.add(task_id)
+        self.task_repo.update_status(task_id, "stopped")
+        self._log_info_task(task_id, "任务停止请求已接收")
         return True
 
     async def restart_task(self, task_id: str) -> TaskResponse:
@@ -671,6 +673,12 @@ class TaskService:
         # Process file content
         result = self.file_processor.process_file(file_path)
 
+        # Check stop flag before LLM call
+        if task_id in self._stop_flags:
+            self._stop_flags.discard(task_id)
+            self._log_info_task(task_id, f"Stopped before summarizing: {file_path_obj.name}")
+            return
+
         self._log_info_task(task_id, f"Summarizing content for: {file_path_obj.name}")
         summary = self.llm_service.summarize_document(result.content) if result.success else ""
 
@@ -691,7 +699,13 @@ class TaskService:
             )
             return
 
-        doc_status= "indexed"
+        # Check stop flag before chunking and embedding
+        if task_id in self._stop_flags:
+            self._stop_flags.discard(task_id)
+            self._log_info_task(task_id, f"Stopped before chunking: {file_path_obj.name}")
+            return
+
+        doc_status = "indexed"
         error_message = None
 
         # chunk and embedding
@@ -706,6 +720,12 @@ class TaskService:
                 doc_status = "failed"
                 error_message = f"Error processing chunks for {file_path_obj.name}: {str(e)}"
                 self._log_err_task(task_id, error_message)
+
+        # Check stop flag before persisting to database and vector store
+        if task_id in self._stop_flags:
+            self._stop_flags.discard(task_id)
+            self._log_info_task(task_id, f"Stopped before persisting: {file_path_obj.name}")
+            return
 
         # persist
         try:
@@ -893,11 +913,23 @@ class TaskService:
         else:
             self._log_info_task(task_id, f"Storing page: {page_url}")
 
+        # Check stop flag before LLM call
+        if task_id in self._stop_flags:
+            self._stop_flags.discard(task_id)
+            self._log_info_task(task_id, f"Stopped before summarizing: {page_url}")
+            return
+
         self._log_info_task(task_id, f"Summarizing: {page_url}")
         if crawl_result.content:
             summary = await asyncio.to_thread(self.llm_service.summarize_document, crawl_result.content)
         else:
             summary = ""
+
+        # Check stop flag before persisting
+        if task_id in self._stop_flags:
+            self._stop_flags.discard(task_id)
+            self._log_info_task(task_id, f"Stopped before persisting: {page_url}")
+            return
 
         try:
             await self._store_crawled_page(
