@@ -113,6 +113,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [confirmName, setConfirmName] = useState('')
   const [taskLogsModal, setTaskLogsModal] = useState<APITaskLog[]>([])
+  const [stoppingTaskIds, setStoppingTaskIds] = useState<Set<string>>(new Set())
   const actionsMenuRef = useRef<HTMLDivElement>(null)
   const [showLogModal, setShowLogModal] = useState(false)
   const [logModalTaskId, setLogModalTaskId] = useState<string | null>(null)
@@ -371,6 +372,15 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       if (selectedTaskId === taskId) {
         setIsStreaming(false)
       }
+      // Show graceful-stop hint for 5 seconds
+      setStoppingTaskIds(prev => new Set(prev).add(taskId))
+      setTimeout(() => {
+        setStoppingTaskIds(prev => {
+          const next = new Set(prev)
+          next.delete(taskId)
+          return next
+        })
+      }, 5000)
     } catch (error) {
       console.error('停止任务失败:', error)
       alert('停止任务失败: ' + (error as Error).message)
@@ -766,6 +776,11 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                             {typeof task.progress === 'number' ? task.progress : (task.progress as any)?.percentage ?? 0}%
                           </span>
                         )}
+                        {stoppingTaskIds.has(task.task_id) && (
+                          <span className="text-xs text-amber-600 ml-1 animate-pulse">
+                            正在停止，当前操作完成后将停止
+                          </span>
+                        )}
                       </div>
                       <div className="grid grid-cols-10 gap-2 text-xs text-gray-500 mt-1">
                         <span className="col-span-1 truncate" title={`创建: ${new Date(task.created_at).toLocaleString()}`}>
@@ -795,7 +810,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                         <button
                           onClick={() => handleStopTask(task.task_id)}
                           className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                          title="停止"
+                          title="停止（当前操作完成后停止）"
                         >
                           <StopIcon className="w-4 h-4" />
                         </button>
