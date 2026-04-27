@@ -1,17 +1,18 @@
 /**
  * Knowledge base management page - three-column layout
- * Left: category sidebar | Right: README / DocList / DocReader | Top: search + import
+ * Left: category sidebar | Middle: doc list | Right: README / DocReader | Top: search + import
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
-  ArrowLeftIcon,
   DocumentIcon,
+  FolderIcon,
   GlobeAltIcon,
   ArrowDownTrayIcon,
   TrashIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  ChevronLeftIcon,
   MagnifyingGlassIcon,
   PlayIcon,
   ArrowPathIcon,
@@ -95,6 +96,8 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<MappedDoc[] | null>(null)
   const [searching, setSearching] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [docListCollapsed, setDocListCollapsed] = useState(false)
 
   // Import & Task state
   const [importCollapsed, setImportCollapsed] = useState(true)
@@ -247,9 +250,13 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       const doc = documents.find(d => d.source_path === path)
       if (doc) {
         setSelectedDocId(doc.id)
+        const cat = findCategoryForPath(categories, path)
+        if (cat) {
+          setActiveTab(cat)
+        }
       }
     },
-    [documents]
+    [documents, categories]
   )
 
   // Doc click from list
@@ -257,15 +264,9 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     setSelectedDocId(doc.id)
   }, [])
 
-  // Back from reader
-  const handleBackFromReader = useCallback(() => {
-    setSelectedDocId(null)
-  }, [])
-
   // Tab select from sidebar
   const handleTabSelect = useCallback((tab: 'overview' | 'all' | string) => {
     setActiveTab(tab)
-    setSelectedDocId(null)
     setSearchQuery('')
     setSearchResults(null)
   }, [])
@@ -564,11 +565,17 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     }
   }, [])
 
-  // Determine right panel view
+  // Right panel view
   const showReader = selectedDoc !== null
-  const showDocList = !showReader && (activeTab !== 'overview' || searchQuery.trim() !== '')
-  const showReadme = !showReader && !showDocList && activeTab === 'overview' && readmeContent !== null
-  const showFallbackList = !showReader && !showDocList && !showReadme
+  const showReadme = activeTab === 'overview' && readmeContent !== null
+
+  // Doc list header label
+  const docListTitle = useMemo(() => {
+    if (searchResults !== null) return '搜索结果'
+    if (activeTab === 'all') return '全部文档'
+    if (activeTab === 'overview') return ''
+    return isBilingual && displayLanguage === 'zh' ? (categoryNameMap.get(activeTab) || activeTab) : activeTab
+  }, [searchResults, activeTab, isBilingual, displayLanguage, categoryNameMap])
 
   if (!currentKb) {
     return (
@@ -599,7 +606,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
               onClick={() => setActiveKnowledgeBase(null)}
               className="p-2 hover:bg-gray-100/50 rounded-lg transition-colors"
             >
-              <ArrowLeftIcon className="w-5 h-5 text-gray-600" />
+              <ChevronLeftIcon className="w-5 h-5 text-gray-600" />
             </button>
             <div>
               <h1 className="text-xl font-bold text-gray-900">{currentKb.name}</h1>
@@ -842,9 +849,9 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
         </div>
       </div>
 
-      {/* Main Content: Sidebar + Right Panel */}
+      {/* Main Content: Three-column layout */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar */}
+        {/* Left: Category Sidebar */}
         <SidebarNav
           categories={categories}
           activeTab={activeTab}
@@ -856,19 +863,140 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
           isBilingual={isBilingual}
           categoryNameMap={categoryNameMap}
           onLanguageToggle={() => setDisplayLanguage(displayLanguage === 'source' ? 'zh' : 'source')}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(v => !v)}
         />
 
-        {/* Right Content Area */}
+        {/* Middle: Document List */}
+        {docListCollapsed ? (
+          <div className="w-10 flex-shrink-0 border-r border-gray-200/50 bg-white/40 backdrop-blur-sm flex flex-col items-center py-2">
+            <button
+              onClick={() => setDocListCollapsed(false)}
+              className="p-1.5 hover:bg-gray-100/80 rounded-lg transition-colors mb-2"
+              title="展开文档列表"
+            >
+              <ChevronRightIcon className="w-4 h-4 text-gray-500" />
+            </button>
+            <div className="flex-1 flex items-center justify-center">
+              <span
+                className="text-xs font-medium text-gray-500 tracking-widest"
+                style={{ writingMode: 'vertical-rl' }}
+              >
+                {activeTab === 'overview' ? '概览' : `${displayedDocs.length} 篇`}
+              </span>
+            </div>
+            {selectedDoc && (
+              <div className="flex items-center justify-center py-2">
+                <DocumentIcon className="w-4 h-4 text-blue-500" />
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="w-72 flex-shrink-0 border-r border-gray-200/50 bg-white/40 backdrop-blur-sm flex flex-col">
+            {/* Doc list header */}
+            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200/30 flex-shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider truncate">
+                  {activeTab === 'overview' ? '概览' : docListTitle}
+                </span>
+                {activeTab !== 'overview' && (
+                  <span className="text-xs text-gray-400 flex-shrink-0">{displayedDocs.length}</span>
+                )}
+              </div>
+              <button
+                onClick={() => setDocListCollapsed(true)}
+                className="p-1 hover:bg-gray-100/80 rounded transition-colors flex-shrink-0"
+                title="收起文档列表"
+              >
+                <ChevronLeftIcon className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
+
+            {/* Doc list content */}
+            <div className="flex-1 overflow-y-auto">
+              {activeTab === 'overview' ? (
+                <div className="flex flex-col items-center justify-center h-full text-gray-400 px-4">
+                  <FolderIcon className="w-8 h-8 mb-2 opacity-50" />
+                  <p className="text-sm text-center">概览模式</p>
+                  <p className="text-xs text-center mt-1">从左侧选择分类查看文档</p>
+                </div>
+              ) : loadingDocuments ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-gray-500">加载中...</div>
+                </div>
+              ) : displayedDocs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-gray-400 px-4">
+                  <DocumentIcon className="w-8 h-8 mb-2 opacity-50" />
+                  <p className="text-sm text-center">
+                    {searchResults !== null ? '未找到匹配的文档' : '暂无文档'}
+                  </p>
+                </div>
+              ) : (
+                <div className="py-1">
+                  {displayedDocs.map(doc => (
+                    <div
+                      key={doc.id}
+                      className={clsx(
+                        "flex items-center gap-2 px-3 py-2.5 cursor-pointer transition-colors group",
+                        selectedDocId === doc.id
+                          ? "bg-blue-50/80 border-l-2 border-blue-500"
+                          : "hover:bg-white/60 border-l-2 border-transparent"
+                      )}
+                      onClick={() => handleDocClick(doc)}
+                    >
+                      <div className="flex-shrink-0">
+                        {doc.url ? (
+                          <GlobeAltIcon className="w-4 h-4 text-blue-500" />
+                        ) : (
+                          <DocumentIcon className="w-4 h-4 text-gray-400" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className={clsx(
+                          "text-sm truncate",
+                          selectedDocId === doc.id ? "font-medium text-blue-700" : "text-gray-800"
+                        )}>
+                          {doc.name}
+                          {isBilingual && doc.nameTranslated && (
+                            <span className="text-gray-500 font-normal"> ({doc.nameTranslated})</span>
+                          )}
+                        </div>
+                        {doc.url && (
+                          <div className="text-xs text-gray-400 truncate">{doc.url}</div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={e => { e.stopPropagation(); handleDownload(doc) }}
+                          className="p-1 hover:bg-gray-100 rounded"
+                          title="下载"
+                        >
+                          <ArrowDownTrayIcon className="w-3.5 h-3.5 text-gray-400 hover:text-blue-500" />
+                        </button>
+                        <button
+                          onClick={e => { e.stopPropagation(); handleDelete(doc) }}
+                          className="p-1 hover:bg-gray-100 rounded"
+                          title="删除"
+                        >
+                          <TrashIcon className="w-3.5 h-3.5 text-gray-400 hover:text-red-500" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Right: Detail Panel */}
         <div className="flex-1 flex flex-col overflow-hidden bg-gray-50/30">
-          {showReader && selectedDoc && (
+          {showReader && selectedDoc ? (
             <DocReader
               doc={{ id: selectedDoc.id, name: selectedDoc.name, nameTranslated: selectedDoc.nameTranslated, url: selectedDoc.url }}
               previewUrl={previewUrl}
-              onBack={handleBackFromReader}
             />
-          )}
-
-          {showReadme && readmeContent && (
+          ) : showReadme && readmeContent ? (
             <ReadmePanel
               readmeContent={readmeContent}
               readmeContentZh={readmeContentZh}
@@ -876,21 +1004,16 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
               isBilingual={isBilingual}
               onDocClick={handleReadmeDocClick}
             />
-          )}
-
-          {(showDocList || showFallbackList) && (
-            <DocListPanel
-              docs={displayedDocs}
-              loading={loadingDocuments}
-              activeTab={activeTab}
-              hasSearch={searchQuery.trim() !== ''}
-              isBilingual={isBilingual}
-              displayLanguage={displayLanguage}
-              categoryNameMap={categoryNameMap}
-              onDocClick={handleDocClick}
-              onDownload={handleDownload}
-              onDelete={handleDelete}
-            />
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
+              <DocumentIcon className="w-12 h-12 mb-3 opacity-50" />
+              <p className="text-sm">
+                {activeTab === 'overview'
+                  ? '概览页面加载中...'
+                  : '从中间栏选择一篇文档查看详情'
+                }
+              </p>
+            </div>
           )}
         </div>
       </div>
@@ -908,7 +1031,6 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
         isProcessing={isStreaming}
       />
 
-      {/* Log Modal */}
       {/* Clear Collection Confirm Modal */}
       {clearModalOpen && currentKb && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
@@ -1014,106 +1136,6 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-/**
- * Document list panel - shown when filtering by category or search
- */
-const DocListPanel: React.FC<{
-  docs: MappedDoc[]
-  loading: boolean
-  activeTab: 'overview' | 'all' | string
-  hasSearch: boolean
-  isBilingual: boolean
-  displayLanguage: 'source' | 'zh'
-  categoryNameMap: Map<string, string>
-  onDocClick: (doc: MappedDoc) => void
-  onDownload: (doc: MappedDoc) => void
-  onDelete: (doc: MappedDoc) => void
-}> = ({ docs, loading, activeTab, hasSearch, isBilingual, displayLanguage, categoryNameMap, onDocClick, onDownload, onDelete }) => {
-  if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-gray-500">加载中...</div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="p-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">
-            {hasSearch ? '搜索结果' : activeTab === 'all' ? '全部文档' : (isBilingual && displayLanguage === 'zh' ? (categoryNameMap.get(activeTab) || activeTab) : activeTab)}
-          </h2>
-          <span className="text-sm text-gray-500">{docs.length} 个文档</span>
-        </div>
-
-        {docs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-500">
-            <DocumentIcon className="w-12 h-12 mb-2 opacity-50" />
-            <p>{hasSearch ? '未找到匹配的文档' : '暂无文档'}</p>
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {docs.map(doc => (
-              <div
-                key={doc.id}
-                className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white hover:shadow-sm cursor-pointer transition-all group"
-                onClick={() => onDocClick(doc)}
-              >
-                <div className="flex-shrink-0">
-                  {doc.url ? (
-                    <GlobeAltIcon className="w-4 h-4 text-blue-500" />
-                  ) : (
-                    <DocumentIcon className="w-4 h-4 text-gray-400" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-gray-900 truncate">
-                    {doc.name}
-                    {isBilingual && doc.nameTranslated && (
-                      <span className="text-gray-500 font-normal"> ({doc.nameTranslated})</span>
-                    )}
-                  </div>
-                  {doc.url && (
-                    <div className="text-xs text-gray-400 truncate mt-0.5">{doc.url}</div>
-                  )}
-                </div>
-                <span className={clsx(
-                  'text-xs px-2 py-0.5 rounded-full flex-shrink-0',
-                  doc.status === 'indexed' ? 'bg-green-100 text-green-700' :
-                  doc.status === 'processing' ? 'bg-yellow-100 text-yellow-700' :
-                  doc.status === 'pending' ? 'bg-gray-100 text-gray-600' :
-                  'bg-red-100 text-red-700'
-                )}>
-                  {doc.status === 'indexed' ? '已索引' : doc.status === 'processing' ? '处理中' : doc.status === 'pending' ? '等待中' : '失败'}
-                </span>
-                <span className="text-xs text-gray-400 flex-shrink-0 w-16 text-right">{doc.size}</span>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                  <button
-                    onClick={e => { e.stopPropagation(); onDownload(doc) }}
-                    className="p-1 hover:bg-gray-100 rounded"
-                    title="下载"
-                  >
-                    <ArrowDownTrayIcon className="w-3.5 h-3.5 text-gray-400 hover:text-blue-500" />
-                  </button>
-                  <button
-                    onClick={e => { e.stopPropagation(); onDelete(doc) }}
-                    className="p-1 hover:bg-gray-100 rounded"
-                    title="删除"
-                  >
-                    <TrashIcon className="w-3.5 h-3.5 text-gray-400 hover:text-red-500" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   )
 }
