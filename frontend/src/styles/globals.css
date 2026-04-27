@@ -30,17 +30,17 @@
   ::-webkit-scrollbar {
     @apply w-2;
   }
-  
+
   ::-webkit-scrollbar-track {
     @apply bg-transparent;
   }
-  
+
   ::-webkit-scrollbar-thumb {
-    @apply bg-white/30 rounded-full;
+    @apply bg-gray-400/50 rounded-full;
   }
-  
+
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-white/50;
+    @apply bg-gray-500/70;
   }
   
   /* Text selection */
