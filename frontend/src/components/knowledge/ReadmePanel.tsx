@@ -2,7 +2,7 @@
  * README navigation panel - renders AI-generated markdown with doc:// link interception
  */
 
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useMemo, useRef } from 'react'
 
 interface ReadmePanelProps {
   readmeContent: string
@@ -20,9 +20,16 @@ function markdownToHtml(md: string): string {
   const lines = md.split('\n')
   const htmlParts: string[] = []
   let inList = false
+  let inBlockquote = false
 
   for (const line of lines) {
     const trimmed = line.trim()
+
+    // Close blockquote if needed
+    if (inBlockquote && !trimmed.startsWith('>')) {
+      htmlParts.push('</blockquote>')
+      inBlockquote = false
+    }
 
     // Close list if needed
     if (inList && !trimmed.startsWith('- ') && !trimmed.startsWith('* ')) {
@@ -34,12 +41,25 @@ function markdownToHtml(md: string): string {
       continue
     }
 
+    // Blockquote
+    if (trimmed.startsWith('>')) {
+      if (!inBlockquote) {
+        htmlParts.push('<blockquote>')
+        inBlockquote = true
+      }
+      const text = processInline(trimmed.slice(1).trim())
+      htmlParts.push(`<p>${text}</p>`)
+      continue
+    }
+
     // Headings
     const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)/)
     if (headingMatch) {
       const level = headingMatch[1].length
-      const text = processInline(headingMatch[2])
-      htmlParts.push(`<h${level}>${text}</h${level}>`)
+      const rawText = headingMatch[2]
+      const text = processInline(rawText)
+      const id = rawText.trim()
+      htmlParts.push(`<h${level} id="${id}">${text}</h${level}>`)
       continue
     }
 
@@ -61,6 +81,9 @@ function markdownToHtml(md: string): string {
 
   if (inList) {
     htmlParts.push('</ul>')
+  }
+  if (inBlockquote) {
+    htmlParts.push('</blockquote>')
   }
 
   return htmlParts.join('\n')
@@ -88,6 +111,7 @@ export const ReadmePanel: React.FC<ReadmePanelProps> = ({
   isBilingual,
   onDocClick,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null)
   const effectiveContent = isBilingual && displayLanguage === 'zh' && readmeContentZh
     ? readmeContentZh
     : readmeContent
@@ -96,18 +120,39 @@ export const ReadmePanel: React.FC<ReadmePanelProps> = ({
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       const link = (e.target as HTMLElement).closest('a[data-doc-link]')
-      if (link instanceof HTMLAnchorElement) {
+      if (!(link instanceof HTMLAnchorElement)) return
+
+      const href = link.getAttribute('href')
+      if (!href) return
+
+      // doc:// links - open document
+      const docMatch = href.match(/^doc:\/\/\/?(.*)$/)
+      if (docMatch) {
         e.preventDefault()
-        const href = link.getAttribute('href')
-        if (href) {
-          // Parse doc:///path, doc://path, or doc:/// (home)
-          const match = href.match(/^doc:\/\/\/?(.*)$/)
-          if (match) {
-            const path = match[1] || '/'
-            onDocClick('/' + path)
-          }
-        }
+        const path = docMatch[1] || '/'
+        onDocClick('/' + path)
+        return
       }
+
+      // Anchor links - scroll within container
+      if (href.startsWith('#')) {
+        e.preventDefault()
+        const targetId = href.slice(1)
+        const targetEl = containerRef.current?.querySelector(`[id="${CSS.escape(targetId)}"]`)
+        if (targetEl) {
+          targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+        return
+      }
+
+      // External links - open in new tab
+      if (href.startsWith('http://') || href.startsWith('https://')) {
+        e.preventDefault()
+        window.open(href, '_blank', 'noopener,noreferrer')
+        return
+      }
+
+      // Let other links behave normally
     },
     [onDocClick]
   )
@@ -115,6 +160,7 @@ export const ReadmePanel: React.FC<ReadmePanelProps> = ({
   return (
     <div className="flex-1 overflow-y-auto p-8">
       <div
+        ref={containerRef}
         className="prose prose-sm max-w-none
           prose-headings:text-gray-900 prose-headings:font-semibold
           prose-h1:text-2xl prose-h1:mb-6 prose-h1:pb-3 prose-h1:border-b prose-h1:border-gray-200

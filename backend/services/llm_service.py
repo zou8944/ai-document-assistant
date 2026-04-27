@@ -103,7 +103,7 @@ generate a navigation guide README and structured category data in Chinese.
 
 Respond with ONLY a JSON object in this exact format:
 {{
-  "readme": "# 欢迎\\n\\n这份指南帮助你找到需要的内容...\\n\\n## 分类名称\\n\\n- [页面标题](doc:///path) — 简短描述\\n...",
+  "readme": "# 欢迎\\n\\n> 简短介绍这个文档站的整体定位和内容范围...\\n\\n## 文档目录\\n\\n- [分类一名称](#分类一名称)\\n- [分类二名称](#分类二名称)\\n...\\n\\n## 整体介绍\\n\\n这个网站是关于...的文档站。\\n\\n根据你的需求，可以前往不同页面：\\n\\n- 如果你是新手，建议从 [快速开始](doc:///path) 开始\\n- 如果你想了解 API，请查看 [API 参考](doc:///path)\\n...\\n\\n## 分类一名称\\n\\n- [页面标题](doc:///path) — 简短描述\\n...",
   "categories": [
     {{
       "category": "分类名称",
@@ -117,11 +117,18 @@ Respond with ONLY a JSON object in this exact format:
 }}
 
 Rules for "readme":
-- Write in natural, helpful Chinese (like a guide or tour)
-- Organize content by category, each as a ## heading
+- Start with an h1 title and a short overview paragraph in blockquote (>)
+- "## 文档目录" section (at the TOP): list all categories as anchor links: [分类名](#分类名)
+  - Use the exact category name as the anchor (no slug conversion)
+  - Example: [快速开始](#快速开始), [API 文档](#API 文档)
+- "## 整体介绍" section (second): write 2-4 natural paragraphs describing:
+  - What topics this documentation site covers
+  - Guidance for different users on where to find information
+  - Use doc:///path links to point to specific pages
+  - Brief overview of each category's content
+- Then list each category as a ## heading with page links underneath
 - Under each category, list pages as Markdown links: [页面标题](doc:///path)
 - Include a brief description after each link (em dash separator)
-- Start with a short overview paragraph
 - Use Markdown formatting (headings, lists, bold)
 
 Rules for "categories":
@@ -137,8 +144,8 @@ generate a navigation guide README and structured category data in BOTH English 
 
 Respond with ONLY a JSON object in this exact format:
 {{
-  "readme": "# Welcome\\n\\nThis guide helps you find what you need...\\n\\n## Category Name\\n\\n- [Page Title](doc:///path) — short description\\n...",
-  "readme_zh": "# 欢迎\\n\\n这份指南帮助你找到需要的内容...\\n\\n## 分类中文名\\n\\n- [页面中文标题](doc:///path) — 简短中文描述\\n...",
+  "readme": "# Welcome\\n\\n> A short overview of this documentation site...\\n\\n## Table of Contents\\n\\n- [Category One](#Category One)\\n- [Category Two](#Category Two)\\n...\\n\\n## Overview\\n\\nThis site covers...\\n\\nDepending on your needs:\\n\\n- If you are new, start with [Quick Start](doc:///path)\\n- For API reference, see [API Docs](doc:///path)\\n...\\n\\n## Category One\\n\\n- [Page Title](doc:///path) — short description\\n...",
+  "readme_zh": "# 欢迎\\n\\n> 简短介绍这个文档站的整体定位和内容范围...\\n\\n## 文档目录\\n\\n- [分类一名称](#分类一名称)\\n- [分类二名称](#分类二名称)\\n...\\n\\n## 整体介绍\\n\\n这个网站是关于...的文档站。\\n\\n根据你的需求，可以前往不同页面：\\n\\n- 如果你是新手，建议从 [快速开始](doc:///path) 开始\\n- 如果你想了解 API，请查看 [API 参考](doc:///path)\\n...\\n\\n## 分类一名称\\n\\n- [页面中文标题](doc:///path) — 简短中文描述\\n...",
   "categories": [
     {{
       "category": "Category Name",
@@ -151,6 +158,26 @@ Respond with ONLY a JSON object in this exact format:
     ...
   ]
 }}
+
+Rules for "readme" (English):
+- Start with an h1 title and a short overview paragraph in blockquote (>)
+- "## Table of Contents" section (at the TOP): list all categories as anchor links: [Category Name](#Category Name)
+  - Use the exact category name as the anchor (no slug conversion)
+  - Example: [Getting Started](#Getting Started), [API Reference](#API Reference)
+- "## Overview" section (second): write 2-4 natural paragraphs describing:
+  - What topics this documentation site covers
+  - Guidance for different users on where to find information
+  - Use doc:///path links to point to specific pages
+  - Brief overview of each category's content
+- Then list each category as a ## heading with page links underneath
+- Under each category, list pages as Markdown links: [Page Title](doc:///path)
+- Include a brief description after each link (em dash separator)
+- Use Markdown formatting (headings, lists, bold)
+
+Rules for "readme_zh" (Chinese):
+- Same structure as English version but all content in natural Chinese
+- "## 文档目录" for table of contents, "## 整体介绍" for overview
+- Use doc:///path links (same paths as English version)
 
 Rules for English content:
 - Write in natural, helpful language
