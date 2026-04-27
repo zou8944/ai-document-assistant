@@ -152,7 +152,7 @@ class TaskService:
         tasks = self.task_repo.list_tasks_with_filters(collection_id=collection_id, limit=200)
         return [self._to_response(task) for task in tasks]
 
-    async def get_task_logs(self, task_id: str, limit: int, offset: int = 0) -> list[TaskLogDTO]:
+    async def get_task_logs(self, task_id: str, limit: int | None = None, offset: int = 0) -> list[TaskLogDTO]:
         return self.task_log_repo.list_by_task(task_id=task_id, limit=limit, offset=offset)
 
     async def stop_task(self, task_id: str) -> bool:

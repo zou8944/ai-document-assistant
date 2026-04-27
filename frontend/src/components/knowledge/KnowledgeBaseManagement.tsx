@@ -16,8 +16,6 @@ import {
   PlayIcon,
   ArrowPathIcon,
   StopIcon,
-  XMarkIcon,
-  ClockIcon,
   EllipsisVerticalIcon,
   XCircleIcon,
 } from '@heroicons/react/24/outline'
@@ -112,13 +110,8 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const [clearModalOpen, setClearModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [confirmName, setConfirmName] = useState('')
-  const [taskLogsModal, setTaskLogsModal] = useState<APITaskLog[]>([])
   const [stoppingTaskIds, setStoppingTaskIds] = useState<Set<string>>(new Set())
   const actionsMenuRef = useRef<HTMLDivElement>(null)
-  const [showLogModal, setShowLogModal] = useState(false)
-  const [logModalTaskId, setLogModalTaskId] = useState<string | null>(null)
-  const [logModalStreaming, setLogModalStreaming] = useState(false)
-  const logModalRef = useRef<HTMLDivElement>(null)
 
   // Whether this collection supports bilingual display
   const isBilingual = sourceLanguage === 'en' && !!categoriesJsonZh
@@ -479,60 +472,6 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     }
   }, [showActionsMenu])
 
-  const handleViewLogs = async (taskId: string) => {
-    setLogModalTaskId(taskId)
-    setShowLogModal(true)
-    setTaskLogsModal([])
-
-    const task = tasks.find(t => t.task_id === taskId)
-    if (task?.status === 'processing') {
-      setLogModalStreaming(true)
-      await apiClient.streamTaskProgress(
-        taskId,
-        (event: SSEEvent) => {
-          if (event.event === 'log' && event.data) {
-            const logData = event.data
-            const timestamp = logData.timestamp
-              ? new Date(logData.timestamp).toLocaleTimeString()
-              : new Date().toLocaleTimeString()
-            setTaskLogsModal(prev => [...prev, {
-              id: Date.now(),
-              task_id: taskId,
-              level: logData.level || 'info',
-              message: `[${timestamp}] ${logData.message}`,
-              details: logData.details || {},
-              timestamp: logData.timestamp || new Date().toISOString(),
-            }])
-            setTimeout(() => {
-              if (logModalRef.current) {
-                logModalRef.current.scrollTop = logModalRef.current.scrollHeight
-              }
-            }, 0)
-          } else if (event.event === 'done' || event.event === 'error') {
-            setLogModalStreaming(false)
-            loadTasks()
-          }
-        },
-        (error: Error) => {
-          console.error('日志流错误:', error)
-          setLogModalStreaming(false)
-        }
-      )
-    } else {
-      setLogModalStreaming(false)
-      try {
-        const response = await apiClient.getTaskLogs(taskId, 200)
-        const data = extractData(response)
-        setTaskLogsModal(data.logs.map((log: APITaskLog) => ({
-          ...log,
-          message: `[${new Date(log.timestamp).toLocaleTimeString()}] ${log.message}`,
-        })))
-      } catch (error) {
-        console.error('获取日志失败:', error)
-      }
-    }
-  }
-
   const handleSelectTask = async (taskId: string) => {
     if (selectedTaskId === taskId) return
     setSelectedTaskId(taskId)
@@ -546,7 +485,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     } else {
       setIsStreaming(false)
       try {
-        const response = await apiClient.getTaskLogs(taskId, 200)
+        const response = await apiClient.getTaskLogs(taskId)
         const data = extractData(response)
         setTaskLogs(data.logs.map((log: APITaskLog) => {
           const timestamp = new Date(log.timestamp).toLocaleTimeString()
@@ -833,13 +772,6 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                           <TrashIcon className="w-4 h-4" />
                         </button>
                       )}
-                      <button
-                        onClick={() => handleViewLogs(task.task_id)}
-                        className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
-                        title="查看日志"
-                      >
-                        <ClockIcon className="w-4 h-4" />
-                      </button>
                     </div>
                   </div>
                 ))}
@@ -852,6 +784,9 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                 <div className="flex items-center justify-between mb-2 flex-shrink-0">
                   <span className="text-xs text-gray-500">
                     {tasks.find(t => t.task_id === selectedTaskId)?.task_type === 'ingest_urls' ? '网页抓取' : '文件上传'} 日志
+                    {taskLogs.length > 0 && (
+                      <span className="ml-1 text-gray-400">({taskLogs.length} 条)</span>
+                    )}
                     {isStreaming && (
                       <span className="ml-1 text-blue-600">(实时)</span>
                     )}
@@ -974,62 +909,6 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       />
 
       {/* Log Modal */}
-      {showLogModal && logModalTaskId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick={() => setShowLogModal(false)}
-        >
-          <div
-            className="w-full max-w-2xl max-h-[80vh] bg-white rounded-xl shadow-2xl flex flex-col mx-4"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200"
-            >
-              <h3 className="text-sm font-semibold text-gray-800"
-              >
-                任务日志
-                {logModalStreaming && (
-                  <span className="ml-2 text-xs text-blue-600"
-                  >
-                    (实时)
-                    <span className="inline-block w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse ml-1" />
-                  </span>
-                )}
-              </h3>
-              <button
-                onClick={() => setShowLogModal(false)}
-                className="p-1 hover:bg-gray-100 rounded-md transition-colors"
-              >
-                <XMarkIcon className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-            <div
-              ref={logModalRef}
-              className="flex-1 overflow-y-auto p-4 space-y-1 min-h-[300px] max-h-[60vh]"
-            >
-              {taskLogsModal.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-8"
-                >暂无日志</p>
-              ) : (
-                taskLogsModal.map((log, idx) => (
-                  <div
-                    key={`${log.id}-${idx}`}
-                    className={clsx(
-                      "text-xs font-mono py-0.5 px-1 rounded",
-                      log.level === 'error' && "text-red-700 bg-red-50",
-                      log.level === 'warning' && "text-yellow-700 bg-yellow-50",
-                      log.level === 'debug' && "text-gray-500",
-                      (log.level === 'info' || !log.level) && "text-gray-700"
-                    )}
-                  >
-                    {log.message}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Clear Collection Confirm Modal */}
       {clearModalOpen && currentKb && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"

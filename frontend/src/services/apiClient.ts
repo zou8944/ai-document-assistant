@@ -529,15 +529,19 @@ export class DocumentAssistantAPI {
   }
 
   /**
-   * Get task logs (non-streaming)
+   * Get task logs (non-streaming). Omit limit to fetch all logs.
    */
   async getTaskLogs(
     taskId: string,
-    limit: number = 100,
+    limit?: number,
     offset: number = 0
   ): Promise<APIResponse<{ logs: TaskLog[], total: number }>> {
+    const params = new URLSearchParams()
+    if (limit !== undefined) params.append('limit', limit.toString())
+    if (offset > 0) params.append('offset', offset.toString())
+    const query = params.toString() ? `?${params.toString()}` : ''
     return this.request<APIResponse<{ logs: TaskLog[], total: number }>>(
-      `/api/v1/tasks/${encodeURIComponent(taskId)}/logs?limit=${limit}&offset=${offset}`
+      `/api/v1/tasks/${encodeURIComponent(taskId)}/logs${query}`
     )
   }
 

@@ -38,16 +38,18 @@ async def stream_task_progress(task_id: str, request: Request):
 async def get_task_logs(
     task_id: str,
     request: Request,
-    limit: int = 100,
+    limit: int | None = None,
     offset: int = 0,
 ):
     """
-    Get task logs (non-streaming, for historical viewing)
+    Get task logs (non-streaming, for historical viewing).
+    If limit is omitted, returns all logs.
     """
     task_service = get_app_state(request).task_service
 
     logs = await task_service.get_task_logs(task_id, limit=limit, offset=offset)
-    return {"logs": logs, "total": len(logs)}
+    total = task_service.task_log_repo.count_by_task(task_id)
+    return {"logs": logs, "total": total}
 
 
 @router.post("/tasks/{task_id}/stop")
