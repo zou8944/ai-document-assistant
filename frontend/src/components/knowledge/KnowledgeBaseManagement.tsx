@@ -1,6 +1,6 @@
 /**
- * Knowledge base management page - three-column layout
- * Left: category sidebar | Middle: doc list | Right: README / DocReader | Top: search + import
+ * Knowledge base management page - two-column layout
+ * Left: accordion sidebar (overview + expandable groups with docs) | Right: README / DocReader | Top: search + import
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
@@ -25,13 +25,11 @@ import { useAppStore } from '../../store/appStore'
 import { Document as APIDocument, Task as APITask, TaskLog as APITaskLog, useAPIClient, extractData, SSEEvent } from '../../services/apiClient'
 import { UrlInputDialog } from '../InputDialog'
 import FileUploadModal from '../FileUploadModal'
-import SidebarNav from './SidebarNav'
 import ReadmePanel from './ReadmePanel'
 import DocReader from './DocReader'
 import {
   parseCategories,
   findCategoryForPath,
-  getPagesForCategory,
 } from '../../utils/categoryParser'
 
 interface KnowledgeBaseManagementProps {
@@ -91,13 +89,16 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const [sourceLanguage, setSourceLanguage] = useState<string | null>(null)
 
   // Navigation state
-  const [activeTab, setActiveTab] = useState<'overview' | 'all' | string>('overview')
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<MappedDoc[] | null>(null)
   const [searching, setSearching] = useState(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [docListCollapsed, setDocListCollapsed] = useState(false)
+
+  // Sidebar state
+  const [sidebarWidth, setSidebarWidth] = useState(260)
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  const [isDragging, setIsDragging] = useState(false)
+  const sidebarRef = useRef<HTMLDivElement>(null)
 
   // Import & Task state
   const [importCollapsed, setImportCollapsed] = useState(true)
@@ -143,26 +144,14 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     return categories.reduce((sum, cat) => sum + cat.pages.length, 0)
   }, [categories])
 
-  // Determine which docs to show in list
-  const displayedDocs = useMemo(() => {
-    if (searchResults !== null) return searchResults
-    if (activeTab === 'all') return documents
-    if (activeTab !== 'overview') {
-      const catPages = getPagesForCategory(categories, activeTab)
-      const paths = new Set(catPages.map(p => p.path))
-      return documents.filter(d => d.source_path && paths.has(d.source_path))
-    }
-    return []
-  }, [searchResults, activeTab, categories, documents])
-
   // Find selected document
   const selectedDoc = useMemo(
     () => (selectedDocId ? documents.find(d => d.id === selectedDocId) || null : null),
     [selectedDocId, documents]
   )
 
-  // Find which category the selected doc belongs to (for sidebar highlight)
-  const highlightedCategory = useMemo(() => {
+  // Find which category the selected doc belongs to
+  const selectedDocCategory = useMemo(() => {
     if (!selectedDoc?.source_path) return null
     return findCategoryForPath(categories, selectedDoc.source_path)
   }, [selectedDoc, categories])
@@ -172,6 +161,42 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     if (!selectedDoc || !currentKb) return ''
     return apiClient.getDocumentPreviewUrl(currentKb.id, selectedDoc.id)
   }, [selectedDoc, currentKb, apiClient])
+
+  // Group -> docs mapping
+  const groupDocsMap = useMemo(() => {
+    const map = new Map<string, MappedDoc[]>()
+    map.set('all', documents)
+    for (const cat of categories) {
+      const paths = new Set(cat.pages.map(p => p.path))
+      const docs = documents.filter(d => d.source_path && paths.has(d.source_path))
+      map.set(cat.category, docs)
+    }
+    return map
+  }, [documents, categories])
+
+  // Search results grouped by category
+  const searchGroupedDocs = useMemo(() => {
+    if (!searchResults) return null
+    const map = new Map<string, MappedDoc[]>()
+    map.set('all', searchResults)
+    for (const cat of categories) {
+      const paths = new Set(cat.pages.map(p => p.path))
+      const docs = searchResults.filter(d => d.source_path && paths.has(d.source_path))
+      if (docs.length > 0) {
+        map.set(cat.category, docs)
+      }
+    }
+    return map
+  }, [searchResults, categories])
+
+  // Visible groups (when searching, only show groups with results)
+  const visibleCategories = useMemo(() => {
+    if (!searchResults) return categories
+    return categories.filter(cat => {
+      const docs = searchGroupedDocs?.get(cat.category)
+      return docs && docs.length > 0
+    })
+  }, [searchResults, categories, searchGroupedDocs])
 
   // Load data
   const loadDocuments = useCallback(async () => {
@@ -207,7 +232,6 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       setCategoriesJsonZh(data.categories_json_zh)
       setSourceLanguage(data.source_language)
     } catch {
-      // No readme available - fallback
       setReadmeContent(null)
       setCategoriesJson(null)
       setReadmeContentZh(null)
@@ -221,7 +245,6 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     if (!currentKb) return
     if (!query.trim()) {
       setSearchResults(null)
-      setActiveTab('overview')
       return
     }
     try {
@@ -252,7 +275,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
         setSelectedDocId(doc.id)
         const cat = findCategoryForPath(categories, path)
         if (cat) {
-          setActiveTab(cat)
+          setExpandedGroups(prev => new Set(prev).add(cat))
         }
       }
     },
@@ -264,12 +287,45 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     setSelectedDocId(doc.id)
   }, [])
 
-  // Tab select from sidebar
-  const handleTabSelect = useCallback((tab: 'overview' | 'all' | string) => {
-    setActiveTab(tab)
-    setSearchQuery('')
-    setSearchResults(null)
+  // Overview click
+  const handleOverviewClick = useCallback(() => {
+    setSelectedDocId(null)
   }, [])
+
+  // Toggle group expand/collapse
+  const toggleGroup = useCallback((group: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(group)) {
+        next.delete(group)
+      } else {
+        next.add(group)
+      }
+      return next
+    })
+  }, [])
+
+  // Drag to resize sidebar
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+    const startX = e.clientX
+    const startWidth = sidebarWidth
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const newWidth = Math.max(200, Math.min(500, startWidth + e.clientX - startX))
+      setSidebarWidth(newWidth)
+    }
+
+    const handleMouseUp = () => {
+      setIsDragging(false)
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }, [sidebarWidth])
 
   // Import handlers
   const handleUrlDialogConfirm = async (config: {
@@ -361,12 +417,10 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const handleStopTask = async (taskId: string) => {
     try {
       await apiClient.stopTask(taskId)
-      // Immediately update local state
       setTasks(prev => prev.map(t => t.task_id === taskId ? { ...t, status: 'stopped' as const } : t))
       if (selectedTaskId === taskId) {
         setIsStreaming(false)
       }
-      // Show graceful-stop hint for 5 seconds
       setStoppingTaskIds(prev => new Set(prev).add(taskId))
       setTimeout(() => {
         setStoppingTaskIds(prev => {
@@ -384,7 +438,6 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const handleRestartTask = async (taskId: string) => {
     try {
       await apiClient.restartTask(taskId)
-      // Immediately update local state
       setTasks(prev => prev.map(t => t.task_id === taskId ? { ...t, status: 'pending' as const } : t))
       setSelectedTaskId(taskId)
       setTaskLogs([])
@@ -505,7 +558,6 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       (event: SSEEvent) => {
         switch (event.event) {
           case 'progress':
-            // Progress updates now come through task list polling, ignore here
             break
           case 'log':
             if (event.data) {
@@ -567,15 +619,65 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
 
   // Right panel view
   const showReader = selectedDoc !== null
-  const showReadme = activeTab === 'overview' && readmeContent !== null
+  const showReadme = selectedDocId === null && readmeContent !== null
 
-  // Doc list header label
-  const docListTitle = useMemo(() => {
-    if (searchResults !== null) return '搜索结果'
-    if (activeTab === 'all') return '全部文档'
-    if (activeTab === 'overview') return ''
-    return isBilingual && displayLanguage === 'zh' ? (categoryNameMap.get(activeTab) || activeTab) : activeTab
-  }, [searchResults, activeTab, isBilingual, displayLanguage, categoryNameMap])
+  // Get display name for category
+  const getDisplayCategory = useCallback((enName: string) => {
+    if (!isBilingual || displayLanguage === 'source') return enName
+    return categoryNameMap.get(enName) || enName
+  }, [isBilingual, displayLanguage, categoryNameMap])
+
+  // Render a document item in sidebar
+  const renderDocItem = (doc: MappedDoc) => (
+    <div
+      key={doc.id}
+      className={clsx(
+        'flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors group',
+        selectedDocId === doc.id
+          ? 'bg-blue-50/80 border-l-2 border-blue-500'
+          : 'hover:bg-white/60 border-l-2 border-transparent'
+      )}
+      onClick={() => handleDocClick(doc)}
+    >
+      <div className="flex-shrink-0">
+        {doc.url ? (
+          <GlobeAltIcon className="w-4 h-4 text-blue-500" />
+        ) : (
+          <DocumentIcon className="w-4 h-4 text-gray-400" />
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className={clsx(
+          'text-sm truncate',
+          selectedDocId === doc.id ? 'font-medium text-blue-700' : 'text-gray-800'
+        )}>
+          {doc.name}
+          {isBilingual && doc.nameTranslated && (
+            <span className="text-gray-500 font-normal"> ({doc.nameTranslated})</span>
+          )}
+        </div>
+        {doc.url && (
+          <div className="text-xs text-gray-400 truncate">{doc.url}</div>
+        )}
+      </div>
+      <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={e => { e.stopPropagation(); handleDownload(doc) }}
+          className="p-1 hover:bg-gray-100 rounded"
+          title="下载"
+        >
+          <ArrowDownTrayIcon className="w-3.5 h-3.5 text-gray-400 hover:text-blue-500" />
+        </button>
+        <button
+          onClick={e => { e.stopPropagation(); handleDelete(doc) }}
+          className="p-1 hover:bg-gray-100 rounded"
+          title="删除"
+        >
+          <TrashIcon className="w-3.5 h-3.5 text-gray-400 hover:text-red-500" />
+        </button>
+      </div>
+    </div>
+  )
 
   if (!currentKb) {
     return (
@@ -616,10 +718,10 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
             <button
               onClick={() => { setImportCollapsed(!importCollapsed); if (importCollapsed) loadTasks() }}
               className={clsx(
-                "flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg transition-colors",
+                'flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg transition-colors',
                 !importCollapsed
-                  ? "text-blue-700 bg-blue-50"
-                  : "text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                  ? 'text-blue-700 bg-blue-50'
+                  : 'text-blue-600 hover:text-blue-700 hover:bg-blue-50'
               )}
             >
               {importCollapsed ? <ChevronRightIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
@@ -700,19 +802,19 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                     key={task.task_id}
                     onClick={() => handleSelectTask(task.task_id)}
                     className={clsx(
-                      "flex items-center justify-between p-2 rounded-lg border cursor-pointer transition-colors",
+                      'flex items-center justify-between p-2 rounded-lg border cursor-pointer transition-colors',
                       getTaskBgClass(task, selectedTaskId === task.task_id),
                     )}
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className={clsx(
-                          "w-2 h-2 rounded-full flex-shrink-0",
-                          task.status === 'processing' && "bg-yellow-500 animate-pulse",
-                          task.status === 'success' && "bg-green-500",
-                          task.status === 'failed' && "bg-red-500",
-                          task.status === 'stopped' && "bg-blue-500",
-                          task.status === 'pending' && "bg-gray-400",
+                          'w-2 h-2 rounded-full flex-shrink-0',
+                          task.status === 'processing' && 'bg-yellow-500 animate-pulse',
+                          task.status === 'success' && 'bg-green-500',
+                          task.status === 'failed' && 'bg-red-500',
+                          task.status === 'stopped' && 'bg-blue-500',
+                          task.status === 'pending' && 'bg-gray-400',
                         )} />
                         <span className="text-sm font-medium text-gray-800">
                           {task.task_type === 'ingest_urls' ? '网页抓取' : '文件上传'}
@@ -787,7 +889,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
 
             {/* Unified Log Area */}
             {selectedTaskId && (
-              <div className={clsx("mt-3 flex flex-col", logsExpanded && "h-[50vh]")}>
+              <div className={clsx('mt-3 flex flex-col', logsExpanded && 'h-[50vh]')}>
                 <div className="flex items-center justify-between mb-2 flex-shrink-0">
                   <span className="text-xs text-gray-500">
                     {tasks.find(t => t.task_id === selectedTaskId)?.task_type === 'ingest_urls' ? '网页抓取' : '文件上传'} 日志
@@ -816,8 +918,8 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                 <textarea
                   ref={logTextAreaRef}
                   className={clsx(
-                    "w-full p-2 text-xs font-mono bg-gray-50 border border-gray-200 rounded-md resize-none",
-                    logsExpanded ? "flex-1 min-h-0" : "h-24"
+                    'w-full p-2 text-xs font-mono bg-gray-50 border border-gray-200 rounded-md resize-none',
+                    logsExpanded ? 'flex-1 min-h-0' : 'h-24'
                   )}
                   value={taskLogs.join('\n')}
                   readOnly
@@ -838,8 +940,9 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
             value={searchQuery}
             onChange={e => {
               setSearchQuery(e.target.value)
-              setSelectedDocId(null)
-              if (e.target.value.trim()) setActiveTab('all')
+              if (e.target.value.trim()) {
+                setSelectedDocId(null)
+              }
             }}
             className="w-full pl-9 pr-4 py-2 text-sm bg-white/80 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
           />
@@ -849,145 +952,174 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
         </div>
       </div>
 
-      {/* Main Content: Three-column layout */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left: Category Sidebar */}
-        <SidebarNav
-          categories={categories}
-          activeTab={activeTab}
-          onTabSelect={handleTabSelect}
-          highlightedCategory={highlightedCategory}
-          totalDocs={documents.length}
-          readmeDocCount={readmeDocCount}
-          displayLanguage={displayLanguage}
-          isBilingual={isBilingual}
-          categoryNameMap={categoryNameMap}
-          onLanguageToggle={() => setDisplayLanguage(displayLanguage === 'source' ? 'zh' : 'source')}
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed(v => !v)}
-        />
+      {/* Main Content: Two-column layout */}
+      <div className={clsx('flex-1 flex overflow-hidden', isDragging && 'select-none')}>
+        {/* Left: Accordion Sidebar */}
+        <div
+          ref={sidebarRef}
+          className="flex-shrink-0 border-r border-gray-200/50 bg-white/50 backdrop-blur-sm flex flex-col overflow-hidden"
+          style={{ width: sidebarWidth }}
+        >
+          {/* Sidebar header */}
+          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200/30 flex-shrink-0">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">文档</span>
+          </div>
 
-        {/* Middle: Document List */}
-        {docListCollapsed ? (
-          <div className="w-10 flex-shrink-0 border-r border-gray-200/50 bg-white/40 backdrop-blur-sm flex flex-col items-center py-2">
-            <button
-              onClick={() => setDocListCollapsed(false)}
-              className="p-1.5 hover:bg-gray-100/80 rounded-lg transition-colors mb-2"
-              title="展开文档列表"
-            >
-              <ChevronRightIcon className="w-4 h-4 text-gray-500" />
-            </button>
-            <div className="flex-1 flex items-center justify-center">
-              <span
-                className="text-xs font-medium text-gray-500 tracking-widest"
-                style={{ writingMode: 'vertical-rl' }}
-              >
-                {activeTab === 'overview' ? '概览' : `${displayedDocs.length} 篇`}
-              </span>
-            </div>
-            {selectedDoc && (
-              <div className="flex items-center justify-center py-2">
-                <DocumentIcon className="w-4 h-4 text-blue-500" />
+          {/* Sidebar content */}
+          <div className="flex-1 overflow-y-auto py-1">
+            {loadingDocuments && documents.length === 0 && (
+              <div className="flex items-center justify-center py-8 text-gray-500">
+                <div className="text-sm">加载中...</div>
               </div>
             )}
-          </div>
-        ) : (
-          <div className="w-72 flex-shrink-0 border-r border-gray-200/50 bg-white/40 backdrop-blur-sm flex flex-col">
-            {/* Doc list header */}
-            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200/30 flex-shrink-0">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider truncate">
-                  {activeTab === 'overview' ? '概览' : docListTitle}
-                </span>
-                {activeTab !== 'overview' && (
-                  <span className="text-xs text-gray-400 flex-shrink-0">{displayedDocs.length}</span>
-                )}
-              </div>
-              <button
-                onClick={() => setDocListCollapsed(true)}
-                className="p-1 hover:bg-gray-100/80 rounded transition-colors flex-shrink-0"
-                title="收起文档列表"
-              >
-                <ChevronLeftIcon className="w-4 h-4 text-gray-400" />
-              </button>
-            </div>
 
-            {/* Doc list content */}
-            <div className="flex-1 overflow-y-auto">
-              {activeTab === 'overview' ? (
-                <div className="flex flex-col items-center justify-center h-full text-gray-400 px-4">
-                  <FolderIcon className="w-8 h-8 mb-2 opacity-50" />
-                  <p className="text-sm text-center">概览模式</p>
-                  <p className="text-xs text-center mt-1">从左侧选择分类查看文档</p>
-                </div>
-              ) : loadingDocuments ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-gray-500">加载中...</div>
-                </div>
-              ) : displayedDocs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-gray-400 px-4">
-                  <DocumentIcon className="w-8 h-8 mb-2 opacity-50" />
-                  <p className="text-sm text-center">
-                    {searchResults !== null ? '未找到匹配的文档' : '暂无文档'}
-                  </p>
-                </div>
-              ) : (
-                <div className="py-1">
-                  {displayedDocs.map(doc => (
-                    <div
-                      key={doc.id}
-                      className={clsx(
-                        "flex items-center gap-2 px-3 py-2.5 cursor-pointer transition-colors group",
-                        selectedDocId === doc.id
-                          ? "bg-blue-50/80 border-l-2 border-blue-500"
-                          : "hover:bg-white/60 border-l-2 border-transparent"
-                      )}
-                      onClick={() => handleDocClick(doc)}
-                    >
-                      <div className="flex-shrink-0">
-                        {doc.url ? (
-                          <GlobeAltIcon className="w-4 h-4 text-blue-500" />
-                        ) : (
-                          <DocumentIcon className="w-4 h-4 text-gray-400" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className={clsx(
-                          "text-sm truncate",
-                          selectedDocId === doc.id ? "font-medium text-blue-700" : "text-gray-800"
-                        )}>
-                          {doc.name}
-                          {isBilingual && doc.nameTranslated && (
-                            <span className="text-gray-500 font-normal"> ({doc.nameTranslated})</span>
-                          )}
+            {/* Overview */}
+            <button
+              onClick={handleOverviewClick}
+              className={clsx(
+                'w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors',
+                selectedDocId === null && !searchQuery
+                  ? 'bg-blue-50/80 text-blue-600 font-medium'
+                  : 'text-gray-700 hover:bg-gray-50/80'
+              )}
+            >
+              <span className="flex items-center gap-2">
+                <FolderIcon className="w-4 h-4 flex-shrink-0" />
+                概览
+              </span>
+              <span className={clsx(
+                'text-xs px-1.5 py-0.5 rounded-full',
+                selectedDocId === null && !searchQuery ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'
+              )}>
+                {readmeDocCount}
+              </span>
+            </button>
+
+            {/* All Documents */}
+            <div>
+              <button
+                onClick={() => toggleGroup('all')}
+                className={clsx(
+                  'w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors',
+                  selectedDocId !== null && !selectedDocCategory
+                    ? 'text-gray-700 hover:bg-gray-50/80'
+                    : 'text-gray-700 hover:bg-gray-50/80'
+                )}
+              >
+                <span className="flex items-center gap-2">
+                  {expandedGroups.has('all') ? (
+                    <ChevronDownIcon className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                  ) : (
+                    <ChevronRightIcon className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                  )}
+                  <span>所有文档</span>
+                </span>
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                  {searchResults !== null
+                    ? (searchGroupedDocs?.get('all')?.length ?? 0)
+                    : documents.length}
+                </span>
+              </button>
+              {expandedGroups.has('all') && (
+                <div className="pb-1">
+                  {(() => {
+                    const docs = searchResults !== null
+                      ? (searchGroupedDocs?.get('all') ?? [])
+                      : (groupDocsMap.get('all') ?? [])
+                    if (docs.length === 0) {
+                      return (
+                        <div className="px-8 py-2 text-xs text-gray-400">
+                          暂无文档
                         </div>
-                        {doc.url && (
-                          <div className="text-xs text-gray-400 truncate">{doc.url}</div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={e => { e.stopPropagation(); handleDownload(doc) }}
-                          className="p-1 hover:bg-gray-100 rounded"
-                          title="下载"
-                        >
-                          <ArrowDownTrayIcon className="w-3.5 h-3.5 text-gray-400 hover:text-blue-500" />
-                        </button>
-                        <button
-                          onClick={e => { e.stopPropagation(); handleDelete(doc) }}
-                          className="p-1 hover:bg-gray-100 rounded"
-                          title="删除"
-                        >
-                          <TrashIcon className="w-3.5 h-3.5 text-gray-400 hover:text-red-500" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                      )
+                    }
+                    return docs.map(renderDocItem)
+                  })()}
                 </div>
               )}
             </div>
+
+            {/* Category Groups */}
+            {visibleCategories.map(cat => {
+              const isExpanded = expandedGroups.has(cat.category)
+              const isHighlighted = selectedDocCategory === cat.category
+              const docs = searchResults !== null
+                ? (searchGroupedDocs?.get(cat.category) ?? [])
+                : (groupDocsMap.get(cat.category) ?? [])
+              return (
+                <div key={cat.category}>
+                  <button
+                    onClick={() => toggleGroup(cat.category)}
+                    className={clsx(
+                      'w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors',
+                      isHighlighted && !searchQuery
+                        ? 'bg-blue-50/30 text-blue-600'
+                        : 'text-gray-700 hover:bg-gray-50/80'
+                    )}
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      {isExpanded ? (
+                        <ChevronDownIcon className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                      ) : (
+                        <ChevronRightIcon className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                      )}
+                      <span className="truncate">{getDisplayCategory(cat.category)}</span>
+                    </span>
+                    <span className={clsx(
+                      'text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 ml-2',
+                      isHighlighted && !searchQuery ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'
+                    )}>
+                      {docs.length}
+                    </span>
+                  </button>
+                  {isExpanded && (
+                    <div className="pb-1">
+                      {docs.length === 0 ? (
+                        <div className="px-8 py-2 text-xs text-gray-400">
+                          暂无文档
+                        </div>
+                      ) : (
+                        docs.map(renderDocItem)
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            {/* Search empty state */}
+            {searchResults !== null && visibleCategories.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-8 text-gray-400 px-4">
+                <DocumentIcon className="w-8 h-8 mb-2 opacity-50" />
+                <p className="text-sm text-center">未找到匹配的文档</p>
+              </div>
+            )}
           </div>
-        )}
+
+          {/* Language toggle for bilingual collections */}
+          {isBilingual && (
+            <div className="px-4 py-3 border-t border-gray-200/50 flex-shrink-0">
+              <button
+                onClick={() => setDisplayLanguage(displayLanguage === 'source' ? 'zh' : 'source')}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <span>{displayLanguage === 'source' ? 'English' : '中文'}</span>
+                <svg className="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+                <span>{displayLanguage === 'source' ? '中文' : 'English'}</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Drag handle */}
+        <div
+          className="w-1 flex-shrink-0 hover:bg-blue-400/50 active:bg-blue-500/60 transition-colors"
+          style={{ cursor: isDragging ? 'col-resize' : 'col-resize' }}
+          onMouseDown={handleDragStart}
+          title="拖动调整宽度"
+        />
 
         {/* Right: Detail Panel */}
         <div className="flex-1 flex flex-col overflow-hidden bg-gray-50/30">
@@ -1008,9 +1140,11 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
             <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
               <DocumentIcon className="w-12 h-12 mb-3 opacity-50" />
               <p className="text-sm">
-                {activeTab === 'overview'
-                  ? '概览页面加载中...'
-                  : '从中间栏选择一篇文档查看详情'
+                {searchQuery
+                  ? '搜索中或从左侧选择一篇文档'
+                  : readmeContent
+                    ? '概览页面加载中...'
+                    : '从左侧选择一篇文档查看详情'
                 }
               </p>
             </div>
