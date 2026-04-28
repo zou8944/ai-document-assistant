@@ -75,6 +75,7 @@ export interface Task {
   completed_at?: string
   urls?: string[]
   recursive_prefix?: string
+  title?: string
 }
 
 export interface TaskLog {

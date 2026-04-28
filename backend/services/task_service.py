@@ -17,6 +17,8 @@ from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urldefrag, urljoin, urlparse
 
+from langchain_core.output_parsers import StrOutputParser
+
 from crawler.simple_web_crawler import SimpleCrawlResult, create_simple_web_crawler
 from data_processing.file_processor import create_file_processor
 from data_processing.text_splitter import create_document_processor
@@ -105,7 +107,8 @@ class TaskService:
             completed_at=task.completed_at.isoformat() if task.completed_at else None,
             urls=urls,
             recursive_prefix=recursive_prefix,
-            error=task.error_message
+            error=task.error_message,
+            title=input_params.get("title")
         )
 
     def _log_info_task(self, task_id: str, message: str) -> None:
@@ -121,8 +124,77 @@ class TaskService:
         self.task_log_repo.add_log(task_id, level, message, None)
         logger.log(getattr(logging, level.upper()), message, exc_info=(level == "error"))
 
+    async def _generate_task_title(
+        self,
+        urls: list[str],
+        recursive_prefix: str,
+        existing_titles: list[str]
+    ) -> str:
+        """Generate a Chinese title for a URL ingestion task using LLM."""
+        urls_str = "\n".join(f"- {url}" for url in urls[:5])
+        if len(urls) > 5:
+            urls_str += f"\n... 等共 {len(urls)} 个 URL"
+
+        prefix_str = f"递归前缀: {recursive_prefix}" if recursive_prefix else "递归前缀: 无"
+
+        existing_titles_str = ""
+        if existing_titles:
+            existing_titles_str = "\n已有标题列表（请确保新标题不与以下重复）:\n" + "\n".join(f"- {t}" for t in existing_titles)
+
+        prompt = (
+            "请为以下网页抓取任务生成一个20字以内的中文标题。\n\n"
+            f"初始URL:\n{urls_str}\n"
+            f"{prefix_str}\n"
+            f"{existing_titles_str}\n\n"
+            "要求:\n"
+            "1. 标题应简洁概括该任务抓取的内容范围\n"
+            "2. 严格控制在20字以内\n"
+            "3. 使用中文\n"
+            "4. 不要与已有标题重复\n\n"
+            "请只返回标题文字，不要任何解释。"
+        )
+
+        try:
+            chain = self.llm_service.llm | StrOutputParser()
+            title = await chain.ainvoke(prompt)
+            title = title.strip().strip('"').strip("'").strip()
+            if len(title) > 20:
+                title = title[:20]
+            return title
+        except Exception as e:
+            logger.warning(f"Failed to generate task title: {e}")
+            # Fallback: use first URL hostname
+            try:
+                from urllib.parse import urlparse
+                hostname = urlparse(urls[0]).netloc if urls else "未知"
+                return f"{hostname} 网页抓取"
+            except Exception:
+                return "网页抓取"
+
     async def create_task(self, task_type: str, collection_id: str, input_params: dict[str, Any]) -> TaskResponse:
         """Create a new task"""
+        # Generate AI title for URL ingestion tasks
+        if task_type == "ingest_urls":
+            urls = input_params.get("urls", [])
+            recursive_prefix = input_params.get("recursive_prefix", "")
+
+            # Get existing task titles for this collection
+            existing_tasks = self.task_repo.list_tasks_with_filters(
+                collection_id=collection_id, limit=200
+            )
+            existing_titles: list[str] = []
+            for t in existing_tasks:
+                try:
+                    params = json.loads(t.input_params) if t.input_params else {}
+                    if params.get("title"):
+                        existing_titles.append(params["title"])
+                except json.JSONDecodeError:
+                    pass
+
+            title = await self._generate_task_title(urls, recursive_prefix, existing_titles)
+            input_params["title"] = title
+            logger.info(f"Generated task title: {title}")
+
         created_task = self.task_repo.create_by_model(TaskDTO(
             type=task_type,
             collection_id=collection_id,

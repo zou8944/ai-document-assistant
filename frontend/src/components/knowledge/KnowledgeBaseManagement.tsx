@@ -816,8 +816,8 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                           task.status === 'stopped' && 'bg-blue-500',
                           task.status === 'pending' && 'bg-gray-400',
                         )} />
-                        <span className="text-sm font-medium text-gray-800">
-                          {task.task_type === 'ingest_urls' ? '网页抓取' : '文件上传'}
+                        <span className="text-sm font-medium text-gray-800 truncate">
+                          {task.title || (task.task_type === 'ingest_urls' ? '网页抓取' : '文件上传')}
                         </span>
                         {task.status === 'processing' && task.progress !== undefined && (
                           <span className="text-xs text-blue-600 ml-1">
@@ -892,7 +892,10 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
               <div className={clsx('mt-3 flex flex-col', logsExpanded && 'h-[50vh]')}>
                 <div className="flex items-center justify-between mb-2 flex-shrink-0">
                   <span className="text-xs text-gray-500">
-                    {tasks.find(t => t.task_id === selectedTaskId)?.task_type === 'ingest_urls' ? '网页抓取' : '文件上传'} 日志
+                    {(() => {
+                      const t = tasks.find(task => task.task_id === selectedTaskId)
+                      return t ? (t.title || (t.task_type === 'ingest_urls' ? '网页抓取' : '文件上传')) : '任务'
+                    })()} 日志
                     {taskLogs.length > 0 && (
                       <span className="ml-1 text-gray-400">({taskLogs.length} 条)</span>
                     )}

@@ -121,6 +121,7 @@ class TaskResponse(BaseModel):
     urls: list[str] = Field(default=[], description="URLs to crawl")
     recursive_prefix: str = Field(default="", description="Recursive prefix for crawling")
     error: Optional[str] = Field(None, description="Error message if failed")
+    title: Optional[str] = Field(None, description="AI-generated task title")
 
 
 class IngestResponse(BaseModel):
