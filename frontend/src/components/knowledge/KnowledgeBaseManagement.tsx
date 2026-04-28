@@ -1130,6 +1130,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
             <DocReader
               doc={{ id: selectedDoc.id, name: selectedDoc.name, nameTranslated: selectedDoc.nameTranslated, url: selectedDoc.url }}
               previewUrl={previewUrl}
+              collectionId={currentKb.id}
             />
           ) : showReadme && readmeContent ? (
             <ReadmePanel

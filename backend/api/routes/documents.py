@@ -117,3 +117,20 @@ async def preview_document(
         raise HTTPNotFoundException(f"Document '{document_id}' has no HTML preview available")
 
     return html_response
+
+
+@router.get("/collections/{collection_id}/documents/{document_id}/content")
+async def get_document_content(
+    collection_id: str,
+    document_id: str,
+    request: Request
+):
+    """Get a document's markdown content"""
+    document_service = get_app_state(request).document_service
+
+    content = await document_service.get_document_content(collection_id, document_id)
+
+    if content is None:
+        raise HTTPNotFoundException(f"Document '{document_id}' not found in collection '{collection_id}'")
+
+    return {"content": content}

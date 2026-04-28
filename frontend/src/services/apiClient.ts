@@ -350,6 +350,15 @@ export class DocumentAssistantAPI {
     return `${this.baseURL}/api/v1/collections/${encodeURIComponent(collectionId)}/documents/${encodeURIComponent(documentId)}/preview`
   }
 
+  /**
+   * Get a document's markdown content
+   */
+  async getDocumentContent(collectionId: string, documentId: string): Promise<APIResponse<{ content: string }>> {
+    return this.request<APIResponse<{ content: string }>>(
+      `/api/v1/collections/${encodeURIComponent(collectionId)}/documents/${encodeURIComponent(documentId)}/content`
+    )
+  }
+
   // Document Management
   /**
    * List documents in a collection

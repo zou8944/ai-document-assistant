@@ -276,6 +276,17 @@ class DocumentService:
             media_type="text/html",
         )
 
+    async def get_document_content(
+        self, collection_id: str, document_id: str
+    ) -> Optional[str]:
+        """Get the markdown content of a specific document"""
+        document = self.doc_repo.get_by_id(document_id)
+
+        if not document or document.collection_id != collection_id:
+            return None
+
+        return document.content or None
+
     def close(self):
         self.chroma_manager.close()
         logger.info("DocumentService resources closed")
