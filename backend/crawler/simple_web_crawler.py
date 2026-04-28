@@ -101,8 +101,8 @@ class SimpleWebCrawler:
         title_tag = soup.find("title")
         title = title_tag.get_text(strip=True) if title_tag else ""
 
-        # Remove meta elements
-        for tag in soup(["script", "style", "header", "footer"]):
+        # Remove navigation/layout elements (keep in sync with _clean_html)
+        for tag in soup(["script", "style", "nav", "header", "footer", "aside"]):
             tag.decompose()
 
         # Find main content area
@@ -153,7 +153,7 @@ class SimpleWebCrawler:
         response.raise_for_status()
         html_content = response.text
         clean_html = self._clean_html(html_content)
-        title, content, links = self._extract_content(html_content, url)
+        title, content, links = self._extract_content(clean_html, url)
         return SimpleCrawlResult(
             url=url,
             title=title,

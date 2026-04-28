@@ -237,5 +237,38 @@ export function markdownToHtml(md: string, baseUrl?: string): string {
   flushList()
   flushBlockquote()
 
-  return htmlParts.join('\n')
+  let html = htmlParts.join('\n')
+
+  // Post-process: remove duplicate consecutive h1 headings (common in crawled docs
+  // where a page-level title and an article-level title are both present)
+  html = removeDuplicateH1(html)
+
+  return html
+}
+
+/**
+ * Remove duplicate consecutive h1 headings and any content between them.
+ * Handles patterns like: <h1>Title</h1> ... <h1>Title</h1>
+ */
+function removeDuplicateH1(html: string): string {
+  const matches: Array<{ index: number; length: number; text: string }> = []
+  const regex = /<h1\b[^>]*>([\s\S]*?)<\/h1>/gi
+  let match
+  while ((match = regex.exec(html)) !== null) {
+    matches.push({
+      index: match.index,
+      length: match[0].length,
+      text: match[1].replace(/<[^\u003e]+>/g, '').trim(),
+    })
+  }
+
+  for (let i = 0; i < matches.length - 1; i++) {
+    if (matches[i].text === matches[i + 1].text) {
+      const start = matches[i].index + matches[i].length
+      const end = matches[i + 1].index + matches[i + 1].length
+      return html.slice(0, start) + html.slice(end)
+    }
+  }
+
+  return html
 }
