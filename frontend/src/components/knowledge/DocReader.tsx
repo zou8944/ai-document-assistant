@@ -2,13 +2,11 @@
  * Document reader panel - shows a document in HTML (iframe) or Markdown view
  */
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowTopRightOnSquareIcon, DocumentTextIcon, CodeBracketIcon } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import remarkBreaks from 'remark-breaks'
 import { useAPIClient, extractData } from '../../services/apiClient'
+import { markdownToHtml } from '../../utils/markdown'
 
 interface DocInfo {
   id: string
@@ -31,6 +29,7 @@ export const DocReader: React.FC<DocReaderProps> = ({ doc, previewUrl, collectio
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const apiClient = useAPIClient()
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const loadMarkdown = useCallback(async () => {
     if (markdownContent !== null || loading) return
@@ -52,6 +51,40 @@ export const DocReader: React.FC<DocReaderProps> = ({ doc, previewUrl, collectio
       loadMarkdown()
     }
   }, [viewMode, loadMarkdown])
+
+  const html = useMemo(() => {
+    if (!markdownContent) return ''
+    return markdownToHtml(markdownContent, doc.url)
+  }, [markdownContent, doc.url])
+
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      const link = (e.target as HTMLElement).closest('a[data-doc-link]')
+      if (!(link instanceof HTMLAnchorElement)) return
+
+      const href = link.getAttribute('href')
+      if (!href) return
+
+      // Anchor links - scroll within container
+      if (href.startsWith('#')) {
+        e.preventDefault()
+        const targetId = href.slice(1)
+        const targetEl = containerRef.current?.querySelector(`[id="${CSS.escape(targetId)}"]`)
+        if (targetEl) {
+          targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+        return
+      }
+
+      // External links - open in new tab
+      if (href.startsWith('http://') || href.startsWith('https://')) {
+        e.preventDefault()
+        window.open(href, '_blank', 'noopener,noreferrer')
+        return
+      }
+    },
+    []
+  )
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -132,90 +165,25 @@ export const DocReader: React.FC<DocReaderProps> = ({ doc, previewUrl, collectio
               </div>
             ) : (
               <div className="max-w-3xl mx-auto px-6 py-8">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm, remarkBreaks]}
-                  components={{
-                    h1: ({ children }) => (
-                      <h1 className="text-2xl font-bold mb-4 text-gray-900">{children}</h1>
-                    ),
-                    h2: ({ children }) => (
-                      <h2 className="text-xl font-semibold mb-3 mt-6 text-gray-900">{children}</h2>
-                    ),
-                    h3: ({ children }) => (
-                      <h3 className="text-lg font-semibold mb-2 mt-4 text-gray-900">{children}</h3>
-                    ),
-                    p: ({ children }) => (
-                      <p className="mb-3 last:mb-0 text-gray-800 leading-relaxed">{children}</p>
-                    ),
-                    ul: ({ children }) => (
-                      <ul className="list-disc list-inside mb-3 space-y-1 text-gray-800">{children}</ul>
-                    ),
-                    ol: ({ children }) => (
-                      <ol className="list-decimal list-inside mb-3 space-y-1 text-gray-800">{children}</ol>
-                    ),
-                    li: ({ children }) => <li className="text-gray-800">{children}</li>,
-                    blockquote: ({ children }) => (
-                      <blockquote className="border-l-4 border-gray-300 pl-4 py-2 mb-3 bg-gray-50 text-gray-700 italic">
-                        {children}
-                      </blockquote>
-                    ),
-                    code: ({ className, children, ...props }: any) => {
-                      const inline = !className
-                      if (inline) {
-                        return (
-                          <code
-                            className="bg-gray-100 text-gray-800 px-1 py-0.5 rounded text-sm font-mono"
-                            {...props}
-                          >
-                            {children}
-                          </code>
-                        )
-                      }
-                      return (
-                        <div className="my-3">
-                          <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm">
-                            <code className={className} {...props}>
-                              {children}
-                            </code>
-                          </pre>
-                        </div>
-                      )
-                    },
-                    table: ({ children }) => (
-                      <div className="overflow-x-auto mb-3">
-                        <table className="min-w-full border border-gray-300 text-sm">
-                          {children}
-                        </table>
-                      </div>
-                    ),
-                    thead: ({ children }) => <thead className="bg-gray-50">{children}</thead>,
-                    tbody: ({ children }) => <tbody>{children}</tbody>,
-                    tr: ({ children }) => <tr className="border-b border-gray-200">{children}</tr>,
-                    th: ({ children }) => (
-                      <th className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-900">
-                        {children}
-                      </th>
-                    ),
-                    td: ({ children }) => (
-                      <td className="border border-gray-300 px-3 py-2 text-gray-800">{children}</td>
-                    ),
-                    strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
-                    em: ({ children }) => <em className="italic text-gray-900">{children}</em>,
-                    a: ({ href, children }) => (
-                      <a
-                        href={href}
-                        className="text-blue-600 hover:text-blue-800 underline"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        {children}
-                      </a>
-                    ),
-                    hr: () => <hr className="my-4 border-gray-200" />,
-                  }}
-                >
-                  {markdownContent}
-                </ReactMarkdown>
+                <div
+                  ref={containerRef}
+                  className="prose prose-sm max-w-none
+                    prose-headings:text-gray-900 prose-headings:font-semibold
+                    prose-h1:text-2xl prose-h1:mb-4 prose-h1:pb-2 prose-h1:border-b prose-h1:border-gray-200
+                    prose-h2:text-xl prose-h2:mt-6 prose-h2:mb-3
+                    prose-h3:text-lg prose-h3:mt-4 prose-h3:mb-2
+                    prose-p:text-gray-800 prose-p:leading-relaxed
+                    prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline
+                    prose-strong:text-gray-900
+                    prose-ul:text-gray-800 prose-ul:my-3
+                    prose-li:my-1
+                    prose-img:rounded-lg prose-img:shadow-sm
+                    prose-blockquote:border-l-4 prose-blockquote:border-gray-300 prose-blockquote:pl-4 prose-blockquote:py-2 prose-blockquote:bg-gray-50 prose-blockquote:text-gray-700 prose-blockquote:italic
+                    prose-code:bg-gray-100 prose-code:text-gray-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:font-mono
+                    prose-pre:bg-gray-900 prose-pre:text-gray-100 prose-pre:p-4 prose-pre:rounded-lg prose-pre:overflow-x-auto prose-pre:text-sm"
+                  dangerouslySetInnerHTML={{ __html: html }}
+                  onClick={handleClick}
+                />
               </div>
             )}
           </div>

@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useMemo, useRef } from 'react'
+import { markdownToHtml } from '../../utils/markdown'
 
 interface ReadmePanelProps {
   readmeContent: string
@@ -10,98 +11,6 @@ interface ReadmePanelProps {
   displayLanguage: 'source' | 'zh'
   isBilingual: boolean
   onDocClick: (path: string) => void
-}
-
-/**
- * Simple markdown to HTML converter for README content.
- * Handles headings, bold, links, lists, and paragraphs.
- */
-function markdownToHtml(md: string): string {
-  const lines = md.split('\n')
-  const htmlParts: string[] = []
-  let inList = false
-  let inBlockquote = false
-
-  for (const line of lines) {
-    const trimmed = line.trim()
-
-    // Close blockquote if needed
-    if (inBlockquote && !trimmed.startsWith('>')) {
-      htmlParts.push('</blockquote>')
-      inBlockquote = false
-    }
-
-    // Close list if needed
-    if (inList && !trimmed.startsWith('- ') && !trimmed.startsWith('* ')) {
-      htmlParts.push('</ul>')
-      inList = false
-    }
-
-    if (!trimmed) {
-      continue
-    }
-
-    // Blockquote
-    if (trimmed.startsWith('>')) {
-      if (!inBlockquote) {
-        htmlParts.push('<blockquote>')
-        inBlockquote = true
-      }
-      const text = processInline(trimmed.slice(1).trim())
-      htmlParts.push(`<p>${text}</p>`)
-      continue
-    }
-
-    // Headings
-    const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)/)
-    if (headingMatch) {
-      const level = headingMatch[1].length
-      const rawText = headingMatch[2]
-      const text = processInline(rawText)
-      const id = rawText.trim()
-      htmlParts.push(`<h${level} id="${id}">${text}</h${level}>`)
-      continue
-    }
-
-    // List items
-    if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-      if (!inList) {
-        htmlParts.push('<ul>')
-        inList = true
-      }
-      const text = processInline(trimmed.slice(2))
-      htmlParts.push(`<li>${text}</li>`)
-      continue
-    }
-
-    // Paragraph
-    const text = processInline(trimmed)
-    htmlParts.push(`<p>${text}</p>`)
-  }
-
-  if (inList) {
-    htmlParts.push('</ul>')
-  }
-  if (inBlockquote) {
-    htmlParts.push('</blockquote>')
-  }
-
-  return htmlParts.join('\n')
-}
-
-/**
- * Process inline markdown: bold, links
- */
-function processInline(text: string): string {
-  // Bold
-  text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-
-  // Links - keep doc:// links, handle external links
-  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
-    return `<a href="${url}" data-doc-link="true">${label}</a>`
-  })
-
-  return text
 }
 
 export const ReadmePanel: React.FC<ReadmePanelProps> = ({
