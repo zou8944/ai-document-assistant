@@ -928,7 +928,7 @@ class TaskService:
             return
 
         docs = self.doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
-        crawled_docs = [d for d in docs if d.uri and d.source_path and d.html_content]
+        crawled_docs = [d for d in docs if d.uri and d.source_path and d.clean_html]
         stats.phase = "rewrite"
         stats.rewrite_total = len(crawled_docs)
         stats.rewrite_done = 0
@@ -970,6 +970,7 @@ class TaskService:
                 title=crawl_result.title,
                 content=crawl_result.content,
                 html_content=crawl_result.html_content,
+                clean_html=crawl_result.clean_html,
                 summary="",
                 doc_status=doc_status,
                 error_message=crawl_result.error,
@@ -1010,6 +1011,7 @@ class TaskService:
                 title=crawl_result.title,
                 content=crawl_result.content,
                 html_content=crawl_result.html_content,
+                clean_html=crawl_result.clean_html,
                 summary=summary,
                 doc_status="indexed",
                 error_message=None,
@@ -1025,6 +1027,7 @@ class TaskService:
         title: str,
         content: str,
         html_content: str,
+        clean_html: str,
         summary: str,
         doc_status: str,
         error_message: str | None,
@@ -1049,6 +1052,7 @@ class TaskService:
             uri=url,
             content=content,
             html_content=html_content,
+            clean_html=clean_html,
             summary=summary,
             source_path=source_path,
             size_bytes=len(content.encode()) if content else 0,
@@ -1324,7 +1328,7 @@ class TaskService:
 
         self._log_info_task(task_id, "Mirroring static assets and rewriting HTML links...")
         docs = self.doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
-        crawled_docs = [d for d in docs if d.uri and d.source_path and d.html_content]
+        crawled_docs = [d for d in docs if d.uri and d.source_path and d.clean_html]
         if not crawled_docs:
             self._log_info_task(task_id, "No crawled HTML pages found, skipping link rewriting")
             return
@@ -1357,7 +1361,7 @@ class TaskService:
             pages_manifest: dict[str, str] = {}
 
             for doc in domain_docs:
-                if not doc.id or not doc.html_content or not doc.uri or not doc.source_path:
+                if not doc.id or not doc.clean_html or not doc.uri or not doc.source_path:
                     continue
 
                 canonical_page_url = self._canonicalize_page_url(doc.uri)
@@ -1366,7 +1370,7 @@ class TaskService:
 
                 logger.debug(f"Processing page: {doc.uri} -> {page_rel_path}")
 
-                soup = BeautifulSoup(doc.html_content, "lxml")
+                soup = BeautifulSoup(doc.clean_html, "lxml")
                 changed = False
 
                 for a_tag in soup.find_all("a", href=True):
@@ -1491,7 +1495,7 @@ class TaskService:
 
                 rewritten_html = str(soup)
                 if changed:
-                    self.doc_repo.update(doc.id, html_content=rewritten_html)
+                    self.doc_repo.update(doc.id, clean_html=rewritten_html)
                     rewritten_pages += 1
 
                 stats.rewrite_done += 1

@@ -262,14 +262,14 @@ class DocumentService:
         if not document or document.collection_id != collection_id:
             return None
 
-        if not document.html_content:
+        if not document.clean_html:
             return None
 
         base_href = self._compute_preview_base_href(document, collection_id)
         if base_href:
-            html = self._inject_base_tag(document.html_content, base_href)
+            html = self._inject_base_tag(document.clean_html, base_href)
         else:
-            html = document.html_content
+            html = document.clean_html
 
         return Response(
             content=html.encode("utf-8"),

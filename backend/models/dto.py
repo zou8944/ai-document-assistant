@@ -84,6 +84,7 @@ class DocumentDTO(DTOConvertible[Document, "DocumentDTO"]):
     name_translated: str | None = None
     content: str | None = None
     html_content: str | None = None
+    clean_html: str | None = None
     summary: str | None = None
     uri: str | None = None
     source_path: str | None = None

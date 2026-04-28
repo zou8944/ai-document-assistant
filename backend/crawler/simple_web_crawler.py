@@ -30,6 +30,7 @@ class SimpleCrawlResult:
     title: str
     content: str
     html_content: str
+    clean_html: str
     links: list[str]
     success: bool
     error: Optional[str] = None
@@ -84,6 +85,13 @@ class SimpleWebCrawler:
             return bool(parsed.netloc and parsed.scheme in ("http", "https"))
         except Exception:
             return False
+
+    def _clean_html(self, html: str) -> str:
+        """Remove navigation/layout elements from raw HTML for clean preview."""
+        soup = BeautifulSoup(html, "lxml")
+        for tag in soup(["script", "style", "nav", "header", "footer", "aside"]):
+            tag.decompose()
+        return str(soup)
 
     def _extract_content(self, html: str, url: str) -> tuple[str, str, list[str]]:
         """Extract title, markdown content and links from HTML"""
@@ -144,12 +152,14 @@ class SimpleWebCrawler:
         response = self.session.get(url, timeout=30)
         response.raise_for_status()
         html_content = response.text
+        clean_html = self._clean_html(html_content)
         title, content, links = self._extract_content(html_content, url)
         return SimpleCrawlResult(
             url=url,
             title=title,
             content=content,
             html_content=html_content,
+            clean_html=clean_html,
             links=links,
             success=True,
         )
@@ -232,7 +242,7 @@ class SimpleWebCrawler:
             except Exception as e:
                 failed_urls.add(url)
                 result = SimpleCrawlResult(
-                    url=url, title="", content="", html_content="",
+                    url=url, title="", content="", html_content="", clean_html="",
                     links=[], success=False, error=str(e),
                 )
                 logger.warning(f"Failed to crawl {url}: {e}")
