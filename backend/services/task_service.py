@@ -1157,6 +1157,21 @@ class TaskService:
         if canonical in failed_assets:
             logger.debug(f"Asset {canonical} failed previously, skipping")
             return None
+
+        # Check disk cache before downloading
+        file_hash = hashlib.sha1(canonical.encode()).hexdigest()[:24]
+        assets_dir = domain_dir / "assets"
+        if assets_dir.exists():
+            for category_dir in assets_dir.iterdir():
+                if not category_dir.is_dir():
+                    continue
+                for existing_file in category_dir.iterdir():
+                    if existing_file.name.startswith(file_hash):
+                        local_rel_path = str(existing_file.relative_to(domain_dir)).replace("\\", "/")
+                        asset_map[canonical] = local_rel_path
+                        logger.debug(f"Asset {canonical} found in disk cache, returning: {local_rel_path}")
+                        return local_rel_path
+
         failed_assets.add(canonical)
 
         try:

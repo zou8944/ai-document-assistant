@@ -191,7 +191,7 @@ Rules for Chinese content:
 
 Pages:
 {pages_text}"""
-        return await self.invoke_llm(prompt)
+        return await self.invoke_llm(prompt, max_tokens=self.config.llm.max_tokens)
 
     # ==================== Direct LLM Access ====================
 

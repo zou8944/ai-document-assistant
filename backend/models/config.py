@@ -13,6 +13,7 @@ class LLMConfig:
     api_key: str = ""
     base_url: str = "https://api.openai.com/v1"
     chat_model: str = "gpt-3.5-turbo"
+    max_tokens: Optional[int] = 8192
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -24,10 +25,12 @@ class LLMConfig:
     @classmethod
     def from_env(cls):
         """Load configuration from environment variables."""
+        max_tokens = os.getenv("OPENAI_MAX_TOKENS", "")
         return cls(
             api_key=os.getenv("OPENAI_API_KEY", ""),
             base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
             chat_model=os.getenv("OPENAI_CHAT_MODEL", "gpt-3.5-turbo"),
+            max_tokens=int(max_tokens) if max_tokens else 8192,
         )
 
 
@@ -185,6 +188,7 @@ class AppConfig:
             "temperature": 0.1,
             "api_key": self.llm.api_key,
             "base_url": self.llm.base_url,
+            "max_tokens": self.llm.max_tokens,
         }
         return kwargs
 
