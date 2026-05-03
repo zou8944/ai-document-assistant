@@ -10,6 +10,7 @@ from exception import HTTPNotFoundException
 from models.dto import ChatDTO, ChatMessageDTO
 from models.rag import ChatMessageRoleEnum, CollectionSummary, DocChunk, HistoryItem
 from models.responses import ChatMessageResponse, ChatResponse, SourceReference
+from rag.retrieval_strategy import DocumentRetrievalService
 from repository.chat import ChatMessageRepository, ChatRepository
 from repository.collection import CollectionRepository
 from repository.document import DocumentRepository
@@ -37,6 +38,9 @@ class ChatService:
 
         # Initialize LLM service
         self.llm_service = llm_service
+
+        # Initialize retrieval service
+        self.retrieval_service = DocumentRetrievalService(config, llm_service, self.document_repo, self.chroma_manager)
 
         logger.info("ChatService initialized successfully")
 
@@ -251,18 +255,13 @@ class ChatService:
                 relevance_score=1.0
             ) for doc in docs if doc]
         else:
-            # 意图分析
-            intent_info = await self.llm_service.analyze_intent(user_message)
-
-            # 向量检索
-            relevant_docs = []
-            sources = []
-            if len(intent_info.queries) > 1:
-                relevant_docs = await self._retrieve_from_multiple_collections(chat.collection_ids, intent_info.queries)
-                sources = self._format_sources(relevant_docs)
-
-            ## 提示词素材准备
-            doc_chunks = self._format_doc_chunks(relevant_docs, collection_summaries)
+            retrieval_result = await self.retrieval_service.retrieve(
+                collection_ids=chat.collection_ids,
+                user_query=user_message,
+                collection_summaries=collection_summaries,
+            )
+            doc_chunks = retrieval_result.doc_chunks
+            sources = retrieval_result.sources
         # 提示词构建
         prompt = self.llm_service.build_rag_prompt(
             collections=collection_summaries,
@@ -280,7 +279,7 @@ class ChatService:
             content=ai_response,
             sources=json.dumps([source.model_dump() for source in sources]),
             metadata=json.dumps({
-                "model": self.config.openai_chat_model,
+                "model": self.config.llm.chat_model,
                 "sources_count": len(sources),
                 "collections_searched": chat.collection_ids,
                 "document_retrieval": True
@@ -326,23 +325,18 @@ class ChatService:
                 relevance_score=1.0
             ) for doc in docs if doc]
         else:
-            # 意图分析
             yield {
                 "event": "status",
-                "data": json.dumps({"status": "analyzing_intent"})
+                "data": json.dumps({"status": "retrieving_documents"})
             }
-            intent_info = await self.llm_service.analyze_intent(user_message)
-
-            # 向量检索
-            relevant_docs = []
-            if len(intent_info.queries) > 1:
-                yield {
-                    "event": "status",
-                    "data": json.dumps({"status": "retrieving_documents"})
-                }
-                relevant_docs = await self._retrieve_from_multiple_collections(chat.collection_ids, intent_info.queries)
-
-                sources = self._format_sources(relevant_docs)
+            retrieval_result = await self.retrieval_service.retrieve(
+                collection_ids=chat.collection_ids,
+                user_query=user_message,
+                collection_summaries=collection_summaries,
+            )
+            doc_chunks = retrieval_result.doc_chunks
+            sources = retrieval_result.sources
+            if sources:
                 yield {
                     "event": "sources",
                     "data": json.dumps({
@@ -350,7 +344,6 @@ class ChatService:
                         "count": len(sources)
                     })
                 }
-            doc_chunks = self._format_doc_chunks(relevant_docs, collection_summaries)
 
         # AI 生成
         yield {
@@ -382,7 +375,7 @@ class ChatService:
             content=full_response,
             sources=json.dumps([source.model_dump() for source in sources]),
             metadata=json.dumps({
-                "model": self.config.openai_chat_model,
+                "model": self.config.llm.chat_model,
                 "sources_count": len(sources),
                 "collections_searched": chat.collection_ids
             })

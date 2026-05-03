@@ -2,6 +2,7 @@
 LLM service for centralized AI model management and operations.
 """
 
+import json
 import logging
 
 from langchain_core.output_parsers import StrOutputParser
@@ -85,6 +86,18 @@ class LLMService:
                 yield content
 
     # ==================== README Generation ====================
+
+    async def filter_by_summaries(self, user_query: str, summaries_block: str) -> list[int]:
+        """Returns list of 1-based document indices relevant to the query."""
+        from rag.prompt_templates import SUMMARY_FILTER_PROMPT
+        chain = SUMMARY_FILTER_PROMPT | self.llm | self.text_parser
+        result = await chain.ainvoke({"user_query": user_query, "summaries_block": summaries_block})
+        try:
+            indices = json.loads(result.strip())
+            return [int(i) for i in indices if isinstance(i, int) and i > 0]
+        except (json.JSONDecodeError, ValueError):
+            logger.warning(f"Failed to parse summary filter result: {result}")
+            return []
 
     async def generate_readme(self, pages: list[dict], source_language: str = "en") -> str:
         """

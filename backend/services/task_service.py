@@ -933,6 +933,52 @@ class TaskService:
             await asyncio.gather(*pending_tasks)
         self._log_info_task(task_id, f"Incremental crawl/store completed: {crawl_count} pages processed in this run")
 
+        # Phase 1.5: vectorize documents stored without vectors (idempotency recovery)
+        unvectorized = [
+            d for d in self.doc_repo.get_by_collection(collection_id, status="indexed")
+            if (d.chunk_count or 0) == 0 and d.content
+        ]
+        if unvectorized:
+            self._log_info_task(task_id, f"Vectorizing {len(unvectorized)} documents without vectors")
+            for doc in unvectorized:
+                try:
+                    chunks = self.document_processor.process_web_content(doc.uri or "", doc.content)
+                    texts = [chunk.content for chunk in chunks]
+                    chunk_embeddings = await self.llm_service.embed_documents(texts)
+                    collection = await self.chroma_manager.get_collection(collection_id)
+                    assert doc.id
+                    vector_ids = []
+                    embedding_list = []
+                    metadatas_list = []
+                    documents_list = []
+                    for i, (chunk, embedding) in enumerate(zip(chunks, chunk_embeddings)):
+                        vector_id = f"{doc.id}_chunk_{i}"
+                        chunk_record = DocumentChunkDTO(
+                            document_id=doc.id,
+                            collection_id=collection_id,
+                            chunk_index=i,
+                            content_preview=chunk.content[:200] if chunk.content else "",
+                            vector_id=vector_id,
+                            content_hash=hashlib.md5(chunk.content.encode()).hexdigest(),
+                            chunk_metadata=json.dumps(chunk.metadata)
+                        )
+                        self.doc_chunk_repo.create_by_model(chunk_record)
+                        vector_ids.append(vector_id)
+                        embedding_list.append(embedding)
+                        metadatas_list.append({
+                            "document_id": doc.id,
+                            "document_name": doc.name or "",
+                            "document_uri": doc.uri or "",
+                            "collection_id": collection_id,
+                            "chunk_index": i,
+                        })
+                        documents_list.append(chunk.content)
+                    if vector_ids and collection:
+                        collection.add(ids=vector_ids, embeddings=embedding_list, metadatas=metadatas_list, documents=documents_list)
+                    self.doc_repo.update(doc.id, chunk_count=len(chunks))
+                except Exception as e:
+                    self._log_err_task(task_id, f"Vectorization failed for {doc.uri}: {e}")
+
         # Phase 2: rewrite in-page links to local routes
         if task_id in self._stop_flags:
             self._stop_flags.discard(task_id)
@@ -1017,6 +1063,17 @@ class TaskService:
             self._log_info_task(task_id, f"Stopped before persisting: {page_url}")
             return
 
+        # chunk and embed
+        chunks = []
+        chunk_embeddings = []
+        if crawl_result.content:
+            try:
+                chunks = self.document_processor.process_web_content(page_url, crawl_result.content)
+                texts = [chunk.content for chunk in chunks]
+                chunk_embeddings = await self.llm_service.embed_documents(texts)
+            except Exception as e:
+                self._log_err_task(task_id, f"Chunking/embedding failed for {page_url}: {e}")
+
         try:
             await self._store_crawled_page(
                 collection_id=collection_id,
@@ -1029,6 +1086,8 @@ class TaskService:
                 doc_status="indexed",
                 error_message=None,
                 source_task_id=task_id,
+                chunks=chunks,
+                chunk_embeddings=chunk_embeddings,
             )
         except Exception as e:
             self._log_err_task(task_id, f"Storage failed for {page_url}: {e}")
@@ -1045,8 +1104,10 @@ class TaskService:
         doc_status: str,
         error_message: str | None,
         source_task_id: str | None = None,
+        chunks: list | None = None,
+        chunk_embeddings: list | None = None,
     ):
-        """Persist a crawled page to the database. No Chroma / no chunks."""
+        """Persist a crawled page to the database, with optional ChromaDB vectors."""
         from urllib.parse import urlparse as _urlparse
 
         # Remove existing record if any (override case)
@@ -1055,6 +1116,13 @@ class TaskService:
             assert exist_doc.id
             self.doc_chunk_repo.delete_by_document(exist_doc.id)
             self.doc_repo.delete_by_id(exist_doc.id)
+            # Also delete vectors from ChromaDB
+            try:
+                collection = await self.chroma_manager.get_collection(collection_id)
+                if collection:
+                    collection.delete(where={"document_id": exist_doc.id})
+            except Exception:
+                pass
 
         source_path = _urlparse(url).path or "/"
 
@@ -1070,13 +1138,45 @@ class TaskService:
             source_path=source_path,
             size_bytes=len(content.encode()) if content else 0,
             mime_type="text/markdown",
-            chunk_count=0,
+            chunk_count=len(chunks) if chunks else 0,
             status=doc_status,
             error_message=error_message,
             hash_md5=hashlib.md5(f"{url}:{title}:{content}".encode()).hexdigest(),
             source_task_id=source_task_id,
         )
         self.doc_repo.create_by_model(doc_record)
+
+        if chunks and chunk_embeddings and len(chunks) == len(chunk_embeddings):
+            collection = await self.chroma_manager.get_collection(collection_id)
+            vector_ids = []
+            embedding_list = []
+            metadatas = []
+            documents = []
+            doc_id = doc_record.id
+            for i, (chunk, embedding) in enumerate(zip(chunks, chunk_embeddings)):
+                vector_id = f"{doc_id}_chunk_{i}"
+                chunk_record = DocumentChunkDTO(
+                    document_id=doc_id,
+                    collection_id=collection_id,
+                    chunk_index=i,
+                    content_preview=chunk.content[:200] if chunk.content else "",
+                    vector_id=vector_id,
+                    content_hash=hashlib.md5(chunk.content.encode()).hexdigest(),
+                    chunk_metadata=json.dumps(chunk.metadata)
+                )
+                self.doc_chunk_repo.create_by_model(chunk_record)
+                vector_ids.append(vector_id)
+                embedding_list.append(embedding)
+                metadatas.append({
+                    "document_id": doc_id,
+                    "document_name": title,
+                    "document_uri": url,
+                    "collection_id": collection_id,
+                    "chunk_index": i,
+                })
+                documents.append(chunk.content)
+            if vector_ids and collection:
+                collection.add(ids=vector_ids, embeddings=embedding_list, metadatas=metadatas, documents=documents)
 
     @staticmethod
     def _canonicalize_page_url(url: str) -> str:

@@ -71,6 +71,30 @@ class KnowledgeBaseConfig:
 
 
 @dataclass
+class RetrievalConfig:
+    context_window_tokens: int = 160000
+    tier1_max_tokens: int = 80000
+    tier2_max_summary_tokens: int = 20000
+    tier2_max_full_tokens: int = 80000
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        return cls(**data)
+
+    @classmethod
+    def from_env(cls):
+        return cls(
+            context_window_tokens=int(os.getenv("CONTEXT_WINDOW_TOKENS", "160000")),
+            tier1_max_tokens=int(os.getenv("TIER1_MAX_TOKENS", "80000")),
+            tier2_max_summary_tokens=int(os.getenv("TIER2_MAX_SUMMARY_TOKENS", "20000")),
+            tier2_max_full_tokens=int(os.getenv("TIER2_MAX_FULL_TOKENS", "80000")),
+        )
+
+
+@dataclass
 class SystemConfig:
     log_level: str = "info"
 
@@ -96,6 +120,7 @@ class AppConfig:
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     knowledge_base: KnowledgeBaseConfig = field(default_factory=KnowledgeBaseConfig)
     system: SystemConfig = field(default_factory=SystemConfig)
+    retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -106,7 +131,8 @@ class AppConfig:
             llm=LLMConfig.from_dict(data.get("llm", {})),
             embedding=EmbeddingConfig.from_dict(data.get("embedding", {})),
             knowledge_base=KnowledgeBaseConfig.from_dict(data.get("knowledge_base", {})),
-            system=SystemConfig.from_dict(data.get("system", {}))
+            system=SystemConfig.from_dict(data.get("system", {})),
+            retrieval=RetrievalConfig.from_dict(data.get("retrieval", {}))
         )
 
     @classmethod
@@ -145,7 +171,8 @@ class AppConfig:
             llm=LLMConfig(**data.get("llm", {})),
             embedding=EmbeddingConfig(**data.get("embedding", {})),
             knowledge_base=KnowledgeBaseConfig(**data.get("knowledge_base", {})),
-            system=SystemConfig(**data.get("system", {}))
+            system=SystemConfig(**data.get("system", {})),
+            retrieval=RetrievalConfig(**data.get("retrieval", {}))
         )
 
     @classmethod
@@ -156,6 +183,7 @@ class AppConfig:
             embedding=EmbeddingConfig.from_env(),
             knowledge_base=KnowledgeBaseConfig(),
             system=SystemConfig.from_env(),
+            retrieval=RetrievalConfig.from_env(),
         )
 
     def to_toml_file(self, file_path: Optional[Path] = None) -> None:

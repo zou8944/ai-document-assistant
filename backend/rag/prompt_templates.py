@@ -90,3 +90,16 @@ def build_rag_prompt(
         source_contents=source_contents,
         question=user_query,
     )
+
+
+SUMMARY_FILTER_PROMPT = PromptTemplate.from_template("""你是一个文档筛选助手。用户提出了以下问题：
+{user_query}
+
+以下是所有可用文档的摘要，请判断哪些文档与用户问题相关。
+请仅返回相关文档的序号（从1开始），格式为JSON数组。
+
+文档摘要：
+{summaries_block}
+
+请直接返回JSON数组。如果没有相关文档，返回空数组 []。
+示例格式：[1, 3, 5]""")
