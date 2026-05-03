@@ -233,6 +233,7 @@ class TaskService:
         if not task or task.status != "processing":
             return False
         self._stop_flags.add(task_id)
+        self.web_crawler.stop()
         self.task_repo.update_status(task_id, "stopped")
         self._log_info_task(task_id, "任务停止请求已接收")
         return True
@@ -511,6 +512,9 @@ class TaskService:
             logger.error(f"Task {task_id} not found")
             return
 
+        # Reset crawler stop state so a restarted task can run
+        self.web_crawler.clear_stop()
+
         # Mark as started
         self.task_repo.mark_started(task_id)
 
@@ -752,7 +756,7 @@ class TaskService:
             return
 
         self._log_info_task(task_id, f"Summarizing content for: {file_path_obj.name}")
-        summary = self.llm_service.summarize_document(result.content) if result.success else ""
+        summary = await self.llm_service.summarize_document(result.content) if result.success else ""
 
         if not result.success:
             self._log_err_task(task_id, f"Failed to process {file_path_obj.name}: {result.error}")
@@ -909,7 +913,16 @@ class TaskService:
                     pt.cancel()
                 return
 
-            crawl_result = await asyncio.to_thread(_next_crawl_result, crawl_gen)
+            try:
+                crawl_result = await asyncio.to_thread(_next_crawl_result, crawl_gen)
+            except RuntimeError:
+                # Crawler was stopped
+                self._stop_flags.discard(task_id)
+                self.task_repo.update_status(task_id, "stopped")
+                self._log_info_task(task_id, "任务已停止")
+                for pt in pending_tasks:
+                    pt.cancel()
+                return
             if crawl_result is None:
                 break
             crawl_count += 1
@@ -994,7 +1007,7 @@ class TaskService:
 
         self._log_info_task(task_id, f"Summarizing: {page_url}")
         if crawl_result.content:
-            summary = await asyncio.to_thread(self.llm_service.summarize_document, crawl_result.content)
+            summary = await self.llm_service.summarize_document(crawl_result.content)
         else:
             summary = ""
 

@@ -4,6 +4,7 @@ Lightweight solution for basic document crawling with domain restrictions.
 """
 
 import logging
+import threading
 import time
 import xml.etree.ElementTree as ET
 from collections.abc import Iterator
@@ -45,6 +46,7 @@ class SimpleWebCrawler:
     def __init__(self):
         """Initialize crawler with basic settings"""
         self.delay = 1.0
+        self._stop_event = threading.Event()
 
         # Anti-detection headers
         self.headers = {
@@ -60,6 +62,20 @@ class SimpleWebCrawler:
         self.session.headers.update(self.headers)
 
         logger.info(f"Initialized SimpleWebCrawler with delay={self.delay}s")
+
+    def stop(self) -> None:
+        """Signal the crawler to stop as soon as possible."""
+        self._stop_event.set()
+        logger.info("Crawler stop requested")
+
+    def clear_stop(self) -> None:
+        """Reset the stop flag so the crawler can be reused."""
+        self._stop_event.clear()
+
+    def _check_stopped(self) -> None:
+        """Raise RuntimeError if stop has been requested."""
+        if self._stop_event.is_set():
+            raise RuntimeError("Crawler stopped by user request")
 
     def _is_same_domain(self, url1: str, url2: str) -> bool:
         """Check if URLs are from the same domain"""
@@ -149,7 +165,8 @@ class SimpleWebCrawler:
 
     def _fetch_page(self, url: str) -> SimpleCrawlResult:
         """Fetch a page from the network and return its content."""
-        response = self.session.get(url, timeout=30)
+        self._check_stopped()
+        response = self.session.get(url, timeout=10)
         response.raise_for_status()
         html_content = response.text
         clean_html = self._clean_html(html_content)
@@ -166,6 +183,8 @@ class SimpleWebCrawler:
 
     def _try_sitemap(self, base_url: str, recursive_prefix: str) -> list[str]:
         """Try to fetch sitemap.xml and return filtered URLs. Returns empty list on failure."""
+        if self._stop_event.is_set():
+            return []
         parsed = urlparse(base_url)
         sitemap_url = f"{parsed.scheme}://{parsed.netloc}/sitemap.xml"
         try:
@@ -226,6 +245,8 @@ class SimpleWebCrawler:
             logger.info("No sitemap.xml found, starting BFS from provided URLs")
 
         while to_crawl:
+            self._check_stopped()
+
             url = to_crawl.pop(0)
 
             if url in crawled_urls or url in failed_urls:
@@ -239,6 +260,9 @@ class SimpleWebCrawler:
 
             try:
                 result = self._fetch_page(url)
+            except RuntimeError as e:
+                logger.info(f"Crawl stopped: {e}")
+                raise
             except Exception as e:
                 failed_urls.add(url)
                 result = SimpleCrawlResult(

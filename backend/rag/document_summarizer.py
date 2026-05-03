@@ -37,6 +37,11 @@ class DocumentSummarizer:
         chain = prompt | self.llm | StrOutputParser()
         return chain.invoke({"document_content": content})
 
+    async def summarize_document_async(self, content) -> str:
+        prompt = DOC_SUMMARY_PROMPT
+        chain = prompt | self.llm | StrOutputParser()
+        return await chain.ainvoke({"document_content": content})
+
     def summarize_collection(self, contents: list[str]) -> str:
         prompt = COLLECTION_SUMMARY_PROMPT
         chain = prompt | self.llm | StrOutputParser()
@@ -44,6 +49,14 @@ class DocumentSummarizer:
         for idx, content in enumerate(contents):
             document_contents.append(f"文档 {idx + 1}: {content}")
         return chain.invoke({"document_contents": "\n".join(document_contents)})
+
+    async def summarize_collection_async(self, contents: list[str]) -> str:
+        prompt = COLLECTION_SUMMARY_PROMPT
+        chain = prompt | self.llm | StrOutputParser()
+        document_contents = []
+        for idx, content in enumerate(contents):
+            document_contents.append(f"文档 {idx + 1}: {content}")
+        return await chain.ainvoke({"document_contents": "\n".join(document_contents)})
 
 
 if __name__ == "__main__":

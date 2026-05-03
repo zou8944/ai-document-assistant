@@ -52,11 +52,11 @@ class LLMService:
 
     # ==================== Document Summarization ====================
 
-    def summarize_document(self, content: str) -> str:
-        return self.document_summarizer.summarize_document(content)
+    async def summarize_document(self, content: str) -> str:
+        return await self.document_summarizer.summarize_document_async(content)
 
-    def summarize_collection(self, document_summaries: list[str]) -> str:
-        return self.document_summarizer.summarize_collection(document_summaries)
+    async def summarize_collection(self, document_summaries: list[str]) -> str:
+        return await self.document_summarizer.summarize_collection_async(document_summaries)
 
     # ==================== RAG Chat Operations ====================
 

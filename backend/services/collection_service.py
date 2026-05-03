@@ -232,7 +232,7 @@ class CollectionService:
         doc_summaries = [doc.summary for doc in docs if doc.summary]
         if not doc_summaries:
             return
-        collection_summary = self.llm_service.summarize_collection(doc_summaries)
+        collection_summary = await self.llm_service.summarize_collection(doc_summaries)
         self.collection_repo.update(collection_id, summary=collection_summary)
 
     def close(self):
