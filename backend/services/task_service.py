@@ -1185,14 +1185,13 @@ class TaskService:
                         logger.debug(f"Asset {canonical} found in disk cache, returning: {local_rel_path}")
                         return local_rel_path
 
-        failed_assets.add(canonical)
-
         try:
             logger.debug(f"Downloading asset: {canonical}")
             response = self.web_crawler.session.get(canonical, timeout=30)
             response.raise_for_status()
         except Exception as e:
             logger.error(f"Failed to download asset {canonical}: {e}")
+            failed_assets.add(canonical)
             return None
 
         content_type = response.headers.get("Content-Type", "").split(";")[0].strip().lower()
@@ -1200,6 +1199,7 @@ class TaskService:
 
         if content_type.startswith("text/html"):
             logger.debug(f"Skipping HTML asset: {canonical}")
+            failed_assets.add(canonical)
             return None
 
         suffix = Path(urlparse(canonical).path).suffix.lower()
@@ -1469,9 +1469,14 @@ class TaskService:
                                 media_tag["srcset"] = rewritten_srcset
                                 changed = True
 
+                asset_rel_types = {"stylesheet", "icon", "shortcut icon", "preload", "prefetch", "apple-touch-icon"}
                 for link_tag in soup.find_all("link", href=True):
                     raw_href = str(link_tag.get("href", "")).strip()
                     if self._should_skip_reference(raw_href):
+                        continue
+                    link_rel = str(link_tag.get("rel", "")).lower()
+                    if not any(r in asset_rel_types for r in link_rel.split()):
+                        logger.debug(f"Skipping non-asset <link rel='{link_rel}'>: {raw_href}")
                         continue
                     resolved = urljoin(doc.uri, raw_href)
                     logger.debug(f"Found link asset: {raw_href} (resolved: {resolved})")
