@@ -79,7 +79,15 @@ export const useAppStore = create<AppStore>()(
           set({ activeChat: id }),
 
         setSidebarWidth: (width) =>
-          set({ sidebarWidth: Math.max(200, Math.min(400, width)) }),
+          set({
+            sidebarWidth: Math.max(
+              200,
+              Math.min(
+                typeof window !== 'undefined' ? window.innerWidth * 0.5 : 400,
+                width
+              )
+            )
+          }),
 
         setDisplayLanguage: (lang) =>
           set({ displayLanguage: lang }),

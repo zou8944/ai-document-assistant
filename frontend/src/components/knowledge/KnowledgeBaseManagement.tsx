@@ -1124,7 +1124,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
         />
 
         {/* Right: Detail Panel */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-gray-50/30">
+        <div className={clsx('flex-1 flex flex-col overflow-hidden bg-gray-50/30', isDragging && 'pointer-events-none')}>
           {showReader && selectedDoc ? (
             <DocReader
               doc={{ id: selectedDoc.id, name: selectedDoc.name, nameTranslated: selectedDoc.nameTranslated, url: selectedDoc.url }}
