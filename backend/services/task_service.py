@@ -7,9 +7,10 @@ import hashlib
 import json
 import logging
 import mimetypes
-import queue
 import os
+import queue
 import re
+import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
@@ -66,6 +67,12 @@ class TaskService:
         self.running = False
         self._stop_flags: set[str] = set()  # Task IDs marked for stopping
 
+        # Per-task lifecycle tracking (written by worker thread, read by API thread)
+        self._worker_loop: asyncio.AbstractEventLoop | None = None  # shared worker event loop
+        self._task_events: dict[str, asyncio.Event] = {}            # task_id -> cancel event
+        self._active_tasks: dict[str, asyncio.Task] = {}            # task_id -> running asyncio task
+        self._task_lock = threading.Lock()  # guards the dicts above
+
         # Initialize repositories
         self.task_repo = TaskRepository()
         self.task_log_repo = TaskLogRepository()
@@ -82,6 +89,27 @@ class TaskService:
         self.llm_service = llm_service
 
         logger.info("TaskService initialized successfully")
+
+    def _check_task_cancelled(self, task_id: str) -> bool:
+        """Check if a task has been asked to stop.  Safe to call from any thread."""
+        with self._task_lock:
+            event = self._task_events.get(task_id)
+        if event and event.is_set():
+            return True
+        return task_id in self._stop_flags
+
+    async def _apply_stop(self, task_id: str, pending_tasks: list[asyncio.Task] | None = None):
+        """Centralised stop handling: cancel pending async tasks, cleanup tracking state."""
+        if pending_tasks:
+            for pt in pending_tasks:
+                pt.cancel()
+            await asyncio.gather(*pending_tasks, return_exceptions=True)
+        # The status was already set to "stopped" by stop_task(); just clean up
+        with self._task_lock:
+            self._stop_flags.discard(task_id)
+            self._task_events.pop(task_id, None)
+            self._active_tasks.pop(task_id, None)
+        self._log_info_task(task_id, "任务已停止，工作线程清理完成")
 
     def _to_response(self, task: TaskDTO) -> TaskResponse:
         """Convert Task model to response model"""
@@ -203,8 +231,13 @@ class TaskService:
             status="pending"
         ))
 
-        # Add task to queue
-        self.task_queue.put(created_task.id)
+        # Try direct submission for immediate start; fall back to queue
+        assert created_task.id
+        loop = self._worker_loop
+        if loop and loop.is_running():
+            asyncio.run_coroutine_threadsafe(self._process_task_with_exception(created_task.id), loop)
+        else:
+            self.task_queue.put(created_task.id)
 
         logger.info(f"Created task {created_task.id} of type {task_type}")
 
@@ -229,14 +262,29 @@ class TaskService:
         return self.task_log_repo.list_by_task(task_id=task_id, limit=limit, offset=offset)
 
     async def stop_task(self, task_id: str) -> bool:
-        """Mark a running task for graceful stop."""
+        """Stop a running task. Returns immediately; worker cleans up in background."""
         task = self.task_repo.get_by_id(task_id)
         if not task or task.status != "processing":
             return False
+
+        # Signal every layer immediately
         self._stop_flags.add(task_id)
         self.web_crawler.stop()
+        with self._task_lock:
+            event = self._task_events.get(task_id)
+            active = self._active_tasks.get(task_id)
+            loop = self._worker_loop
+
+        if event:
+            event.set()
+
+        # Ask the worker event-loop to cancel the running asyncio.Task
+        if active and loop and loop.is_running():
+            loop.call_soon_threadsafe(active.cancel)
+
+        # Immediately mark as stopped so the UI reflects the change right away
         self.task_repo.update_status(task_id, "stopped")
-        self._log_info_task(task_id, "任务停止请求已接收")
+        self._log_info_task(task_id, "任务已停止")
         return True
 
     async def restart_task(self, task_id: str) -> TaskResponse:
@@ -248,12 +296,24 @@ class TaskService:
             from exception import HTTPBadRequestException
             raise HTTPBadRequestException("只能重跑已完成或已停止的任务")
 
+        # Clear any stale stop flags from a previous run
+        with self._task_lock:
+            self._stop_flags.discard(task_id)
+            self._task_events.pop(task_id, None)
+            self._active_tasks.pop(task_id, None)
+
         # Delete old logs before restarting
         self.task_log_repo.delete_by_task(task_id)
         self.task_repo.reset_task(task_id)
-        self.task_queue.put(task_id)
-        logger.info(f"Restarted task {task_id}")
 
+        # Submit directly to the worker event-loop for immediate start
+        loop = self._worker_loop
+        if loop and loop.is_running():
+            asyncio.run_coroutine_threadsafe(self._process_task_with_exception(task_id), loop)
+        else:
+            self.task_queue.put(task_id)
+
+        logger.info(f"Restarted task {task_id}")
         return self._to_response(self.task_repo.get_by_id(task_id))
 
     async def cleanup_task(self, task_id: str) -> bool:
@@ -389,6 +449,12 @@ class TaskService:
                     })
                 }
                 break
+            elif current_task.status == "stopped":
+                yield {
+                    "event": "stopped",
+                    "data": json.dumps({})
+                }
+                break
 
             # Wait before next check
             await asyncio.sleep(1.0)
@@ -498,15 +564,18 @@ class TaskService:
     async def _process_task_with_exception(self, task_id: str):
         try:
             await self._process_task(task_id)
+        except asyncio.CancelledError:
+            # Task was cancelled by stop_task — status already set to "stopped"
+            current = self.task_repo.get_by_id(task_id)
+            if not current or current.status != "stopped":
+                self.task_repo.update_status(task_id, "stopped")
         except Exception as e:
             logger.error(f"Error processing task {task_id}: {e}", exc_info=True)
             self.task_repo.mark_completed(task_id, success=False, error_message=str(e))
 
     async def _process_task(self, task_id: str):
-        """Process a single task"""
-        # Get task details
+        """Process a single task — owns the per-task lifecycle state."""
         task = self.task_repo.get_by_id(task_id)
-
         if not task:
             logger.error(f"Task {task_id} not found")
             return
@@ -514,33 +583,42 @@ class TaskService:
         # Reset crawler stop state so a restarted task can run
         self.web_crawler.clear_stop()
 
-        # Mark as started
+        # Register per-task cancellation infrastructure so stop_task() can reach us
+        cancel_event = asyncio.Event()
+        with self._task_lock:
+            self._worker_loop = asyncio.get_event_loop()
+            self._task_events[task_id] = cancel_event
+            self._active_tasks[task_id] = asyncio.current_task()  # type: ignore[assignment]
+
         self.task_repo.mark_started(task_id)
 
-        # Parse input parameters
-        assert task.input_params
-        input_params = json.loads(task.input_params)
+        try:
+            assert task.input_params
+            input_params = json.loads(task.input_params)
 
-        # Route to appropriate handler
-        assert task.collection_id
-        if task.type == "ingest_files":
-            await self._process_file_ingestion(task_id, task.collection_id, input_params)
-        elif task.type == "ingest_urls":
-            await self._process_url_ingestion(task_id, task.collection_id, input_params)
-        else:
-            error_msg = f"Unknown task type: {task.type}"
-            logger.error(error_msg)
-            self.task_repo.mark_completed(task_id, False, error_msg)
+            assert task.collection_id
+            if task.type == "ingest_files":
+                await self._process_file_ingestion(task_id, task.collection_id, input_params)
+            elif task.type == "ingest_urls":
+                await self._process_url_ingestion(task_id, task.collection_id, input_params)
+            else:
+                error_msg = f"Unknown task type: {task.type}"
+                logger.error(error_msg)
+                self.task_repo.mark_completed(task_id, False, error_msg)
+                return
 
-        # Check if task was stopped
-        if task_id in self._stop_flags:
-            self._stop_flags.discard(task_id)
-            self.task_repo.update_status(task_id, "stopped")
-            self._log_info_task(task_id, "任务已停止")
-            return
+            # Final stop check
+            if self._check_task_cancelled(task_id):
+                await self._apply_stop(task_id)
+                return
 
-        # 重新为目标知识库生成摘要
-        await self.collection_service.refresh_collection_summary(task.collection_id)
+            # Refresh collection summary on success
+            await self.collection_service.refresh_collection_summary(task.collection_id)
+        finally:
+            # Always clean up tracking state
+            with self._task_lock:
+                self._task_events.pop(task_id, None)
+                self._active_tasks.pop(task_id, None)
 
     async def _check_document_exists(self, collection_id: str, uri: str) -> bool:
         """Check if document already exists and handle duplication logic"""
@@ -708,10 +786,8 @@ class TaskService:
 
         for file_path in all_files:
             # Check stop flag before processing next file
-            if task_id in self._stop_flags:
-                self._stop_flags.discard(task_id)
-                self.task_repo.update_status(task_id, "stopped")
-                self._log_info_task(task_id, "任务已停止")
+            if self._check_task_cancelled(task_id):
+                await self._apply_stop(task_id)
                 return
 
             try:
@@ -749,8 +825,7 @@ class TaskService:
         result = self.file_processor.process_file(file_path)
 
         # Check stop flag before LLM call
-        if task_id in self._stop_flags:
-            self._stop_flags.discard(task_id)
+        if self._check_task_cancelled(task_id):
             self._log_info_task(task_id, f"Stopped before summarizing: {file_path_obj.name}")
             return
 
@@ -775,8 +850,7 @@ class TaskService:
             return
 
         # Check stop flag before chunking and embedding
-        if task_id in self._stop_flags:
-            self._stop_flags.discard(task_id)
+        if self._check_task_cancelled(task_id):
             self._log_info_task(task_id, f"Stopped before chunking: {file_path_obj.name}")
             return
 
@@ -797,8 +871,7 @@ class TaskService:
                 self._log_err_task(task_id, error_message)
 
         # Check stop flag before persisting to database and vector store
-        if task_id in self._stop_flags:
-            self._stop_flags.discard(task_id)
+        if self._check_task_cancelled(task_id):
             self._log_info_task(task_id, f"Stopped before persisting: {file_path_obj.name}")
             return
 
@@ -903,24 +976,15 @@ class TaskService:
 
         while True:
             # Check stop flag before fetching next crawl result
-            if task_id in self._stop_flags:
-                self._stop_flags.discard(task_id)
-                self.task_repo.update_status(task_id, "stopped")
-                self._log_info_task(task_id, "任务已停止")
-                # Cancel pending background tasks
-                for pt in pending_tasks:
-                    pt.cancel()
+            if self._check_task_cancelled(task_id):
+                await self._apply_stop(task_id, pending_tasks)
                 return
 
             try:
                 crawl_result = await asyncio.to_thread(_next_crawl_result, crawl_gen)
             except RuntimeError:
                 # Crawler was stopped
-                self._stop_flags.discard(task_id)
-                self.task_repo.update_status(task_id, "stopped")
-                self._log_info_task(task_id, "任务已停止")
-                for pt in pending_tasks:
-                    pt.cancel()
+                await self._apply_stop(task_id, pending_tasks)
                 return
             if crawl_result is None:
                 break
@@ -979,10 +1043,8 @@ class TaskService:
                     self._log_err_task(task_id, f"Vectorization failed for {doc.uri}: {e}")
 
         # Phase 2: rewrite in-page links to local routes
-        if task_id in self._stop_flags:
-            self._stop_flags.discard(task_id)
-            self.task_repo.update_status(task_id, "stopped")
-            self._log_info_task(task_id, "任务已停止")
+        if self._check_task_cancelled(task_id):
+            await self._apply_stop(task_id)
             return
 
         docs = self.doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
@@ -994,10 +1056,8 @@ class TaskService:
         await self._rewrite_html_links(task_id, collection_id, stats)
 
         # Phase 3: generate AI README
-        if task_id in self._stop_flags:
-            self._stop_flags.discard(task_id)
-            self.task_repo.update_status(task_id, "stopped")
-            self._log_info_task(task_id, "任务已停止")
+        if self._check_task_cancelled(task_id):
+            await self._apply_stop(task_id)
             return
 
         stats.phase = "readme"
@@ -1045,8 +1105,7 @@ class TaskService:
             self._log_info_task(task_id, f"Storing page: {page_url}")
 
         # Check stop flag before LLM call
-        if task_id in self._stop_flags:
-            self._stop_flags.discard(task_id)
+        if self._check_task_cancelled(task_id):
             self._log_info_task(task_id, f"Stopped before summarizing: {page_url}")
             return
 
@@ -1057,8 +1116,7 @@ class TaskService:
             summary = ""
 
         # Check stop flag before persisting
-        if task_id in self._stop_flags:
-            self._stop_flags.discard(task_id)
+        if self._check_task_cancelled(task_id):
             self._log_info_task(task_id, f"Stopped before persisting: {page_url}")
             return
 
