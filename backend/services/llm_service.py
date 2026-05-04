@@ -136,112 +136,102 @@ class LLMService:
             logger.warning(f"Failed to parse summary filter result: {result}")
             return []
 
-    async def generate_readme(self, pages: list[dict], source_language: str = "en") -> str:
+    async def generate_readme(
+        self, pages: list[dict], groups: list[dict], source_language: str = "en"
+    ) -> str:
         """
-        Given a list of {path, title} dicts, generate a README navigation guide
-        and structured categories data. Returns a JSON string.
+        Given full page data and grouped summary, generate a README navigation guide
+        and Chinese translations. Returns a JSON string.
+
+        pages:  [{"path": "/path", "title": "Page Title"}]  (full list for translation)
+        groups: [{"category": "Category Name", "pages": [...]}]  (grouped summary for README)
 
         When source_language is 'zh', generates Chinese-only content.
         When source_language is 'en' or other, generates bilingual content
-        with both English and Chinese versions.
+        with Chinese translations for categories and page titles.
         """
         pages_text = "\n".join(f"- {p['path']}: {p['title']}" for p in pages)
-        logger.info(f"[generate_readme] pages count: {len(pages)}, total chars: {len(pages_text)}")
-        logger.info(f"[generate_readme] pages_text:\n{pages_text}")
+
+        # Build a compact summary for each group (up to 5 representative pages)
+        group_lines = []
+        for g in groups:
+            cat = g["category"]
+            group_pages = g["pages"]
+            sample = group_pages[:5]
+            page_lines = "\n".join(f"    - {p['path']}: {p['title']}" for p in sample)
+            more = f"    ... and {len(group_pages) - 5} more pages" if len(group_pages) > 5 else ""
+            group_lines.append(f"- {cat} ({len(group_pages)} pages)\n{page_lines}{more}")
+        groups_text = "\n".join(group_lines)
+
+        logger.info(f"[generate_readme] groups: {len(groups)}, pages: {len(pages)}")
 
         if source_language == "zh":
-            prompt = f"""You are analyzing a documentation website. Given the page paths and titles below,
-generate a navigation guide README and structured category data in Chinese.
+            prompt = f"""You are analyzing a documentation website. Given the grouped page data below,
+generate a navigation guide README in Chinese.
 
 Respond with ONLY a JSON object in this exact format:
 {{
-  "readme": "# 欢迎\\n\\n> 简短介绍这个文档站的整体定位和内容范围...\\n\\n## 文档目录\\n\\n- [分类一名称](#分类一名称)\\n- [分类二名称](#分类二名称)\\n...\\n\\n## 整体介绍\\n\\n这个网站是关于...的文档站。\\n\\n根据你的需求，可以前往不同页面：\\n\\n- 如果你是新手，建议从 [快速开始](doc:///path) 开始\\n- 如果你想了解 API，请查看 [API 参考](doc:///path)\\n...\\n\\n## 分类一名称\\n\\n- [页面标题](doc:///path) — 简短描述\\n...",
-  "categories": [
-    {{
-      "category": "分类名称",
-      "pages": [
-        {{"path": "/path", "title": "页面标题", "description": "1-2句话的描述"}},
-        ...
-      ]
-    }},
-    ...
-  ]
+  "readme": "# 欢迎\\n\\n> 简短介绍这个文档站的整体定位和内容范围...\\n\\n## 文档目录\\n\\n- [分类一名称](#分类一名称)\\n- [分类二名称](#分类二名称)\\n...\\n\\n## 整体介绍\\n\\n这个网站是关于...的文档站。\\n\\n根据你的需求，可以前往不同页面：\\n\\n- 如果你是新手，建议从 [快速开始](doc:///path) 开始\\n- 如果你想了解 API，请查看 [API 参考](doc:///path)\\n...\\n\\n## 分类一名称\\n\\n- [页面标题](doc:///path) — 简短描述\\n..."
 }}
 
-Rules for "readme":
+Rules:
 - Start with an h1 title and a short overview paragraph in blockquote (>)
-- "## 文档目录" section (at the TOP): list all categories as anchor links: [分类名](#分类名)
-  - Use the exact category name as the anchor (no slug conversion)
-  - Example: [快速开始](#快速开始), [API 文档](#API 文档)
+- "## 文档目录" section (at the TOP): list all groups as anchor links: [分类名](#分类名)
+  - Use the exact group name as the anchor (no slug conversion)
 - "## 整体介绍" section (second): write 2-4 natural paragraphs describing:
   - What topics this documentation site covers
   - Guidance for different users on where to find information
   - Use doc:///path links to point to specific pages
-  - Brief overview of each category's content
-- Then list each category as a ## heading with page links underneath
-- Under each category, list pages as Markdown links: [页面标题](doc:///path)
+  - Brief overview of each group's content
+- Then list each group as a ## heading with page links underneath
+- Under each group, list up to 5 representative pages as Markdown links: [页面标题](doc:///path)
 - Include a brief description after each link (em dash separator)
 - Use Markdown formatting (headings, lists, bold)
+- Do NOT list every single page if a group has many pages; pick the most representative ones
 
-Rules for "categories":
-- Group similar pages under meaningful category labels in Chinese
-- Each page needs: path, title (Chinese), description (Chinese, 1-2 sentences)
-- Categories should be concise (2-6 Chinese characters)
-
-Pages:
-{pages_text}"""
+Groups:
+{groups_text}"""
         else:
             prompt = f"""You are analyzing a documentation website. Given the page paths and titles below,
-generate a navigation guide README and structured category data in BOTH English and Chinese.
+generate a navigation guide README in BOTH English and Chinese, and provide Chinese translations for group names and page titles.
 
 Respond with ONLY a JSON object in this exact format:
 {{
   "readme": "# Welcome\\n\\n> A short overview of this documentation site...\\n\\n## Table of Contents\\n\\n- [Category One](#Category One)\\n- [Category Two](#Category Two)\\n...\\n\\n## Overview\\n\\nThis site covers...\\n\\nDepending on your needs:\\n\\n- If you are new, start with [Quick Start](doc:///path)\\n- For API reference, see [API Docs](doc:///path)\\n...\\n\\n## Category One\\n\\n- [Page Title](doc:///path) — short description\\n...",
   "readme_zh": "# 欢迎\\n\\n> 简短介绍这个文档站的整体定位和内容范围...\\n\\n## 文档目录\\n\\n- [分类一名称](#分类一名称)\\n- [分类二名称](#分类二名称)\\n...\\n\\n## 整体介绍\\n\\n这个网站是关于...的文档站。\\n\\n根据你的需求，可以前往不同页面：\\n\\n- 如果你是新手，建议从 [快速开始](doc:///path) 开始\\n- 如果你想了解 API，请查看 [API 参考](doc:///path)\\n...\\n\\n## 分类一名称\\n\\n- [页面中文标题](doc:///path) — 简短中文描述\\n...",
-  "categories": [
-    {{
-      "category": "Category Name",
-      "category_zh": "分类中文名",
-      "pages": [
-        {{"path": "/path", "title": "Page Title", "title_zh": "页面中文标题", "description": "1-2 sentence description", "description_zh": "1-2句话的中文描述"}},
-        ...
-      ]
-    }},
-    ...
-  ]
+  "category_names_zh": {{"GroupName": "分组中文名", ...}},
+  "page_titles_zh": {{"/path": "页面中文标题", ...}}
 }}
 
 Rules for "readme" (English):
 - Start with an h1 title and a short overview paragraph in blockquote (>)
-- "## Table of Contents" section (at the TOP): list all categories as anchor links: [Category Name](#Category Name)
-  - Use the exact category name as the anchor (no slug conversion)
-  - Example: [Getting Started](#Getting Started), [API Reference](#API Reference)
+- "## Table of Contents" section (at the TOP): list all groups as anchor links: [Group Name](#Group Name)
+  - Use the exact group name as the anchor (no slug conversion)
 - "## Overview" section (second): write 2-4 natural paragraphs describing:
   - What topics this documentation site covers
   - Guidance for different users on where to find information
   - Use doc:///path links to point to specific pages
-  - Brief overview of each category's content
-- Then list each category as a ## heading with page links underneath
-- Under each category, list pages as Markdown links: [Page Title](doc:///path)
+  - Brief overview of each group's content
+- Then list each group as a ## heading with page links underneath
+- Under each group, list up to 5 representative pages as Markdown links: [Page Title](doc:///path)
 - Include a brief description after each link (em dash separator)
 - Use Markdown formatting (headings, lists, bold)
+- Do NOT list every single page if a group has many pages; pick the most representative ones
 
 Rules for "readme_zh" (Chinese):
 - Same structure as English version but all content in natural Chinese
 - "## 文档目录" for table of contents, "## 整体介绍" for overview
 - Use doc:///path links (same paths as English version)
 
-Rules for English content:
-- Write in natural, helpful language
-- Categories should be concise (2-4 words)
-
-Rules for Chinese content:
+Rules for translations:
+- "category_names_zh": map each group name to a concise natural Chinese name (2-6 characters)
+- "page_titles_zh": map each page path to a meaningful Chinese title translation
 - Translate all content accurately into natural Chinese
-- Category names should be concise (2-6 Chinese characters)
-- Page titles should be meaningful Chinese translations
-- Descriptions should be fluent Chinese
 
-Pages:
+Groups (for README structure):
+{groups_text}
+
+All pages (for translation reference):
 {pages_text}"""
         logger.info(f"[generate_readme] full prompt length: {len(prompt)} chars (~{len(prompt) // 4} tokens)")
         return await self._invoke_crawl_llm(prompt, max_tokens=self.config.llm.max_tokens)

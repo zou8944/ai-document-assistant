@@ -8,10 +8,12 @@ import json
 import logging
 import mimetypes
 import os
+import posixpath
 import queue
 import re
 import threading
 import uuid
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -1755,9 +1757,63 @@ class TaskService:
             return "zh"
         return "en"
 
+    @staticmethod
+    def _build_path_groups(pages: list[dict], min_group_size: int = 3) -> list[dict]:
+        """
+        Cluster pages by URL path prefix (first-level directory).
+
+        Pages are grouped by their top-level directory (e.g., /docs/, /api/).
+        Pages at root level or in small groups (< min_group_size) are
+        merged into an "Other" group. Guarantees 100% coverage.
+
+        Returns groups in the frontend CategoryGroup format.
+        """
+        prefix_pages: defaultdict[str, list[dict]] = defaultdict(list)
+
+        for page in pages:
+            path = page["path"]
+            # Normalize to start with /
+            if not path.startswith("/"):
+                path = "/" + path
+
+            # Remove trailing slash, get directory part
+            path = path.rstrip("/")
+            dir_part = posixpath.dirname(path)
+
+            if dir_part in ("", "/"):
+                prefix_pages["Other"].append(page)
+            else:
+                parts = dir_part.strip("/").split("/")
+                first_level = parts[0]
+                prefix_pages[first_level].append(page)
+
+        result: list[dict] = []
+        other_pages: list[dict] = []
+
+        for prefix, group_pages in prefix_pages.items():
+            if prefix == "Other":
+                other_pages.extend(group_pages)
+            elif len(group_pages) >= min_group_size:
+                result.append({
+                    "category": prefix,
+                    "pages": group_pages,
+                })
+            else:
+                other_pages.extend(group_pages)
+
+        if other_pages:
+            result.append({
+                "category": "Other",
+                "pages": other_pages,
+            })
+
+        # Sort for consistent ordering, but keep "Other" at the end
+        result.sort(key=lambda g: (g["category"] == "Other", g["category"]))
+        return result
+
     async def _generate_readme(self, task_id: str, collection_id: str, stats: UrlTaskStats):
-        """Phase 4: generate AI README navigation guide and categories data."""
-        self._log_info_task(task_id, "Generating AI README...")
+        """Phase 4: generate path-based categories and AI README navigation guide."""
+        self._log_info_task(task_id, "Generating categories and README...")
         docs = self.doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
         crawled = [d for d in docs if d.source_path]
 
@@ -1773,10 +1829,26 @@ class TaskService:
 
             source_language = self._detect_source_language(pages)
             self._log_info_task(task_id, f"Detected source language: {source_language}")
-            self._log_info_task(task_id, f"README input: {len(pages)} pages")
-            self._log_info_task(task_id, "README generation may take a few minutes, please wait...")
 
-            raw = await self.llm_service.generate_readme(pages, source_language)
+            # Step 1: Build path-based groups (deterministic, 100% coverage)
+            groups = self._build_path_groups(pages, min_group_size=3)
+            self._log_info_task(task_id, f"Built {len(groups)} path groups from {len(pages)} pages")
+            for g in groups:
+                self._log_info_task(task_id, f"  Group '{g['category']}': {len(g['pages'])} pages")
+
+            # Build categories JSON for frontend from deterministic groups
+            categories = [
+                {
+                    "category": g["category"],
+                    "pages": [{"path": p["path"], "title": p["title"]} for p in g["pages"]],
+                }
+                for g in groups
+            ]
+            categories_json = json_lib.dumps(categories, ensure_ascii=False)
+
+            # Step 2: Generate README and Chinese translations via AI
+            self._log_info_task(task_id, "README generation may take a few minutes, please wait...")
+            raw = await self.llm_service.generate_readme(pages, groups, source_language)
 
             # Strip markdown fences if LLM wraps the response
             cleaned = raw.strip()
@@ -1787,29 +1859,49 @@ class TaskService:
 
             parsed = json_lib.loads(cleaned)
             readme_content = parsed.get("readme", "")
-            categories = parsed.get("categories", [])
-            categories_json = json_lib.dumps(categories, ensure_ascii=False)
-
-            # For English source, also extract Chinese translations
             readme_content_zh = parsed.get("readme_zh", "") if source_language == "en" else ""
-            categories_json_zh = ""
-            if source_language == "en" and categories:
-                categories_zh = []
-                for cat in categories:
-                    cat_zh = {
-                        "category": cat.get("category_zh", cat.get("category", "")),
-                        "pages": []
-                    }
-                    for page in cat.get("pages", []):
-                        cat_zh["pages"].append({
-                            "path": page.get("path", ""),
-                            "title": page.get("title_zh", page.get("title", "")),
-                            "description": page.get("description_zh", page.get("description", ""))
-                        })
-                    categories_zh.append(cat_zh)
-                categories_json_zh = json_lib.dumps(categories_zh, ensure_ascii=False)
+            category_names_zh = parsed.get("category_names_zh", {}) if source_language == "en" else {}
+            page_titles_zh = parsed.get("page_titles_zh", {}) if source_language == "en" else {}
 
-            # Update collection with README and source language
+            # Build categories with Chinese translations for bilingual support
+            categories_for_json = []
+            categories_zh_for_json = []
+            for g in groups:
+                cat_name = g["category"]
+                cat_name_zh = category_names_zh.get(cat_name, cat_name)
+
+                cat_pages = []
+                cat_pages_zh = []
+                for p in g["pages"]:
+                    path = p["path"]
+                    title = p["title"]
+                    title_zh = page_titles_zh.get(path, title)
+
+                    cat_pages.append({
+                        "path": path,
+                        "title": title,
+                        "description": "",
+                    })
+                    cat_pages_zh.append({
+                        "path": path,
+                        "title": title_zh,
+                        "description": "",
+                    })
+
+                categories_for_json.append({
+                    "category": cat_name,
+                    "pages": cat_pages,
+                })
+                if source_language == "en":
+                    categories_zh_for_json.append({
+                        "category": cat_name_zh,
+                        "pages": cat_pages_zh,
+                    })
+
+            categories_json = json_lib.dumps(categories_for_json, ensure_ascii=False)
+            categories_json_zh = json_lib.dumps(categories_zh_for_json, ensure_ascii=False) if source_language == "en" else ""
+
+            # Update collection with README, categories, and source language
             await self.collection_service.update_readme(
                 collection_id,
                 readme_content=readme_content,
@@ -1821,19 +1913,11 @@ class TaskService:
 
             # Update document name_translated for English source documents
             if source_language == "en":
-                title_zh_map = {}
-                for cat in categories:
-                    for page in cat.get("pages", []):
-                        path = page.get("path", "")
-                        title_zh = page.get("title_zh", "")
-                        if path and title_zh:
-                            title_zh_map[path] = title_zh
-
                 for doc in crawled:
-                    if doc.source_path and doc.source_path in title_zh_map:
-                        self.doc_repo.update(doc.id, name_translated=title_zh_map[doc.source_path])
+                    if doc.source_path and doc.source_path in page_titles_zh:
+                        self.doc_repo.update(doc.id, name_translated=page_titles_zh[doc.source_path])
 
-            self._log_info_task(task_id, "README stored successfully")
+            self._log_info_task(task_id, "Categories and README stored successfully")
         except Exception as e:
             self._log_err_task(task_id, f"README generation failed: {e}")
 
