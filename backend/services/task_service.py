@@ -1825,7 +1825,6 @@ class TaskService:
 
         try:
             import json as json_lib
-            import re
 
             source_language = self._detect_source_language(pages)
             self._log_info_task(task_id, f"Detected source language: {source_language}")
@@ -1836,34 +1835,47 @@ class TaskService:
             for g in groups:
                 self._log_info_task(task_id, f"  Group '{g['category']}': {len(g['pages'])} pages")
 
-            # Build categories JSON for frontend from deterministic groups
-            categories = [
-                {
-                    "category": g["category"],
-                    "pages": [{"path": p["path"], "title": p["title"]} for p in g["pages"]],
-                }
-                for g in groups
-            ]
-            categories_json = json_lib.dumps(categories, ensure_ascii=False)
+            # Step 2: Generate README content (single call)
+            self._log_info_task(task_id, "Generating README content...")
+            readme_content = await self.llm_service.generate_readme_content(groups, source_language)
+            self._log_info_task(task_id, f"README generated, length={len(readme_content)}")
 
-            # Step 2: Generate README and Chinese translations via AI
-            self._log_info_task(task_id, "README generation may take a few minutes, please wait...")
-            raw = await self.llm_service.generate_readme(pages, groups, source_language)
+            # Step 3: Chinese translations (each step is independent, failures are logged but not fatal)
+            readme_content_zh = ""
+            category_names_zh: dict[str, str] = {}
+            page_titles_zh: dict[str, str] = {}
 
-            # Strip markdown fences if LLM wraps the response
-            cleaned = raw.strip()
-            if cleaned.startswith("```"):
-                cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
-                cleaned = re.sub(r"\n?```$", "", cleaned)
-                cleaned = cleaned.strip()
+            if source_language == "en":
+                # 3a: Translate README
+                try:
+                    self._log_info_task(task_id, "Translating README to Chinese...")
+                    readme_content_zh = await self.llm_service.translate_readme(readme_content)
+                    self._log_info_task(task_id, f"README translated, length={len(readme_content_zh)}")
+                except Exception as e:
+                    self._log_err_task(task_id, f"README translation failed: {e}")
 
-            parsed = json_lib.loads(cleaned)
-            readme_content = parsed.get("readme", "")
-            readme_content_zh = parsed.get("readme_zh", "") if source_language == "en" else ""
-            category_names_zh = parsed.get("category_names_zh", {}) if source_language == "en" else {}
-            page_titles_zh = parsed.get("page_titles_zh", {}) if source_language == "en" else {}
+                # 3b: Translate category names
+                try:
+                    self._log_info_task(task_id, "Translating category names...")
+                    category_names_zh = await self.llm_service.translate_category_names(
+                        [g["category"] for g in groups]
+                    )
+                    self._log_info_task(task_id, f"Category names translated: {len(category_names_zh)}")
+                except Exception as e:
+                    self._log_err_task(task_id, f"Category name translation failed: {e}")
 
-            # Build categories with Chinese translations for bilingual support
+                # 3c: Translate page titles (sample only)
+                try:
+                    sample_pages: list[dict] = []
+                    for g in groups:
+                        sample_pages.extend(g["pages"][:5])
+                    self._log_info_task(task_id, f"Translating {len(sample_pages)} page titles...")
+                    page_titles_zh = await self.llm_service.translate_page_titles(sample_pages)
+                    self._log_info_task(task_id, f"Page titles translated: {len(page_titles_zh)}")
+                except Exception as e:
+                    self._log_err_task(task_id, f"Page title translation failed: {e}")
+
+            # Step 4: Build categories JSON for frontend
             categories_for_json = []
             categories_zh_for_json = []
             for g in groups:
@@ -1901,7 +1913,7 @@ class TaskService:
             categories_json = json_lib.dumps(categories_for_json, ensure_ascii=False)
             categories_json_zh = json_lib.dumps(categories_zh_for_json, ensure_ascii=False) if source_language == "en" else ""
 
-            # Update collection with README, categories, and source language
+            # Step 5: Persist to database
             await self.collection_service.update_readme(
                 collection_id,
                 readme_content=readme_content,

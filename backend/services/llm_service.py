@@ -5,6 +5,7 @@ LLM service for centralized AI model management and operations.
 import asyncio
 import json
 import logging
+import re
 import time
 
 from langchain_core.output_parsers import StrOutputParser
@@ -18,7 +19,7 @@ from rag.prompt_templates import build_rag_prompt
 logger = logging.getLogger(__name__)
 
 # Overall timeout (seconds) for any single LLM call; prevents Ctrl+C from hanging
-LLM_TIMEOUT = 180
+LLM_TIMEOUT = 300
 
 
 class LLMService:
@@ -136,23 +137,11 @@ class LLMService:
             logger.warning(f"Failed to parse summary filter result: {result}")
             return []
 
-    async def generate_readme(
-        self, pages: list[dict], groups: list[dict], source_language: str = "en"
-    ) -> str:
-        """
-        Given full page data and grouped summary, generate a README navigation guide
-        and Chinese translations. Returns a JSON string.
+    # ==================== README Generation (Split into independent calls) ====================
 
-        pages:  [{"path": "/path", "title": "Page Title"}]  (full list for translation)
-        groups: [{"category": "Category Name", "pages": [...]}]  (grouped summary for README)
-
-        When source_language is 'zh', generates Chinese-only content.
-        When source_language is 'en' or other, generates bilingual content
-        with Chinese translations for categories and page titles.
-        """
-        pages_text = "\n".join(f"- {p['path']}: {p['title']}" for p in pages)
-
-        # Build a compact summary for each group (up to 5 representative pages)
+    @staticmethod
+    def _build_groups_text(groups: list[dict]) -> str:
+        """Build compact group summary for prompts."""
         group_lines = []
         for g in groups:
             cat = g["category"]
@@ -161,18 +150,15 @@ class LLMService:
             page_lines = "\n".join(f"    - {p['path']}: {p['title']}" for p in sample)
             more = f"    ... and {len(group_pages) - 5} more pages" if len(group_pages) > 5 else ""
             group_lines.append(f"- {cat} ({len(group_pages)} pages)\n{page_lines}{more}")
-        groups_text = "\n".join(group_lines)
+        return "\n".join(group_lines)
 
-        logger.info(f"[generate_readme] groups: {len(groups)}, pages: {len(pages)}")
+    async def generate_readme_content(self, groups: list[dict], language: str = "en") -> str:
+        """Generate README markdown. For 'zh' generates Chinese, otherwise English."""
+        groups_text = self._build_groups_text(groups)
 
-        if source_language == "zh":
+        if language == "zh":
             prompt = f"""You are analyzing a documentation website. Given the grouped page data below,
-generate a navigation guide README in Chinese.
-
-Respond with ONLY a JSON object in this exact format:
-{{
-  "readme": "# 欢迎\\n\\n> 简短介绍这个文档站的整体定位和内容范围...\\n\\n## 文档目录\\n\\n- [分类一名称](#分类一名称)\\n- [分类二名称](#分类二名称)\\n...\\n\\n## 整体介绍\\n\\n这个网站是关于...的文档站。\\n\\n根据你的需求，可以前往不同页面：\\n\\n- 如果你是新手，建议从 [快速开始](doc:///path) 开始\\n- 如果你想了解 API，请查看 [API 参考](doc:///path)\\n...\\n\\n## 分类一名称\\n\\n- [页面标题](doc:///path) — 简短描述\\n..."
-}}
+generate a navigation guide README in Chinese. Respond with ONLY the Markdown content, no JSON wrapper.
 
 Rules:
 - Start with an h1 title and a short overview paragraph in blockquote (>)
@@ -192,18 +178,10 @@ Rules:
 Groups:
 {groups_text}"""
         else:
-            prompt = f"""You are analyzing a documentation website. Given the page paths and titles below,
-generate a navigation guide README in BOTH English and Chinese, and provide Chinese translations for group names and page titles.
+            prompt = f"""You are analyzing a documentation website. Given the grouped page data below,
+generate a navigation guide README in English. Respond with ONLY the Markdown content, no JSON wrapper.
 
-Respond with ONLY a JSON object in this exact format:
-{{
-  "readme": "# Welcome\\n\\n> A short overview of this documentation site...\\n\\n## Table of Contents\\n\\n- [Category One](#Category One)\\n- [Category Two](#Category Two)\\n...\\n\\n## Overview\\n\\nThis site covers...\\n\\nDepending on your needs:\\n\\n- If you are new, start with [Quick Start](doc:///path)\\n- For API reference, see [API Docs](doc:///path)\\n...\\n\\n## Category One\\n\\n- [Page Title](doc:///path) — short description\\n...",
-  "readme_zh": "# 欢迎\\n\\n> 简短介绍这个文档站的整体定位和内容范围...\\n\\n## 文档目录\\n\\n- [分类一名称](#分类一名称)\\n- [分类二名称](#分类二名称)\\n...\\n\\n## 整体介绍\\n\\n这个网站是关于...的文档站。\\n\\n根据你的需求，可以前往不同页面：\\n\\n- 如果你是新手，建议从 [快速开始](doc:///path) 开始\\n- 如果你想了解 API，请查看 [API 参考](doc:///path)\\n...\\n\\n## 分类一名称\\n\\n- [页面中文标题](doc:///path) — 简短中文描述\\n...",
-  "category_names_zh": {{"GroupName": "分组中文名", ...}},
-  "page_titles_zh": {{"/path": "页面中文标题", ...}}
-}}
-
-Rules for "readme" (English):
+Rules:
 - Start with an h1 title and a short overview paragraph in blockquote (>)
 - "## Table of Contents" section (at the TOP): list all groups as anchor links: [Group Name](#Group Name)
   - Use the exact group name as the anchor (no slug conversion)
@@ -218,23 +196,68 @@ Rules for "readme" (English):
 - Use Markdown formatting (headings, lists, bold)
 - Do NOT list every single page if a group has many pages; pick the most representative ones
 
-Rules for "readme_zh" (Chinese):
-- Same structure as English version but all content in natural Chinese
-- "## 文档目录" for table of contents, "## 整体介绍" for overview
-- Use doc:///path links (same paths as English version)
-
-Rules for translations:
-- "category_names_zh": map each group name to a concise natural Chinese name (2-6 characters)
-- "page_titles_zh": map each page path to a meaningful Chinese title translation
-- Translate all content accurately into natural Chinese
-
-Groups (for README structure):
-{groups_text}
-
-All pages (for translation reference):
-{pages_text}"""
-        logger.info(f"[generate_readme] full prompt length: {len(prompt)} chars (~{len(prompt) // 4} tokens)")
+Groups:
+{groups_text}"""
+        logger.info(f"[generate_readme_content] lang={language}, prompt_len={len(prompt)}")
         return await self._invoke_crawl_llm(prompt, max_tokens=self.config.llm.max_tokens)
+
+    async def translate_readme(self, readme_en: str) -> str:
+        """Translate English README to Chinese."""
+        prompt = f"""Translate the following English documentation README into natural, fluent Chinese.
+Preserve all Markdown formatting. Do NOT translate the paths inside doc:/// links, only the link text.
+Respond with ONLY the translated Markdown content.
+
+{readme_en}"""
+        logger.info(f"[translate_readme] prompt_len={len(prompt)}")
+        return await self._invoke_crawl_llm(prompt, max_tokens=self.config.llm.max_tokens)
+
+    async def translate_category_names(self, group_names: list[str]) -> dict[str, str]:
+        """Translate group names to Chinese. Returns {{en_name: zh_name}} mapping."""
+        names_text = "\n".join(f"- {n}" for n in group_names)
+        prompt = f"""Translate the following group names into concise natural Chinese (2-6 characters each).
+Respond with ONLY a JSON object mapping each English name to Chinese.
+
+Group names:
+{names_text}
+
+Format:
+{{"GroupName": "分组中文名", ...}}"""
+        logger.info(f"[translate_category_names] names={len(group_names)}")
+        raw = await self._invoke_crawl_llm(prompt)
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
+            cleaned = re.sub(r"\n?```$", "", cleaned)
+            cleaned = cleaned.strip()
+        try:
+            return json.loads(cleaned)
+        except (json.JSONDecodeError, ValueError):
+            logger.warning(f"Failed to parse category name translation result: {raw}")
+            return {}
+
+    async def translate_page_titles(self, pages: list[dict]) -> dict[str, str]:
+        """Translate page titles to Chinese. Returns {{path: zh_title}} mapping."""
+        pages_text = "\n".join(f"- {p['path']}: {p['title']}" for p in pages)
+        prompt = f"""Translate the following page titles into natural Chinese.
+Respond with ONLY a JSON object mapping each path to its Chinese title.
+
+Pages:
+{pages_text}
+
+Format:
+{{"/path": "中文标题", ...}}"""
+        logger.info(f"[translate_page_titles] pages={len(pages)}")
+        raw = await self._invoke_crawl_llm(prompt)
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
+            cleaned = re.sub(r"\n?```$", "", cleaned)
+            cleaned = cleaned.strip()
+        try:
+            return json.loads(cleaned)
+        except (json.JSONDecodeError, ValueError):
+            logger.warning(f"Failed to parse page title translation result: {raw}")
+            return {}
 
     # ==================== Direct LLM Access ====================
 
