@@ -651,10 +651,9 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
           'text-sm truncate',
           selectedDocId === doc.id ? 'font-medium text-blue-700' : 'text-gray-800'
         )}>
-          {doc.name}
-          {isBilingual && doc.nameTranslated && (
-            <span className="text-gray-500 font-normal"> ({doc.nameTranslated})</span>
-          )}
+          {isBilingual && displayLanguage === 'zh' && doc.nameTranslated
+            ? doc.nameTranslated
+            : doc.name}
         </div>
         {doc.url && (
           <div className="text-xs text-gray-400 truncate">{doc.url}</div>

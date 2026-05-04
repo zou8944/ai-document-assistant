@@ -140,21 +140,34 @@ class LLMService:
     # ==================== README Generation (Split into independent calls) ====================
 
     @staticmethod
-    def _build_groups_text(groups: list[dict]) -> str:
+    def _build_groups_text(groups: list[dict], max_per_group: int = 5) -> str:
         """Build compact group summary for prompts."""
         group_lines = []
         for g in groups:
             cat = g["category"]
             group_pages = g["pages"]
-            sample = group_pages[:5]
+            sample = group_pages[:max_per_group]
             page_lines = "\n".join(f"    - {p['path']}: {p['title']}" for p in sample)
-            more = f"    ... and {len(group_pages) - 5} more pages" if len(group_pages) > 5 else ""
+            more = f"    ... and {len(group_pages) - max_per_group} more pages" if len(group_pages) > max_per_group else ""
             group_lines.append(f"- {cat} ({len(group_pages)} pages)\n{page_lines}{more}")
         return "\n".join(group_lines)
 
-    async def generate_readme_content(self, groups: list[dict], language: str = "en") -> str:
-        """Generate README markdown. For 'zh' generates Chinese, otherwise English."""
-        groups_text = self._build_groups_text(groups)
+    async def generate_readme_content(self, groups: list[dict], language: str = "en", total_pages: int = 0) -> str:
+        """Generate README markdown. For 'zh' generates Chinese, otherwise English.
+
+        The number of representative pages per group scales with total document count:
+        - < 30 pages: list all pages per group
+        - 30-100 pages: up to 40 per group
+        - > 100 pages: up to 45 per group
+        """
+        if total_pages < 30:
+            max_per_group = total_pages  # effectively unlimited
+        elif total_pages <= 100:
+            max_per_group = 40
+        else:
+            max_per_group = 45
+
+        groups_text = self._build_groups_text(groups, max_per_group=max_per_group)
 
         if language == "zh":
             prompt = f"""You are analyzing a documentation website. Given the grouped page data below,
@@ -164,16 +177,19 @@ Rules:
 - Start with an h1 title and a short overview paragraph in blockquote (>)
 - "## 文档目录" section (at the TOP): list all groups as anchor links: [分类名](#分类名)
   - Use the exact group name as the anchor (no slug conversion)
-- "## 整体介绍" section (second): write 2-4 natural paragraphs describing:
-  - What topics this documentation site covers
-  - Guidance for different users on where to find information
-  - Use doc:///path links to point to specific pages
-  - Brief overview of each group's content
+- "## 整体介绍" section (second): write 3-5 natural paragraphs describing:
+  - What topics this documentation site covers overall
+  - The intended audience and what they can learn
+  - Guidance for different users (beginners, advanced users, developers) on where to start
+  - A brief overview of each group's content and how groups relate to each other
+  - Use doc:///path links to point to specific key pages
 - Then list each group as a ## heading with page links underneath
-- Under each group, list up to 5 representative pages as Markdown links: [页面标题](doc:///path)
+- Under each group, start with a 1-2 sentence description of the group's theme
+- Then list the representative pages as Markdown links: [页面标题](doc:///path)
 - Include a brief description after each link (em dash separator)
+- If a group has many pages beyond what's listed, add a note like "... 以及另外 X 个页面"
 - Use Markdown formatting (headings, lists, bold)
-- Do NOT list every single page if a group has many pages; pick the most representative ones
+- Do NOT list every single page if a group has many pages; focus on the most important and representative ones
 
 Groups:
 {groups_text}"""
@@ -185,21 +201,104 @@ Rules:
 - Start with an h1 title and a short overview paragraph in blockquote (>)
 - "## Table of Contents" section (at the TOP): list all groups as anchor links: [Group Name](#Group Name)
   - Use the exact group name as the anchor (no slug conversion)
-- "## Overview" section (second): write 2-4 natural paragraphs describing:
-  - What topics this documentation site covers
-  - Guidance for different users on where to find information
-  - Use doc:///path links to point to specific pages
-  - Brief overview of each group's content
+- "## Overview" section (second): write 3-5 natural paragraphs describing:
+  - What topics this documentation site covers overall
+  - The intended audience and what they can learn
+  - Guidance for different users (beginners, advanced users, developers) on where to start
+  - A brief overview of each group's content and how groups relate to each other
+  - Use doc:///path links to point to specific key pages
 - Then list each group as a ## heading with page links underneath
-- Under each group, list up to 5 representative pages as Markdown links: [Page Title](doc:///path)
+- Under each group, start with a 1-2 sentence description of the group's theme
+- Then list the representative pages as Markdown links: [Page Title](doc:///path)
 - Include a brief description after each link (em dash separator)
+- If a group has many pages beyond what's listed, add a note like "... and X more pages"
 - Use Markdown formatting (headings, lists, bold)
-- Do NOT list every single page if a group has many pages; pick the most representative ones
+- Do NOT list every single page if a group has many pages; focus on the most important and representative ones
 
 Groups:
 {groups_text}"""
-        logger.info(f"[generate_readme_content] lang={language}, prompt_len={len(prompt)}")
+        logger.info(f"[generate_readme_content] lang={language}, total_pages={total_pages}, max_per_group={max_per_group}, prompt_len={len(prompt)}")
         return await self._invoke_crawl_llm(prompt, max_tokens=self.config.llm.max_tokens)
+
+    async def categorize_pages(self, pages: list[dict]) -> list[dict]:
+        """Use AI to group pages by semantic topic.
+
+        Returns groups in the format: [{"category": str, "pages": [{"path": str, "title": str}, ...]}]
+        Guarantees 100% coverage - all pages are assigned to a group.
+        Raises exception on failure (no fallback).
+        """
+        pages_text = "\n".join(f"- {p['path']}: {p['title']}" for p in pages)
+
+        prompt = f"""You are organizing documentation pages into logical topic groups.
+Analyze the page paths and titles below, and group them by content/theme similarity.
+
+Each page must belong to exactly one group. Create meaningful, concise group names (2-4 words).
+The number of groups should be natural based on content diversity (typically 4-10 groups).
+Pages that don't clearly fit any theme should go into a group named "Other".
+
+Pages:
+{pages_text}
+
+Return ONLY a JSON object in this exact format:
+{{
+  "groups": [
+    {{
+      "name": "Group Name",
+      "description": "Brief description of what this group covers",
+      "pages": ["/path1", "/path2"]
+    }}
+  ]
+}}"""
+        logger.info(f"[categorize_pages] pages={len(pages)}, prompt_len={len(prompt)}")
+        raw = await self._invoke_crawl_llm(prompt)
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
+            cleaned = re.sub(r"\n?```$", "", cleaned)
+            cleaned = cleaned.strip()
+
+        try:
+            data = json.loads(cleaned)
+            groups_data = data.get("groups", [])
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.error(f"Failed to parse categorize_pages result: {e}, raw={raw[:500]}")
+            raise
+
+        # Build result and validate coverage
+        all_paths = {p["path"] for p in pages}
+        covered_paths: set[str] = set()
+        result: list[dict] = []
+
+        for g in groups_data:
+            group_pages = []
+            for path in g.get("pages", []):
+                if path in all_paths and path not in covered_paths:
+                    group_pages.append(next(p for p in pages if p["path"] == path))
+                    covered_paths.add(path)
+
+            if group_pages:
+                result.append({
+                    "category": g.get("name", "Unknown"),
+                    "pages": group_pages,
+                })
+
+        # Add missing pages to "Other" group
+        missing_paths = all_paths - covered_paths
+        if missing_paths:
+            other_pages = [p for p in pages if p["path"] in missing_paths]
+            other_group = next((g for g in result if g["category"] == "Other"), None)
+            if other_group:
+                other_group["pages"].extend(other_pages)
+            else:
+                result.append({
+                    "category": "Other",
+                    "pages": other_pages,
+                })
+
+        # Sort: keep "Other" at the end
+        result.sort(key=lambda g: (g["category"] == "Other", g["category"]))
+        logger.info(f"[categorize_pages] produced {len(result)} groups, covering {len(covered_paths | missing_paths)} pages")
+        return result
 
     async def translate_readme(self, readme_en: str) -> str:
         """Translate English README to Chinese."""
@@ -258,6 +357,29 @@ Format:
         except (json.JSONDecodeError, ValueError):
             logger.warning(f"Failed to parse page title translation result: {raw}")
             return {}
+
+    async def translate_all_page_titles(self, pages: list[dict]) -> dict[str, str]:
+        """Translate all page titles to Chinese in batches.
+
+        Returns {{path: zh_title}} mapping. Failures in individual batches
+        are logged but do not block other batches.
+        """
+        batch_size = 35
+        results: dict[str, str] = {}
+        total_batches = (len(pages) + batch_size - 1) // batch_size
+
+        for i in range(0, len(pages), batch_size):
+            batch = pages[i:i + batch_size]
+            batch_num = i // batch_size + 1
+            try:
+                batch_result = await self.translate_page_titles(batch)
+                results.update(batch_result)
+                logger.info(f"[translate_all_page_titles] batch {batch_num}/{total_batches} done, translated {len(batch_result)} titles")
+            except Exception as e:
+                logger.warning(f"[translate_all_page_titles] batch {batch_num}/{total_batches} failed: {e}")
+
+        logger.info(f"[translate_all_page_titles] total translated {len(results)}/{len(pages)} titles")
+        return results
 
     # ==================== Direct LLM Access ====================
 

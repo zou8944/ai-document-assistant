@@ -1812,7 +1812,7 @@ class TaskService:
         return result
 
     async def _generate_readme(self, task_id: str, collection_id: str, stats: UrlTaskStats):
-        """Phase 4: generate path-based categories and AI README navigation guide."""
+        """Phase 4: generate AI-smart categories and README navigation guide."""
         self._log_info_task(task_id, "Generating categories and README...")
         docs = self.doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
         crawled = [d for d in docs if d.source_path]
@@ -1822,98 +1822,97 @@ class TaskService:
             return
 
         pages = [{"path": d.source_path, "title": d.name or ""} for d in crawled]
+        import json as json_lib
 
-        try:
-            import json as json_lib
+        source_language = self._detect_source_language(pages)
+        self._log_info_task(task_id, f"Detected source language: {source_language}")
 
-            source_language = self._detect_source_language(pages)
-            self._log_info_task(task_id, f"Detected source language: {source_language}")
+        # Step 1: AI smart grouping (failure propagates - no fallback)
+        self._log_info_task(task_id, "Categorizing pages with AI...")
+        groups = await self.llm_service.categorize_pages(pages)
+        self._log_info_task(task_id, f"Built {len(groups)} AI groups from {len(pages)} pages")
+        for g in groups:
+            self._log_info_task(task_id, f"  Group '{g['category']}': {len(g['pages'])} pages")
 
-            # Step 1: Build path-based groups (deterministic, 100% coverage)
-            groups = self._build_path_groups(pages, min_group_size=3)
-            self._log_info_task(task_id, f"Built {len(groups)} path groups from {len(pages)} pages")
-            for g in groups:
-                self._log_info_task(task_id, f"  Group '{g['category']}': {len(g['pages'])} pages")
+        # Step 2: Generate README content (failure propagates)
+        self._log_info_task(task_id, "Generating README content...")
+        readme_content = await self.llm_service.generate_readme_content(
+            groups, source_language, total_pages=len(pages)
+        )
+        self._log_info_task(task_id, f"README generated, length={len(readme_content)}")
 
-            # Step 2: Generate README content (single call)
-            self._log_info_task(task_id, "Generating README content...")
-            readme_content = await self.llm_service.generate_readme_content(groups, source_language)
-            self._log_info_task(task_id, f"README generated, length={len(readme_content)}")
+        # Step 3-6: Translations and persistence (errors are logged but not fatal)
+        readme_content_zh = ""
+        category_names_zh: dict[str, str] = {}
+        page_titles_zh: dict[str, str] = {}
 
-            # Step 3: Chinese translations (each step is independent, failures are logged but not fatal)
-            readme_content_zh = ""
-            category_names_zh: dict[str, str] = {}
-            page_titles_zh: dict[str, str] = {}
+        if source_language == "en":
+            # 3a: Translate README
+            try:
+                self._log_info_task(task_id, "Translating README to Chinese...")
+                readme_content_zh = await self.llm_service.translate_readme(readme_content)
+                self._log_info_task(task_id, f"README translated, length={len(readme_content_zh)}")
+            except Exception as e:
+                self._log_err_task(task_id, f"README translation failed: {e}")
 
-            if source_language == "en":
-                # 3a: Translate README
-                try:
-                    self._log_info_task(task_id, "Translating README to Chinese...")
-                    readme_content_zh = await self.llm_service.translate_readme(readme_content)
-                    self._log_info_task(task_id, f"README translated, length={len(readme_content_zh)}")
-                except Exception as e:
-                    self._log_err_task(task_id, f"README translation failed: {e}")
+            # 3b: Translate category names
+            try:
+                self._log_info_task(task_id, "Translating category names...")
+                category_names_zh = await self.llm_service.translate_category_names(
+                    [g["category"] for g in groups]
+                )
+                self._log_info_task(task_id, f"Category names translated: {len(category_names_zh)}")
+            except Exception as e:
+                self._log_err_task(task_id, f"Category name translation failed: {e}")
 
-                # 3b: Translate category names
-                try:
-                    self._log_info_task(task_id, "Translating category names...")
-                    category_names_zh = await self.llm_service.translate_category_names(
-                        [g["category"] for g in groups]
-                    )
-                    self._log_info_task(task_id, f"Category names translated: {len(category_names_zh)}")
-                except Exception as e:
-                    self._log_err_task(task_id, f"Category name translation failed: {e}")
+            # 3c: Translate all page titles (batch)
+            try:
+                self._log_info_task(task_id, f"Translating all {len(pages)} page titles...")
+                page_titles_zh = await self.llm_service.translate_all_page_titles(pages)
+                self._log_info_task(task_id, f"Page titles translated: {len(page_titles_zh)}")
+            except Exception as e:
+                self._log_err_task(task_id, f"Page title translation failed: {e}")
 
-                # 3c: Translate page titles (sample only)
-                try:
-                    sample_pages: list[dict] = []
-                    for g in groups:
-                        sample_pages.extend(g["pages"][:5])
-                    self._log_info_task(task_id, f"Translating {len(sample_pages)} page titles...")
-                    page_titles_zh = await self.llm_service.translate_page_titles(sample_pages)
-                    self._log_info_task(task_id, f"Page titles translated: {len(page_titles_zh)}")
-                except Exception as e:
-                    self._log_err_task(task_id, f"Page title translation failed: {e}")
+        # Step 4: Build categories JSON for frontend
+        categories_for_json = []
+        categories_zh_for_json = []
+        for g in groups:
+            cat_name = g["category"]
+            cat_name_zh = category_names_zh.get(cat_name, cat_name)
 
-            # Step 4: Build categories JSON for frontend
-            categories_for_json = []
-            categories_zh_for_json = []
-            for g in groups:
-                cat_name = g["category"]
-                cat_name_zh = category_names_zh.get(cat_name, cat_name)
+            cat_pages = []
+            cat_pages_zh = []
+            for p in g["pages"]:
+                path = p["path"]
+                title = p["title"]
+                title_zh = page_titles_zh.get(path, title)
 
-                cat_pages = []
-                cat_pages_zh = []
-                for p in g["pages"]:
-                    path = p["path"]
-                    title = p["title"]
-                    title_zh = page_titles_zh.get(path, title)
-
-                    cat_pages.append({
-                        "path": path,
-                        "title": title,
-                        "description": "",
-                    })
-                    cat_pages_zh.append({
-                        "path": path,
-                        "title": title_zh,
-                        "description": "",
-                    })
-
-                categories_for_json.append({
-                    "category": cat_name,
-                    "pages": cat_pages,
+                cat_pages.append({
+                    "path": path,
+                    "title": title,
+                    "description": "",
                 })
-                if source_language == "en":
-                    categories_zh_for_json.append({
-                        "category": cat_name_zh,
-                        "pages": cat_pages_zh,
-                    })
+                cat_pages_zh.append({
+                    "path": path,
+                    "title": title_zh,
+                    "description": "",
+                })
 
-            categories_json = json_lib.dumps(categories_for_json, ensure_ascii=False)
-            categories_json_zh = json_lib.dumps(categories_zh_for_json, ensure_ascii=False) if source_language == "en" else ""
+            categories_for_json.append({
+                "category": cat_name,
+                "pages": cat_pages,
+            })
+            if source_language == "en":
+                categories_zh_for_json.append({
+                    "category": cat_name_zh,
+                    "pages": cat_pages_zh,
+                })
 
-            # Step 5: Persist to database
+        categories_json = json_lib.dumps(categories_for_json, ensure_ascii=False)
+        categories_json_zh = json_lib.dumps(categories_zh_for_json, ensure_ascii=False) if source_language == "en" else ""
+
+        # Step 5: Persist to database
+        try:
             await self.collection_service.update_readme(
                 collection_id,
                 readme_content=readme_content,
@@ -1922,16 +1921,17 @@ class TaskService:
                 categories_json_zh=categories_json_zh,
                 source_language=source_language
             )
-
-            # Update document name_translated for English source documents
-            if source_language == "en":
-                for doc in crawled:
-                    if doc.source_path and doc.source_path in page_titles_zh:
-                        self.doc_repo.update(doc.id, name_translated=page_titles_zh[doc.source_path])
-
-            self._log_info_task(task_id, "Categories and README stored successfully")
         except Exception as e:
-            self._log_err_task(task_id, f"README generation failed: {e}")
+            self._log_err_task(task_id, f"Failed to persist README: {e}")
+            return
+
+        # Step 6: Update document name_translated for English source documents
+        if source_language == "en":
+            for doc in crawled:
+                if doc.source_path and doc.source_path in page_titles_zh:
+                    self.doc_repo.update(doc.id, name_translated=page_titles_zh[doc.source_path])
+
+        self._log_info_task(task_id, "Categories and README stored successfully")
 
     def close(self):
         """Close connections and cleanup resources"""
