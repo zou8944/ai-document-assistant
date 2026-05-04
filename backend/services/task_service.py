@@ -1773,6 +1773,8 @@ class TaskService:
 
             source_language = self._detect_source_language(pages)
             self._log_info_task(task_id, f"Detected source language: {source_language}")
+            self._log_info_task(task_id, f"README input: {len(pages)} pages")
+            self._log_info_task(task_id, "README generation may take a few minutes, please wait...")
 
             raw = await self.llm_service.generate_readme(pages, source_language)
 

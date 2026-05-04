@@ -219,7 +219,6 @@ class AppConfig:
             "api_key": self.llm.api_key,
             "base_url": self.llm.base_url,
             "max_tokens": self.llm.max_tokens,
-            "request_timeout": 120,
         }
         return kwargs
 
@@ -232,7 +231,6 @@ class AppConfig:
             "api_key": self.llm.api_key,
             "base_url": self.llm.base_url,
             "max_tokens": self.llm.max_tokens,
-            "request_timeout": 120,
         }
 
     def get_openai_embeddings_kwargs(self) -> dict:

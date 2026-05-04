@@ -52,14 +52,14 @@ class LLMService:
     # ==================== Embedding Operations ====================
 
     async def embed_query(self, query: str) -> list[float]:
-        logger.info("[LLM] embed_query start, query_len=%d", len(query))
+        logger.info("[LLM] embed_query start, model=%s, query_len=%d", self.embeddings.model, len(query))
         t0 = time.monotonic()
         result = await asyncio.wait_for(self.embeddings.aembed_query(query), timeout=LLM_TIMEOUT)
         logger.info("[LLM] embed_query done, %.2fs", time.monotonic() - t0)
         return result
 
     async def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        logger.info("[LLM] embed_documents start, count=%d", len(texts))
+        logger.info("[LLM] embed_documents start, model=%s, count=%d", self.embeddings.model, len(texts))
         t0 = time.monotonic()
         result = await asyncio.wait_for(self.embeddings.aembed_documents(texts), timeout=LLM_TIMEOUT)
         logger.info("[LLM] embed_documents done, %.2fs", time.monotonic() - t0)
@@ -95,7 +95,7 @@ class LLMService:
         )
 
     async def generate_chat_response(self, prompt: str) -> str:
-        logger.info("[LLM] generate_chat_response start, prompt_len=%d", len(prompt))
+        logger.info("[LLM] generate_chat_response start, model=%s, prompt_len=%d", self.llm.model_name, len(prompt))
         t0 = time.monotonic()
         chain = self.llm | self.text_parser
         result = await asyncio.wait_for(chain.ainvoke(prompt), timeout=LLM_TIMEOUT)
@@ -103,7 +103,7 @@ class LLMService:
         return result
 
     async def stream_chat_response(self, prompt: str):
-        logger.info("[LLM] stream_chat_response start, prompt_len=%d", len(prompt))
+        logger.info("[LLM] stream_chat_response start, model=%s, prompt_len=%d", self.llm.model_name, len(prompt))
         t0 = time.monotonic()
         stream = self.llm.astream(prompt)
         while True:
@@ -120,7 +120,7 @@ class LLMService:
 
     async def filter_by_summaries(self, user_query: str, summaries_block: str) -> list[int]:
         """Returns list of 1-based document indices relevant to the query."""
-        logger.info("[LLM] filter_by_summaries start, query_len=%d, summaries_len=%d", len(user_query), len(summaries_block))
+        logger.info("[LLM] filter_by_summaries start, model=%s, query_len=%d, summaries_len=%d", self.crawl_llm.model_name, len(user_query), len(summaries_block))
         t0 = time.monotonic()
         from rag.prompt_templates import SUMMARY_FILTER_PROMPT
         chain = SUMMARY_FILTER_PROMPT | self.crawl_llm | self.text_parser
@@ -249,7 +249,7 @@ Pages:
     # ==================== Direct LLM Access ====================
 
     async def invoke_llm(self, prompt: str, **kwargs) -> str:
-        logger.info("[LLM] invoke_llm start, prompt_len=%d", len(prompt))
+        logger.info("[LLM] invoke_llm start, model=%s, prompt_len=%d", self.llm.model_name, len(prompt))
         t0 = time.monotonic()
         result = await asyncio.wait_for(
             self.llm.ainvoke(prompt, **kwargs), timeout=LLM_TIMEOUT
@@ -259,7 +259,7 @@ Pages:
         return output
 
     async def _invoke_crawl_llm(self, prompt: str, **kwargs) -> str:
-        logger.info("[LLM] _invoke_crawl_llm start, prompt_len=%d", len(prompt))
+        logger.info("[LLM] _invoke_crawl_llm start, model=%s, prompt_len=%d", self.crawl_llm.model_name, len(prompt))
         t0 = time.monotonic()
         result = await asyncio.wait_for(
             self.crawl_llm.ainvoke(prompt, **kwargs), timeout=LLM_TIMEOUT
