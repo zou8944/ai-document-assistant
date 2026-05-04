@@ -7,6 +7,7 @@ import hashlib
 import json
 import logging
 import mimetypes
+import queue
 import os
 import re
 import uuid
@@ -60,7 +61,7 @@ class TaskService:
         self.collection_service = collection_service
 
         # Task queue and workers
-        self.task_queue: asyncio.Queue = asyncio.Queue(maxsize=100)
+        self.task_queue: queue.Queue = queue.Queue(maxsize=100)
         self.executor = ThreadPoolExecutor(max_workers=5)
         self.running = False
         self._stop_flags: set[str] = set()  # Task IDs marked for stopping
@@ -203,7 +204,7 @@ class TaskService:
         ))
 
         # Add task to queue
-        await self.task_queue.put(created_task.id)
+        self.task_queue.put(created_task.id)
 
         logger.info(f"Created task {created_task.id} of type {task_type}")
 
@@ -250,7 +251,7 @@ class TaskService:
         # Delete old logs before restarting
         self.task_log_repo.delete_by_task(task_id)
         self.task_repo.reset_task(task_id)
-        await self.task_queue.put(task_id)
+        self.task_queue.put(task_id)
         logger.info(f"Restarted task {task_id}")
 
         return self._to_response(self.task_repo.get_by_id(task_id))
@@ -419,7 +420,7 @@ class TaskService:
     async def requeue_processing_task(self):
         tasks = self.task_repo.get_active_tasks()
         for task in tasks:
-            await self.task_queue.put(task.id)
+            self.task_queue.put(task.id)
             logger.info(f"Re-queued processing task {task.id}")
 
     async def start_workers(self):
@@ -469,11 +470,13 @@ class TaskService:
 
         while self.running:
             try:
-                # Wait for task with timeout
-                task_id = await asyncio.wait_for(
-                    self.task_queue.get(),
-                    timeout=1.0
-                )
+                # queue.Queue.get is blocking; use to_thread to avoid blocking the event loop
+                try:
+                    task_id = await asyncio.to_thread(
+                        self.task_queue.get, timeout=1.0
+                    )
+                except queue.Empty:
+                    continue
 
                 logger.info(f"Worker {worker_name} processing task {task_id}")
 
@@ -483,15 +486,11 @@ class TaskService:
                 # Mark task as done in queue
                 self.task_queue.task_done()
 
-            except asyncio.TimeoutError:
-                # No task available, continue loop
-                continue
             except asyncio.CancelledError:
                 logger.info(f"Worker {worker_name} cancelled")
                 break
             except Exception as e:
                 logger.error(f"Worker {worker_name} error: {e}", exc_info=True)
-                # Continue processing other tasks
                 continue
 
         logger.info(f"Task worker {worker_name} stopped")

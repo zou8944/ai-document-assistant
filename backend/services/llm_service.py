@@ -2,8 +2,10 @@
 LLM service for centralized AI model management and operations.
 """
 
+import asyncio
 import json
 import logging
+import time
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
@@ -14,6 +16,9 @@ from rag.intent_analyzer import IntentAnalyzer
 from rag.prompt_templates import build_rag_prompt
 
 logger = logging.getLogger(__name__)
+
+# Overall timeout (seconds) for any single LLM call; prevents Ctrl+C from hanging
+LLM_TIMEOUT = 180
 
 
 class LLMService:
@@ -41,10 +46,18 @@ class LLMService:
     # ==================== Embedding Operations ====================
 
     async def embed_query(self, query: str) -> list[float]:
-        return await self.embeddings.aembed_query(query)
+        logger.info("[LLM] embed_query start, query_len=%d", len(query))
+        t0 = time.monotonic()
+        result = await asyncio.wait_for(self.embeddings.aembed_query(query), timeout=LLM_TIMEOUT)
+        logger.info("[LLM] embed_query done, %.2fs", time.monotonic() - t0)
+        return result
 
     async def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return await self.embeddings.aembed_documents(texts)
+        logger.info("[LLM] embed_documents start, count=%d", len(texts))
+        t0 = time.monotonic()
+        result = await asyncio.wait_for(self.embeddings.aembed_documents(texts), timeout=LLM_TIMEOUT)
+        logger.info("[LLM] embed_documents done, %.2fs", time.monotonic() - t0)
+        return result
 
     # ==================== Intent Analysis ====================
 
@@ -76,22 +89,40 @@ class LLMService:
         )
 
     async def generate_chat_response(self, prompt: str) -> str:
+        logger.info("[LLM] generate_chat_response start, prompt_len=%d", len(prompt))
+        t0 = time.monotonic()
         chain = self.llm | self.text_parser
-        return await chain.ainvoke(prompt)
+        result = await asyncio.wait_for(chain.ainvoke(prompt), timeout=LLM_TIMEOUT)
+        logger.info("[LLM] generate_chat_response done, %.2fs, output_len=%d", time.monotonic() - t0, len(result))
+        return result
 
     async def stream_chat_response(self, prompt: str):
-        async for chunk in self.llm.astream(prompt):
+        logger.info("[LLM] stream_chat_response start, prompt_len=%d", len(prompt))
+        t0 = time.monotonic()
+        stream = self.llm.astream(prompt)
+        while True:
+            try:
+                chunk = await asyncio.wait_for(stream.__anext__(), timeout=LLM_TIMEOUT)
+            except StopAsyncIteration:
+                break
             content = chunk.content if hasattr(chunk, 'content') else str(chunk)
             if content:
                 yield content
+        logger.info("[LLM] stream_chat_response done, %.2fs", time.monotonic() - t0)
 
     # ==================== README Generation ====================
 
     async def filter_by_summaries(self, user_query: str, summaries_block: str) -> list[int]:
         """Returns list of 1-based document indices relevant to the query."""
+        logger.info("[LLM] filter_by_summaries start, query_len=%d, summaries_len=%d", len(user_query), len(summaries_block))
+        t0 = time.monotonic()
         from rag.prompt_templates import SUMMARY_FILTER_PROMPT
         chain = SUMMARY_FILTER_PROMPT | self.llm | self.text_parser
-        result = await chain.ainvoke({"user_query": user_query, "summaries_block": summaries_block})
+        result = await asyncio.wait_for(
+            chain.ainvoke({"user_query": user_query, "summaries_block": summaries_block}),
+            timeout=LLM_TIMEOUT,
+        )
+        logger.info("[LLM] filter_by_summaries done, %.2fs", time.monotonic() - t0)
         try:
             indices = json.loads(result.strip())
             return [int(i) for i in indices if isinstance(i, int) and i > 0]
@@ -109,6 +140,8 @@ class LLMService:
         with both English and Chinese versions.
         """
         pages_text = "\n".join(f"- {p['path']}: {p['title']}" for p in pages)
+        logger.info(f"[generate_readme] pages count: {len(pages)}, total chars: {len(pages_text)}")
+        logger.info(f"[generate_readme] pages_text:\n{pages_text}")
 
         if source_language == "zh":
             prompt = f"""You are analyzing a documentation website. Given the page paths and titles below,
@@ -204,16 +237,20 @@ Rules for Chinese content:
 
 Pages:
 {pages_text}"""
+        logger.info(f"[generate_readme] full prompt length: {len(prompt)} chars (~{len(prompt) // 4} tokens)")
         return await self.invoke_llm(prompt, max_tokens=self.config.llm.max_tokens)
 
     # ==================== Direct LLM Access ====================
 
     async def invoke_llm(self, prompt: str, **kwargs) -> str:
-        result = await self.llm.ainvoke(prompt, **kwargs)
-        if hasattr(result, 'content'):
-            content = result.content
-            return str(content) if content is not None else ""
-        return str(result)
+        logger.info("[LLM] invoke_llm start, prompt_len=%d", len(prompt))
+        t0 = time.monotonic()
+        result = await asyncio.wait_for(
+            self.llm.ainvoke(prompt, **kwargs), timeout=LLM_TIMEOUT
+        )
+        output = str(result.content) if hasattr(result, 'content') and result is not None else str(result)
+        logger.info("[LLM] invoke_llm done, %.2fs, output_len=%d", time.monotonic() - t0, len(output))
+        return output
 
     async def stream_llm(self, prompt: str, **kwargs):
         async for chunk in self.llm.astream(prompt, **kwargs):
