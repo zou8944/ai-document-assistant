@@ -4,6 +4,7 @@
 """
 
 import logging
+from typing import Optional
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -37,9 +38,9 @@ class DocumentSummarizer:
         chain = prompt | self.llm | StrOutputParser()
         return chain.invoke({"document_content": content})
 
-    async def summarize_document_async(self, content) -> str:
+    async def summarize_document_async(self, content, llm: Optional[ChatOpenAI] = None) -> str:
         prompt = DOC_SUMMARY_PROMPT
-        chain = prompt | self.llm | StrOutputParser()
+        chain = prompt | (llm or self.llm) | StrOutputParser()
         return await chain.ainvoke({"document_content": content})
 
     def summarize_collection(self, contents: list[str]) -> str:
@@ -50,9 +51,9 @@ class DocumentSummarizer:
             document_contents.append(f"文档 {idx + 1}: {content}")
         return chain.invoke({"document_contents": "\n".join(document_contents)})
 
-    async def summarize_collection_async(self, contents: list[str]) -> str:
+    async def summarize_collection_async(self, contents: list[str], llm: Optional[ChatOpenAI] = None) -> str:
         prompt = COLLECTION_SUMMARY_PROMPT
-        chain = prompt | self.llm | StrOutputParser()
+        chain = prompt | (llm or self.llm) | StrOutputParser()
         document_contents = []
         for idx, content in enumerate(contents):
             document_contents.append(f"文档 {idx + 1}: {content}")

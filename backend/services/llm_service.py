@@ -34,6 +34,12 @@ class LLMService:
         chat_kwargs = self.config.get_openai_chat_kwargs()
         self.llm = ChatOpenAI(**chat_kwargs)
 
+        # Initialize crawl-specific LLM (falls back to chat_model if not configured)
+        crawl_kwargs = self.config.get_openai_crawl_kwargs()
+        self.crawl_llm = ChatOpenAI(**crawl_kwargs)
+        if self.config.llm.crawl_model:
+            logger.info("Using separate crawl model: %s", self.config.llm.crawl_model)
+
         # Initialize specialized components
         self.intent_analyzer = IntentAnalyzer(llm=self.llm)
         self.document_summarizer = DocumentSummarizer(self.llm)
@@ -67,10 +73,10 @@ class LLMService:
     # ==================== Document Summarization ====================
 
     async def summarize_document(self, content: str) -> str:
-        return await self.document_summarizer.summarize_document_async(content)
+        return await self.document_summarizer.summarize_document_async(content, llm=self.crawl_llm)
 
     async def summarize_collection(self, document_summaries: list[str]) -> str:
-        return await self.document_summarizer.summarize_collection_async(document_summaries)
+        return await self.document_summarizer.summarize_collection_async(document_summaries, llm=self.crawl_llm)
 
     # ==================== RAG Chat Operations ====================
 
@@ -117,7 +123,7 @@ class LLMService:
         logger.info("[LLM] filter_by_summaries start, query_len=%d, summaries_len=%d", len(user_query), len(summaries_block))
         t0 = time.monotonic()
         from rag.prompt_templates import SUMMARY_FILTER_PROMPT
-        chain = SUMMARY_FILTER_PROMPT | self.llm | self.text_parser
+        chain = SUMMARY_FILTER_PROMPT | self.crawl_llm | self.text_parser
         result = await asyncio.wait_for(
             chain.ainvoke({"user_query": user_query, "summaries_block": summaries_block}),
             timeout=LLM_TIMEOUT,
@@ -238,7 +244,7 @@ Rules for Chinese content:
 Pages:
 {pages_text}"""
         logger.info(f"[generate_readme] full prompt length: {len(prompt)} chars (~{len(prompt) // 4} tokens)")
-        return await self.invoke_llm(prompt, max_tokens=self.config.llm.max_tokens)
+        return await self._invoke_crawl_llm(prompt, max_tokens=self.config.llm.max_tokens)
 
     # ==================== Direct LLM Access ====================
 
@@ -250,6 +256,16 @@ Pages:
         )
         output = str(result.content) if hasattr(result, 'content') and result is not None else str(result)
         logger.info("[LLM] invoke_llm done, %.2fs, output_len=%d", time.monotonic() - t0, len(output))
+        return output
+
+    async def _invoke_crawl_llm(self, prompt: str, **kwargs) -> str:
+        logger.info("[LLM] _invoke_crawl_llm start, prompt_len=%d", len(prompt))
+        t0 = time.monotonic()
+        result = await asyncio.wait_for(
+            self.crawl_llm.ainvoke(prompt, **kwargs), timeout=LLM_TIMEOUT
+        )
+        output = str(result.content) if hasattr(result, 'content') and result is not None else str(result)
+        logger.info("[LLM] _invoke_crawl_llm done, %.2fs, output_len=%d", time.monotonic() - t0, len(output))
         return output
 
     async def stream_llm(self, prompt: str, **kwargs):

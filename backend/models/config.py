@@ -13,6 +13,7 @@ class LLMConfig:
     api_key: str = ""
     base_url: str = "https://api.openai.com/v1"
     chat_model: str = "gpt-3.5-turbo"
+    crawl_model: str = ""
     max_tokens: Optional[int] = 8192
 
     def to_dict(self) -> dict:
@@ -30,6 +31,7 @@ class LLMConfig:
             api_key=os.getenv("OPENAI_API_KEY", ""),
             base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
             chat_model=os.getenv("OPENAI_CHAT_MODEL", "gpt-3.5-turbo"),
+            crawl_model=os.getenv("OPENAI_CRAWL_MODEL", ""),
             max_tokens=int(max_tokens) if max_tokens else 8192,
         )
 
@@ -220,6 +222,18 @@ class AppConfig:
             "request_timeout": 120,
         }
         return kwargs
+
+    def get_openai_crawl_kwargs(self) -> dict:
+        """Get kwargs for crawl-phase ChatOpenAI initialization."""
+        model = self.llm.crawl_model or self.llm.chat_model
+        return {
+            "model": model,
+            "temperature": 0.1,
+            "api_key": self.llm.api_key,
+            "base_url": self.llm.base_url,
+            "max_tokens": self.llm.max_tokens,
+            "request_timeout": 120,
+        }
 
     def get_openai_embeddings_kwargs(self) -> dict:
         """Get kwargs for OpenAIEmbeddings initialization."""
