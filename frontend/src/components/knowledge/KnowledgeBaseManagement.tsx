@@ -164,28 +164,63 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
 
   // Group -> docs mapping
   const groupDocsMap = useMemo(() => {
+    const docByPath = new Map<string, MappedDoc>()
+    for (const d of documents) {
+      if (d.source_path) docByPath.set(d.source_path, d)
+    }
+
     const map = new Map<string, MappedDoc[]>()
-    map.set('all', documents)
+
+    // Per-category groups: preserve cat.pages order
     for (const cat of categories) {
-      const paths = new Set(cat.pages.map(p => p.path))
-      const docs = documents.filter(d => d.source_path && paths.has(d.source_path))
+      const docs: MappedDoc[] = []
+      for (const p of cat.pages) {
+        const d = docByPath.get(p.path)
+        if (d) docs.push(d)
+      }
       map.set(cat.category, docs)
     }
+
+    // 'all' view: uncategorized (lex sorted) first, then grouped in order
+    const coveredPaths = new Set(categories.flatMap(c => c.pages.map(p => p.path)))
+    const uncategorized = documents
+      .filter(d => !d.source_path || !coveredPaths.has(d.source_path))
+      .sort((a, b) => (a.source_path ?? a.name).localeCompare(b.source_path ?? b.name))
+    const groupedFlat = categories.flatMap(cat => map.get(cat.category) ?? [])
+    map.set('all', [...uncategorized, ...groupedFlat])
+
     return map
   }, [documents, categories])
 
   // Search results grouped by category
   const searchGroupedDocs = useMemo(() => {
     if (!searchResults) return null
+    const docByPath = new Map<string, MappedDoc>()
+    for (const d of searchResults) {
+      if (d.source_path) docByPath.set(d.source_path, d)
+    }
+
     const map = new Map<string, MappedDoc[]>()
-    map.set('all', searchResults)
+
     for (const cat of categories) {
-      const paths = new Set(cat.pages.map(p => p.path))
-      const docs = searchResults.filter(d => d.source_path && paths.has(d.source_path))
+      const docs: MappedDoc[] = []
+      for (const p of cat.pages) {
+        const d = docByPath.get(p.path)
+        if (d) docs.push(d)
+      }
       if (docs.length > 0) {
         map.set(cat.category, docs)
       }
     }
+
+    // 'all' search view: same ordering logic
+    const coveredPaths = new Set(categories.flatMap(c => c.pages.map(p => p.path)))
+    const uncategorized = searchResults
+      .filter(d => !d.source_path || !coveredPaths.has(d.source_path))
+      .sort((a, b) => (a.source_path ?? a.name).localeCompare(b.source_path ?? b.name))
+    const groupedFlat = categories.flatMap(cat => map.get(cat.category) ?? [])
+    map.set('all', [...uncategorized, ...groupedFlat])
+
     return map
   }, [searchResults, categories])
 

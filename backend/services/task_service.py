@@ -1807,9 +1807,10 @@ class TaskService:
                 "pages": other_pages,
             })
 
-        # Sort for consistent ordering, but keep "Other" at the end
-        result.sort(key=lambda g: (g["category"] == "Other", g["category"]))
-        return result
+        # Keep "Other" at the end, otherwise preserve natural order
+        other = [g for g in result if g["category"] == "Other"]
+        non_other = [g for g in result if g["category"] != "Other"]
+        return non_other + other
 
     async def _generate_readme(self, task_id: str, collection_id: str, stats: UrlTaskStats):
         """Phase 4: generate AI-smart categories and README navigation guide."""
@@ -1833,6 +1834,11 @@ class TaskService:
         self._log_info_task(task_id, f"Built {len(groups)} AI groups from {len(pages)} pages")
         for g in groups:
             self._log_info_task(task_id, f"  Group '{g['category']}': {len(g['pages'])} pages")
+
+        # Step 1.5: Reorder by complexity (beginner -> advanced)
+        self._log_info_task(task_id, "Ordering categories by complexity...")
+        groups = await self.llm_service.order_categories_by_complexity(groups)
+        self._log_info_task(task_id, f"Categories reordered: {[g['category'] for g in groups]}")
 
         # Step 2: Generate README content (failure propagates)
         self._log_info_task(task_id, "Generating README content...")

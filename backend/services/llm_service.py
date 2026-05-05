@@ -183,6 +183,7 @@ Rules:
   - Guidance for different users (beginners, advanced users, developers) on where to start
   - A brief overview of each group's content and how groups relate to each other
   - Use doc:///path links to point to specific key pages
+- The groups below are already ordered from beginner-friendly to advanced; preserve this order in the table of contents and section headings
 - Then list each group as a ## heading with page links underneath
 - Under each group, start with a 1-2 sentence description of the group's theme
 - Then list the representative pages as Markdown links: [页面标题](doc:///path)
@@ -207,6 +208,7 @@ Rules:
   - Guidance for different users (beginners, advanced users, developers) on where to start
   - A brief overview of each group's content and how groups relate to each other
   - Use doc:///path links to point to specific key pages
+- The groups below are already ordered from beginner-friendly to advanced; preserve this order in the table of contents and section headings
 - Then list each group as a ## heading with page links underneath
 - Under each group, start with a 1-2 sentence description of the group's theme
 - Then list the representative pages as Markdown links: [Page Title](doc:///path)
@@ -295,10 +297,119 @@ Return ONLY a JSON object in this exact format:
                     "pages": other_pages,
                 })
 
-        # Sort: keep "Other" at the end
-        result.sort(key=lambda g: (g["category"] == "Other", g["category"]))
+        # Keep "Other" at the end, otherwise preserve LLM-returned order
+        other = [g for g in result if g["category"] == "Other"]
+        non_other = [g for g in result if g["category"] != "Other"]
+        result = non_other + other
         logger.info(f"[categorize_pages] produced {len(result)} groups, covering {len(covered_paths | missing_paths)} pages")
         return result
+
+    def _ensure_other_last(self, groups: list[dict]) -> list[dict]:
+        """Move 'Other' group to the end if present. Otherwise return as-is."""
+        other = [g for g in groups if g["category"] == "Other"]
+        non_other = [g for g in groups if g["category"] != "Other"]
+        return non_other + other
+
+    async def order_categories_by_complexity(self, groups: list[dict]) -> list[dict]:
+        """Reorder categories from beginner-friendly to advanced.
+
+        Both the order of categories AND the order of pages within each category
+        are reordered by topic complexity. The "Other" category stays at the end.
+        Falls back to the original order on parse/LLM failure.
+        """
+        if len(groups) <= 1:
+            return groups
+
+        groups_text = json.dumps(
+            {
+                "groups": [
+                    {
+                        "name": g["category"],
+                        "pages": [
+                            {"path": p["path"], "title": p["title"]}
+                            for p in g["pages"]
+                        ],
+                    }
+                    for g in groups
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+
+        prompt = f"""You are a documentation expert. Reorder the groups below from beginner-friendly to advanced.
+
+Input JSON:
+{groups_text}
+
+Return ONLY a JSON object in this exact format:
+{{
+  "category_order": ["Group Name 1", "Group Name 2", ...],
+  "page_orders": {{
+    "Group Name 1": ["/path1", "/path2"],
+    ...
+  }}
+}}
+
+Rules:
+- "category_order" must include ALL group names, with beginner-friendly topics first and advanced topics last.
+- "page_orders" must include ALL page paths for each group, ordered from simple to complex within that group.
+- The "Other" group, if present, must always be LAST in "category_order".
+- Do NOT rename groups or pages; only change the order.
+- Use the exact group names and paths from the input."""
+
+        try:
+            logger.info(f"[order_categories_by_complexity] groups={len(groups)}")
+            raw = await self._invoke_crawl_llm(prompt)
+            cleaned = raw.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+
+            data = json.loads(cleaned)
+            category_order = data.get("category_order", [])
+            page_orders = data.get("page_orders", {})
+
+            # Validation
+            original_names = {g["category"] for g in groups}
+            if set(category_order) != original_names:
+                logger.warning(
+                    f"Category order mismatch: expected {original_names}, got {set(category_order)}. Falling back."
+                )
+                return self._ensure_other_last(groups)
+
+            # Validate page orders
+            for g in groups:
+                cat_name = g["category"]
+                ordered_paths = set(page_orders.get(cat_name, []))
+                original_paths = {p["path"] for p in g["pages"]}
+                if ordered_paths != original_paths:
+                    logger.warning(
+                        f"Page order mismatch for '{cat_name}': expected {original_paths}, got {ordered_paths}. Falling back."
+                    )
+                    return self._ensure_other_last(groups)
+
+            # Rebuild result in requested order
+            name_to_pages = {g["category"]: g["pages"] for g in groups}
+
+            result = []
+            for cat_name in category_order:
+                ordered_paths = list(page_orders.get(cat_name, []))
+                # Reorder pages within group
+                path_to_page = {p["path"]: p for p in name_to_pages[cat_name]}
+                ordered_pages = [path_to_page[p] for p in ordered_paths]
+                result.append({
+                    "category": cat_name,
+                    "pages": ordered_pages,
+                })
+
+            logger.info(
+                f"[order_categories_by_complexity] reordered {len(result)} groups"
+            )
+            return result
+
+        except Exception as e:
+            logger.warning(f"order_categories_by_complexity failed: {e}. Falling back.")
+            return self._ensure_other_last(groups)
 
     async def translate_readme(self, readme_en: str) -> str:
         """Translate English README to Chinese."""
