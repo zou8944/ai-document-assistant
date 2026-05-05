@@ -202,8 +202,25 @@ async def send_message_stream(
     """
     Send a message and get AI response (streaming via SSE)
     """
-    chat_service = get_app_state(request).chat_service
+    app_state = get_app_state(request)
 
+    # Use new chat service if available and no specific document IDs requested
+    # (legacy service supports document_ids filtering; new service handles
+    # document selection via intent-based retrieval)
+    if app_state.new_chat_service and not request_data.document_ids:
+        async def event_generator():
+            async for event in app_state.new_chat_service.process(
+                chat_id=chat_id,
+                query=request_data.message
+            ):
+                yield {
+                    "event": event.type.value,
+                    "data": event.data
+                }
+        return EventSourceResponse(event_generator())
+
+    # Fallback to legacy chat service (supports document_ids filtering)
+    chat_service = app_state.chat_service
     return EventSourceResponse(chat_service.chat_stream_generator(
         chat_id=chat_id,
         user_message=request_data.message,

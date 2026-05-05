@@ -206,11 +206,16 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
   const [documentMentions, setDocumentMentions] = useState<DocumentMention[]>([])
   const [streamingContent, setStreamingContent] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
-  const [currentStreamingSources, setCurrentStreamingSources] = useState<SourceReference[]>([])  
-  const [currentStreamingMessageId, setCurrentStreamingMessageId] = useState<string | null>(null)
+  const [processingStatus, setProcessingStatus] = useState<string | null>(null)
+  const [processingStage, setProcessingStage] = useState<string | null>(null)
   const [isInitialLoad, setIsInitialLoad] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const apiClient = useAPIClient()
+
+  // Use refs to avoid stale closures in async event handlers
+  const streamingSourcesRef = useRef<SourceReference[]>([])
+  const streamingMessageIdRef = useRef<string | null>(null)
+  const messagesCountRef = useRef<number>(0)
   
   const {
     getCurrentChat,
@@ -284,8 +289,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
     setIsLoading(true)
     setIsStreaming(true)
     setStreamingContent('')
-    setCurrentStreamingSources([])
-    setCurrentStreamingMessageId(null)
+    streamingSourcesRef.current = []
+    streamingMessageIdRef.current = null
+    setProcessingStatus(null)
+    setProcessingStage(null)
 
     try {
       await apiClient.sendMessageStream(
@@ -308,94 +315,147 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
   
   const handleStreamEvent = (event: SSEEvent) => {
     console.log('Stream event:', event)
-    
+
     switch (event.event) {
       case 'metadata':
         // User message already added in handleSendMessage, no need to add again
         break
-        
+
       case 'user_message':
         // User message saved to backend
         break
-        
-      case 'status':
-        // Update loading status if needed
-        break
-        
-      case 'sources':
-        // Store sources for final message
-        if (event.data && Array.isArray(event.data)) {
-          setCurrentStreamingSources(event.data)
+
+      case 'status': {
+        // New format: {stage: "analyzing", message: "🤔 分析查询意图..."}
+        // Legacy format: {status: "retrieving_documents"}
+        if (event.data) {
+          if (event.data.message) {
+            setProcessingStatus(event.data.message)
+            setProcessingStage(event.data.stage || null)
+          } else if (event.data.status) {
+            const statusMap: Record<string, string> = {
+              retrieving_documents: '🔍 检索相关文档...',
+              generating_response: '💭 生成回答...',
+            }
+            setProcessingStatus(statusMap[event.data.status] || event.data.status)
+            setProcessingStage(event.data.status)
+          }
         }
         break
-        
+      }
+
+      case 'intent':
+        // New format: {intent: "...", confidence: 0.95, suggested_mode: "...", complexity_score: 5}
+        if (event.data) {
+          console.log('Query intent:', event.data)
+        }
+        break
+
+      case 'sources': {
+        // New format: {documents: [...], total_found: N}
+        // Legacy format: {sources: [...], count: N} or direct array
+        let sources: SourceReference[] = []
+        if (Array.isArray(event.data)) {
+          sources = event.data
+        } else if (event.data?.documents) {
+          sources = event.data.documents.map((d: any) => ({
+            document_id: d.document_id || '',
+            document_name: d.document_name || '',
+            document_uri: d.document_uri || '',
+            chunk_index: d.chunk_index || 0,
+            content_preview: '',
+            relevance_score: d.relevance_score || 0,
+          }))
+        } else if (event.data?.sources) {
+          sources = event.data.sources
+        }
+        streamingSourcesRef.current = sources
+        break
+      }
+
       case 'content':
-        // Streaming content
-        if (event.data && event.data.content) {
-          setStreamingContent(prev => prev + event.data.content)
+        // New format: {delta: "..."}
+        // Legacy format: {content: "..."}
+        if (event.data) {
+          const content = event.data.delta || event.data.content
+          if (content) {
+            setStreamingContent((prev) => prev + content)
+            setProcessingStatus(null)
+            setProcessingStage(null)
+          }
         }
         break
-        
+
       case 'done':
-        // Response complete - use the accumulated streaming content
         setIsLoading(false)
         setIsStreaming(false)
-        
-        // Use a functional update to get the latest streaming content
-        setStreamingContent(currentContent => {
+        setProcessingStatus(null)
+        setProcessingStage(null)
+
+        // New format done has no content; use accumulated streamingContent.
+        // Legacy format: done may have content, sources, message_id.
+        setStreamingContent((currentContent) => {
           const finalContent = event.data?.content || currentContent
-          const finalSources = event.data?.sources || currentStreamingSources
-          
-          // Only add the AI message if we have content
+          // Use ref to get the latest sources, avoiding stale closure
+          const finalSources = event.data?.sources || streamingSourcesRef.current
+
           if (finalContent) {
             const aiMessage: Message = {
-              id: event.data?.message_id || currentStreamingMessageId || `ai_${Date.now()}`,
+              id: event.data?.message_id || streamingMessageIdRef.current || `ai_${Date.now()}`,
               type: 'assistant',
               content: finalContent,
               timestamp: new Date().toISOString(),
-              sources: finalSources
+              sources: finalSources,
             }
-            setMessages(prev => [...prev, aiMessage])
+            setMessages((prev) => {
+              const updated = [...prev, aiMessage]
+              messagesCountRef.current = updated.length
+              return updated
+            })
           }
-          
-          return '' // Reset streaming content
+
+          return ''
         })
-        
-        // Reset other streaming state
-        setCurrentStreamingSources([])
-        setCurrentStreamingMessageId(null)
-        
-        // Update chat session
+
+        streamingSourcesRef.current = []
+        streamingMessageIdRef.current = null
+
         if (currentChat) {
           updateChatSession(currentChat.id, {
-            messageCount: messages.length + 2,
-            lastMessageAt: new Date().toISOString()
+            messageCount: messagesCountRef.current,
+            lastMessageAt: new Date().toISOString(),
           })
         }
         break
-        
+
       case 'error':
         console.error('Stream error:', event.data)
         setIsLoading(false)
         setIsStreaming(false)
         setStreamingContent('')
-        setCurrentStreamingSources([])
-        setCurrentStreamingMessageId(null)
-        alert('生成回复失败: ' + (event.data?.message || '未知错误'))
+        streamingSourcesRef.current = []
+        streamingMessageIdRef.current = null
+        setProcessingStatus(null)
+        setProcessingStage(null)
+        alert(
+          '生成回复失败: ' + (event.data?.message || event.data?.detail || '未知错误')
+        )
         break
-        
+
       default:
         // Handle generic data events from basic streaming
         if (event.event === 'data' && event.data) {
-          // This might be the basic streaming format
           if (event.data.content) {
-            setStreamingContent(prev => prev + event.data.content)
+            setStreamingContent((prev) => prev + event.data.content)
           }
-          if (event.data.message_id && !currentStreamingMessageId) {
-            setCurrentStreamingMessageId(event.data.message_id)
+          if (event.data.delta) {
+            setStreamingContent((prev) => prev + event.data.delta)
+          }
+          if (event.data.message_id) {
+            streamingMessageIdRef.current = event.data.message_id
           }
           if (event.data.sources) {
-            setCurrentStreamingSources(event.data.sources)
+            streamingSourcesRef.current = event.data.sources
           }
         }
         break
@@ -407,8 +467,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
     setIsLoading(false)
     setIsStreaming(false)
     setStreamingContent('')
-    setCurrentStreamingSources([])
-    setCurrentStreamingMessageId(null)
+    streamingSourcesRef.current = []
+    streamingMessageIdRef.current = null
+    setProcessingStatus(null)
+    setProcessingStage(null)
     alert('生成回复失败: ' + error.message)
   }
 
@@ -583,6 +645,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                       <MarkdownContent content={streamingContent} />
                       <div className="mt-2 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
                     </>
+                  ) : processingStatus ? (
+                    <div className="flex items-center space-x-2 text-sm text-gray-600">
+                      <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                      <span>{processingStatus}</span>
+                    </div>
                   ) : (
                     <div className="flex space-x-1">
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />

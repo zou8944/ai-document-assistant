@@ -94,6 +94,24 @@ class Document(Base):
         doc="Error message if processing failed"
     )
 
+    # Search / indexing fields
+    keywords: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        doc="JSON list of keywords for search"
+    )
+    total_tokens: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default="0",
+        doc="Total token count"
+    )
+    category: Mapped[Optional[str]] = mapped_column(
+        String(200),
+        nullable=True,
+        doc="Category/group name"
+    )
+
     # Content
     content: Mapped[str] = mapped_column(
         Text,

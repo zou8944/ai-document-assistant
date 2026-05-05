@@ -1,6 +1,7 @@
 """Database models for AI Document Assistant."""
 
 from database.models.chat import Chat, ChatMessage
+from database.models.chat_index import KeywordOccurrence
 from database.models.collection import Collection
 from database.models.document import Document, DocumentChunk
 from database.models.settings import Settings
@@ -15,4 +16,5 @@ __all__ = [
     "Chat",
     "ChatMessage",
     "Settings",
+    "KeywordOccurrence",
 ]

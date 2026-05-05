@@ -8,6 +8,7 @@ from sqlalchemy import engine_from_config, pool
 load_dotenv()
 
 from database.base import Base  # noqa: E402
+from database.models import *  # noqa: E402, F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

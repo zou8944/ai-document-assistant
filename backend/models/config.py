@@ -16,6 +16,17 @@ class LLMConfig:
     crawl_model: str = ""
     max_tokens: Optional[int] = 8192
 
+    # Anthropic configuration
+    anthropic_api_key: str = ""
+    anthropic_base_url: str = ""
+    anthropic_chat_model: str = "claude-sonnet-4-20250514"
+
+    # Multi-model routing configuration
+    router_model: str = "gpt-4o-mini"
+    fast_model: str = "gpt-4o-mini"
+    standard_model: str = "gpt-4o"
+    deep_model: str = "claude-sonnet-4-20250514"
+
     def to_dict(self) -> dict:
         return asdict(self)
 

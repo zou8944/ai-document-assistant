@@ -57,11 +57,14 @@ class UrlTaskStats:
 class TaskService:
     """Service for managing async tasks"""
 
-    def __init__(self, config, collection_service: CollectionService, llm_service: LLMService):
+    def __init__(self, config, collection_service: CollectionService, llm_service: LLMService,
+                 document_index=None, keyword_index=None):
         """Initialize task service"""
         self.config = config
 
         self.collection_service = collection_service
+        self.document_index = document_index
+        self.keyword_index = keyword_index
 
         # Task queue and workers
         self.task_queue: queue.Queue = queue.Queue(maxsize=100)
@@ -750,6 +753,22 @@ class TaskService:
                 documents=documents
             )
 
+        # Index document for chat retrieval
+        if doc_status == "indexed":
+            if self.document_index:
+                self.document_index.index_document(
+                    document_id=doc_id,
+                    keywords=[],
+                    total_tokens=len(doc_content) // 4,
+                )
+            if self.keyword_index:
+                self.keyword_index.index_document(
+                    document_id=doc_id,
+                    title=doc_title,
+                    summary=doc_summary,
+                    content=doc_content,
+                    document_name=doc_title or doc_page_uri,
+                )
 
         return len(chunk_records)
 
@@ -1236,6 +1255,23 @@ class TaskService:
                 documents.append(chunk.content)
             if vector_ids and collection:
                 collection.add(ids=vector_ids, embeddings=embedding_list, metadatas=metadatas, documents=documents)
+
+        # Index document for chat retrieval
+        if doc_status == "indexed":
+            if self.document_index:
+                self.document_index.index_document(
+                    document_id=doc_record.id,
+                    keywords=[],
+                    total_tokens=len(content) // 4 if content else 0,
+                )
+            if self.keyword_index:
+                self.keyword_index.index_document(
+                    document_id=doc_record.id,
+                    title=title,
+                    summary=summary,
+                    content=content or "",
+                    document_name=title or url,
+                )
 
     @staticmethod
     def _canonicalize_page_url(url: str) -> str:

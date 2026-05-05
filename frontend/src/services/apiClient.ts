@@ -587,29 +587,30 @@ export class DocumentAssistantAPI {
 
       try {
         let buffer = ''
+        let currentEvent = 'data'
+        let currentData: any = null
+
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
 
           buffer += decoder.decode(value, { stream: true })
           const lines = buffer.split('\n')
-          
+
           // Keep the last incomplete line in the buffer
           buffer = lines.pop() || ''
 
-          let currentEvent = 'data'
-          let currentData: any = null
-          
           for (const line of lines) {
             if (line.trim() === '') {
               // Empty line indicates end of SSE message, emit event
-              if (currentData) {
+              if (currentData !== null) {
                 onEvent({ event: currentEvent, data: currentData })
                 currentData = null
               }
+              currentEvent = 'data'
               continue
             }
-            
+
             if (line.startsWith('event: ')) {
               currentEvent = line.slice(7).trim()
             } else if (line.startsWith('data: ')) {
@@ -619,15 +620,16 @@ export class DocumentAssistantAPI {
                   currentData = JSON.parse(data)
                 } catch (e) {
                   console.error('Failed to parse task SSE data:', e, 'Data:', data)
+                  currentData = data
                 }
               }
             }
           }
-          
-          // Handle case where buffer doesn't end with empty line
-          if (currentData) {
-            onEvent({ event: currentEvent, data: currentData })
-          }
+        }
+
+        // Emit any pending event when stream ends
+        if (currentData !== null) {
+          onEvent({ event: currentEvent, data: currentData })
         }
       } finally {
         reader.releaseLock()
@@ -725,7 +727,7 @@ export class DocumentAssistantAPI {
     onError?: (error: Error) => void
   ): Promise<void> {
     this.abortController = new AbortController()
-    
+
     try {
       const response = await fetch(`${this.baseURL}/api/v1/chats/${encodeURIComponent(chatId)}/chat/stream`, {
         method: 'POST',
@@ -750,32 +752,49 @@ export class DocumentAssistantAPI {
 
       try {
         let buffer = ''
+        let currentEvent = 'data'
+        let currentData: any = null
+
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
 
           buffer += decoder.decode(value, { stream: true })
           const lines = buffer.split('\n')
-          
+
           // Keep the last incomplete line in the buffer
           buffer = lines.pop() || ''
 
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
+            if (line.trim() === '') {
+              // Empty line indicates end of SSE message, emit event
+              if (currentData !== null) {
+                onEvent({ event: currentEvent, data: currentData })
+                currentData = null
+              }
+              currentEvent = 'data'
+              continue
+            }
+
+            if (line.startsWith('event: ')) {
+              currentEvent = line.slice(7).trim()
+            } else if (line.startsWith('data: ')) {
               const data = line.slice(6).trim()
               if (data && data !== '[DONE]') {
                 try {
-                  const parsed = JSON.parse(data)
-                  onEvent({ event: 'data', data: parsed })
+                  currentData = JSON.parse(data)
                 } catch (e) {
                   console.error('Failed to parse SSE data:', e, 'Data:', data)
+                  currentData = data
                 }
               }
-            } else if (line.startsWith('event: ')) {
-              const eventType = line.slice(7).trim()
-              onEvent({ event: eventType, data: null })
             }
           }
+        }
+
+        // Emit any pending event when stream ends
+        if (currentData !== null) {
+          onEvent({ event: currentEvent, data: currentData })
         }
       } finally {
         reader.releaseLock()
@@ -784,7 +803,7 @@ export class DocumentAssistantAPI {
       if (error instanceof Error && error.name === 'AbortError') {
         return // Request was cancelled, don't treat as error
       }
-      
+
       const err = error instanceof Error ? error : new Error('Unknown error')
       if (onError) {
         onError(err)
