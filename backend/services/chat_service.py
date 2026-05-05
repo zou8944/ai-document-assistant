@@ -66,12 +66,18 @@ class ChatService:
         except json.JSONDecodeError:
             sources = []
 
+        try:
+            metadata = json.loads(message.message_metadata) if message.message_metadata else {}
+        except json.JSONDecodeError:
+            metadata = {}
+
         return ChatMessageResponse(
-            message_id=message.id or "" ,
+            message_id=message.id or "",
             chat_id=message.chat_id or "",
             role=message.role or "",
             content=message.content or "",
             sources=sources,
+            metadata=metadata,
             created_at=message.created_at.isoformat() if message.created_at else ""
         )
 

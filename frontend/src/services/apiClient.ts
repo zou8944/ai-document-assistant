@@ -116,6 +116,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   sources: Array<SourceReference>
+  metadata?: Record<string, unknown>
   created_at: string
 }
 

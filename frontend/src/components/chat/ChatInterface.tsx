@@ -37,7 +37,7 @@ const TimingDisplay: React.FC<{ timings: StageTiming }> = ({ timings }) => {
   ]
 
   return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-gray-400">
+    <div className="mt-2 pt-2 border-t border-gray-200/50 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-gray-400">
       <div className="flex items-center space-x-0.5">
         <ClockIcon className="w-3 h-3" />
         <span>总计 {(timings.total_ms / 1000).toFixed(1)}s</span>
@@ -45,7 +45,7 @@ const TimingDisplay: React.FC<{ timings: StageTiming }> = ({ timings }) => {
       {items.map((item) => (
         <div key={item.label} className="flex items-center space-x-0.5" title={`${item.label}: ${item.ms}ms`}>
           <item.Icon className="w-3 h-3" />
-          <span>{item.label} {item.ms}ms</span>
+          <span>{item.label} {(item.ms / 1000).toFixed(1)}s</span>
         </div>
       ))}
     </div>
@@ -248,6 +248,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
 
                   {/* Sources */}
                   <SourceReferences sources={msg.sources || []} />
+                  {msg.type === 'assistant' && msg.timings && (
+                    <TimingDisplay timings={msg.timings} />
+                  )}
                 </div>
 
                 <div className={clsx(
@@ -256,9 +259,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                 )}>
                   {formatTime(msg.timestamp)}
                 </div>
-                {msg.type === 'assistant' && msg.timings && (
-                  <TimingDisplay timings={msg.timings} />
-                )}
               </div>
             </div>
           </div>

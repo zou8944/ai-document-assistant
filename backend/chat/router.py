@@ -87,6 +87,9 @@ class QueryRouter:
 请分析上述问题，按要求的 JSON 格式输出。"""
 
         logger.info(f"QueryRouter.analyze() calling llm.generate() with model={getattr(self.llm, 'model', 'unknown')}")
+        logger.debug(f"QueryRouter system_prompt length={len(ROUTER_SYSTEM_PROMPT)}")
+        logger.debug(f"QueryRouter messages={json.dumps([{'role': 'user', 'content': prompt}], ensure_ascii=False)}")
+        logger.debug("QueryRouter temperature=0.1, max_tokens=1024")
         response = await self.llm.generate(
             system_prompt=ROUTER_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],

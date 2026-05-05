@@ -29,12 +29,14 @@ export interface Message {
 }
 
 const mapAPIMessageToUIMessage = (msg: APIChatMessage): Message => {
+  const timings = msg.metadata?.timings as StageTiming | undefined
   return {
     id: msg.message_id,
     type: msg.role,
     content: msg.content,
     timestamp: msg.created_at,
-    sources: msg.sources || []
+    sources: msg.sources || [],
+    timings,
   }
 }
 

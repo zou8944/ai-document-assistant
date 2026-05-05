@@ -130,7 +130,7 @@ class ChatMessageRepository(BaseRepository[ChatMessage, ChatMessageDTO]):
                 role=role,
                 content=content,
                 sources=sources or "[]",
-                metadata=metadata or "{}"
+                message_metadata=metadata or "{}"
             )
 
             session.add(message)

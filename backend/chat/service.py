@@ -150,6 +150,7 @@ class ChatService:
         # Persist assistant message after successful generation
         try:
             if context and full_response:
+                metadata = json.dumps({"timings": timings}) if timings else "{}"
                 self.chat_message_repo.add_message(
                     chat_id=chat_id,
                     role="assistant",
@@ -158,7 +159,8 @@ class ChatService:
                         "document_id": d.document_id,
                         "document_name": d.document_name,
                         "relevance_score": d.relevance_score
-                    } for d in context.context_documents])
+                    } for d in context.context_documents]),
+                    metadata=metadata
                 )
         except Exception as e:
             logger.error(f"Failed to persist assistant message: {e}", exc_info=True)
