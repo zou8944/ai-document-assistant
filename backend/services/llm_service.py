@@ -225,11 +225,13 @@ Groups:
     async def categorize_pages(self, pages: list[dict]) -> list[dict]:
         """Use AI to group pages by semantic topic.
 
-        Returns groups in the format: [{"category": str, "pages": [{"path": str, "title": str}, ...]}]
+        Input pages must contain 'id', 'path', and 'title'.
+        Returns groups in the format:
+            [{"category": str, "pages": [{"id": str, "path": str, "title": str}, ...]}]
         Guarantees 100% coverage - all pages are assigned to a group.
         Raises exception on failure (no fallback).
         """
-        pages_text = "\n".join(f"- {p['path']}: {p['title']}" for p in pages)
+        pages_text = "\n".join(f"- {p['id']}: {p['path']}: {p['title']}" for p in pages)
 
         prompt = f"""You are organizing documentation pages into logical topic groups.
 Analyze the page paths and titles below, and group them by content/theme similarity.
@@ -247,12 +249,12 @@ Return ONLY a JSON object in this exact format:
     {{
       "name": "Group Name",
       "description": "Brief description of what this group covers",
-      "pages": ["/path1", "/path2"]
+      "page_ids": ["page_id_1", "page_id_2"]
     }}
   ]
 }}"""
         logger.info(f"[categorize_pages] pages={len(pages)}, prompt_len={len(prompt)}")
-        raw = await self._invoke_crawl_llm(prompt)
+        raw = await self._invoke_crawl_llm(prompt, max_tokens=self.config.llm.max_tokens)
         cleaned = raw.strip()
         if cleaned.startswith("```"):
             cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
@@ -267,16 +269,17 @@ Return ONLY a JSON object in this exact format:
             raise
 
         # Build result and validate coverage
-        all_paths = {p["path"] for p in pages}
-        covered_paths: set[str] = set()
+        all_ids = {p["id"] for p in pages}
+        covered_ids: set[str] = set()
+        id_to_page = {p["id"]: p for p in pages}
         result: list[dict] = []
 
         for g in groups_data:
             group_pages = []
-            for path in g.get("pages", []):
-                if path in all_paths and path not in covered_paths:
-                    group_pages.append(next(p for p in pages if p["path"] == path))
-                    covered_paths.add(path)
+            for page_id in g.get("page_ids", []):
+                if page_id in all_ids and page_id not in covered_ids:
+                    group_pages.append(id_to_page[page_id])
+                    covered_ids.add(page_id)
 
             if group_pages:
                 result.append({
@@ -285,9 +288,9 @@ Return ONLY a JSON object in this exact format:
                 })
 
         # Add missing pages to "Other" group
-        missing_paths = all_paths - covered_paths
-        if missing_paths:
-            other_pages = [p for p in pages if p["path"] in missing_paths]
+        missing_ids = all_ids - covered_ids
+        if missing_ids:
+            other_pages = [p for p in pages if p["id"] in missing_ids]
             other_group = next((g for g in result if g["category"] == "Other"), None)
             if other_group:
                 other_group["pages"].extend(other_pages)
@@ -301,7 +304,7 @@ Return ONLY a JSON object in this exact format:
         other = [g for g in result if g["category"] == "Other"]
         non_other = [g for g in result if g["category"] != "Other"]
         result = non_other + other
-        logger.info(f"[categorize_pages] produced {len(result)} groups, covering {len(covered_paths | missing_paths)} pages")
+        logger.info(f"[categorize_pages] produced {len(result)} groups, covering {len(covered_ids | missing_ids)} pages")
         return result
 
     def _ensure_other_last(self, groups: list[dict]) -> list[dict]:
@@ -325,10 +328,7 @@ Return ONLY a JSON object in this exact format:
                 "groups": [
                     {
                         "name": g["category"],
-                        "pages": [
-                            {"path": p["path"], "title": p["title"]}
-                            for p in g["pages"]
-                        ],
+                        "page_ids": [p["id"] for p in g["pages"]],
                     }
                     for g in groups
                 ]
@@ -346,21 +346,21 @@ Return ONLY a JSON object in this exact format:
 {{
   "category_order": ["Group Name 1", "Group Name 2", ...],
   "page_orders": {{
-    "Group Name 1": ["/path1", "/path2"],
+    "Group Name 1": ["page_id_1", "page_id_2"],
     ...
   }}
 }}
 
 Rules:
 - "category_order" must include ALL group names, with beginner-friendly topics first and advanced topics last.
-- "page_orders" must include ALL page paths for each group, ordered from simple to complex within that group.
+- "page_orders" must include ALL page IDs for each group, ordered from simple to complex within that group.
 - The "Other" group, if present, must always be LAST in "category_order".
 - Do NOT rename groups or pages; only change the order.
-- Use the exact group names and paths from the input."""
+- Use the exact group names and page IDs from the input."""
 
         try:
             logger.info(f"[order_categories_by_complexity] groups={len(groups)}")
-            raw = await self._invoke_crawl_llm(prompt)
+            raw = await self._invoke_crawl_llm(prompt, max_tokens=self.config.llm.max_tokens)
             cleaned = raw.strip()
             if cleaned.startswith("```"):
                 cleaned = cleaned.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
@@ -380,11 +380,11 @@ Rules:
             # Validate page orders
             for g in groups:
                 cat_name = g["category"]
-                ordered_paths = set(page_orders.get(cat_name, []))
-                original_paths = {p["path"] for p in g["pages"]}
-                if ordered_paths != original_paths:
+                ordered_ids = set(page_orders.get(cat_name, []))
+                original_ids = {p["id"] for p in g["pages"]}
+                if ordered_ids != original_ids:
                     logger.warning(
-                        f"Page order mismatch for '{cat_name}': expected {original_paths}, got {ordered_paths}. Falling back."
+                        f"Page order mismatch for '{cat_name}': expected {original_ids}, got {ordered_ids}. Falling back."
                     )
                     return self._ensure_other_last(groups)
 
@@ -393,10 +393,10 @@ Rules:
 
             result = []
             for cat_name in category_order:
-                ordered_paths = list(page_orders.get(cat_name, []))
+                ordered_ids = list(page_orders.get(cat_name, []))
                 # Reorder pages within group
-                path_to_page = {p["path"]: p for p in name_to_pages[cat_name]}
-                ordered_pages = [path_to_page[p] for p in ordered_paths]
+                id_to_page = {p["id"]: p for p in name_to_pages[cat_name]}
+                ordered_pages = [id_to_page[pid] for pid in ordered_ids]
                 result.append({
                     "category": cat_name,
                     "pages": ordered_pages,

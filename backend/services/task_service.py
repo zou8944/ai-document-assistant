@@ -1822,7 +1822,7 @@ class TaskService:
             self._log_info_task(task_id, "No crawled pages found, skipping README generation")
             return
 
-        pages = [{"path": d.source_path, "title": d.name or ""} for d in crawled]
+        pages = [{"id": d.id, "path": d.source_path, "title": d.name or ""} for d in crawled]
         import json as json_lib
 
         source_language = self._detect_source_language(pages)
