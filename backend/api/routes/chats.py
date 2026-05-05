@@ -2,6 +2,7 @@
 Chat management and conversation routes.
 """
 
+import json
 import logging
 
 from fastapi import APIRouter, Request, status
@@ -216,7 +217,7 @@ async def send_message_stream(
             ):
                 yield {
                     "event": event.type.value,
-                    "data": event.data
+                    "data": json.dumps(event.data)
                 }
         return EventSourceResponse(event_generator())
 

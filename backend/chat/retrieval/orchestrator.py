@@ -26,7 +26,7 @@ class RetrievalOrchestrator:
 
         for query in queries:
             if intent == QueryIntent.DIRECT_ANSWER:
-                result = await self.chunk_index.search(query, top_k=5)
+                result = await self.chunk_index.search(query, top_k=5, collection_ids=collection_ids)
                 all_documents.extend(result.documents)
                 search_type_parts.append("chunk_vector")
 
@@ -44,27 +44,27 @@ class RetrievalOrchestrator:
                 break
 
             elif intent == QueryIntent.SUMMARIZE:
-                result = await self.chunk_index.search(query, top_k=10)
+                result = await self.chunk_index.search(query, top_k=10, collection_ids=collection_ids)
                 all_documents.extend(result.documents)
                 search_type_parts.append("chunk_vector")
 
             elif intent == QueryIntent.COMPARE:
-                result = await self.chunk_index.search(query, top_k=5)
+                result = await self.chunk_index.search(query, top_k=5, collection_ids=collection_ids)
                 all_documents.extend(result.documents)
                 search_type_parts.append("chunk_vector")
 
             elif intent == QueryIntent.PROCEDURE:
-                result = await self.chunk_index.search(query, top_k=8)
+                result = await self.chunk_index.search(query, top_k=8, collection_ids=collection_ids)
                 all_documents.extend(result.documents)
                 search_type_parts.append("chunk_vector")
 
             elif intent == QueryIntent.SYNTHESIZE:
-                result = await self.chunk_index.search(query, top_k=15)
+                result = await self.chunk_index.search(query, top_k=15, collection_ids=collection_ids)
                 all_documents.extend(result.documents)
                 search_type_parts.append("chunk_vector_broad")
 
             elif intent == QueryIntent.ANALYZE:
-                chunk_result = await self.chunk_index.search(query, top_k=10)
+                chunk_result = await self.chunk_index.search(query, top_k=10, collection_ids=collection_ids)
                 doc_result = await self.document_index.search(query, top_k=5)
                 all_documents.extend(chunk_result.documents)
                 all_documents.extend(doc_result.documents)

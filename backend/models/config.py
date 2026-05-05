@@ -38,12 +38,20 @@ class LLMConfig:
     def from_env(cls):
         """Load configuration from environment variables."""
         max_tokens = os.getenv("OPENAI_MAX_TOKENS", "")
+        chat_model = os.getenv("OPENAI_CHAT_MODEL", "gpt-3.5-turbo")
         return cls(
             api_key=os.getenv("OPENAI_API_KEY", ""),
             base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-            chat_model=os.getenv("OPENAI_CHAT_MODEL", "gpt-3.5-turbo"),
+            chat_model=chat_model,
             crawl_model=os.getenv("OPENAI_CRAWL_MODEL", ""),
             max_tokens=int(max_tokens) if max_tokens else 8192,
+            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
+            anthropic_base_url=os.getenv("ANTHROPIC_BASE_URL", ""),
+            anthropic_chat_model=os.getenv("ANTHROPIC_CHAT_MODEL", "claude-sonnet-4-20250514"),
+            router_model=os.getenv("ROUTER_MODEL", chat_model),
+            fast_model=os.getenv("FAST_MODEL", chat_model),
+            standard_model=os.getenv("STANDARD_MODEL", chat_model),
+            deep_model=os.getenv("DEEP_MODEL", "claude-sonnet-4-20250514"),
         )
 
 

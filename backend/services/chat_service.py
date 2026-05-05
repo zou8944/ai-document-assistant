@@ -55,6 +55,7 @@ class ChatService:
             bound_collection_id=chat.bound_collection_id,
             message_count=chat.message_count or 0,
             created_at=chat.created_at.isoformat() if chat.created_at else "",
+            updated_at=chat.updated_at.isoformat() if chat.updated_at else "",
             last_message_at=chat.last_message_at.isoformat() if chat.last_message_at else None
         )
 
