@@ -4,6 +4,9 @@ from typing import Optional
 
 
 class QueryIntent(Enum):
+    CHITCHAT = "chitchat"
+    META = "meta"
+    OFF_TOPIC = "off_topic"
     DIRECT_ANSWER = "direct_answer"
     LOCATE = "locate"
     RECOMMEND = "recommend"
@@ -28,6 +31,7 @@ class RouterResult:
     suggested_mode: ProcessingMode
     complexity_score: int
     rewritten_queries: list[str]
+    requires_retrieval: bool = True
 
 
 @dataclass

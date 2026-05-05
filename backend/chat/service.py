@@ -90,38 +90,53 @@ class ChatService:
 
             yield SSEEvent(SSEEventType.STATUS, {"stage": "searching", "message": "检索相关文档..."})
 
-            t0 = time.perf_counter()
-            search_result, collection_infos = await self.orchestrator.retrieve(
-                intent=router_result.intent,
-                queries=router_result.rewritten_queries,
-                collection_ids=collection_ids,
-                top_k=15
-            )
-            timings["document_retrieval_ms"] = round((time.perf_counter() - t0) * 1000)
+            if not router_result.requires_retrieval:
+                timings["document_retrieval_ms"] = 0
+                yield SSEEvent(SSEEventType.SOURCES, {"documents": [], "total_found": 0})
+                collection_infos = await self.orchestrator.fetch_collection_overviews(collection_ids)
 
-            yield SSEEvent(SSEEventType.SOURCES, {
-                "documents": [
-                    {
-                        "document_id": d.document_id,
-                        "document_name": d.document_name,
-                        "relevance_score": d.relevance_score,
-                        "source_type": d.source_type
-                    }
-                    for d in search_result.documents
-                ],
-                "total_found": search_result.total_found
-            })
+                yield SSEEvent(SSEEventType.STATUS, {"stage": "assembling", "message": "整理上下文..."})
+                t0 = time.perf_counter()
+                context = self.assembler.assemble_lite(
+                    intent=router_result.intent,
+                    query=query,
+                    collection_info=collection_infos,
+                    chat_history=chat_history
+                )
+                timings["context_assembly_ms"] = round((time.perf_counter() - t0) * 1000)
+            else:
+                t0 = time.perf_counter()
+                search_result, collection_infos = await self.orchestrator.retrieve(
+                    intent=router_result.intent,
+                    queries=router_result.rewritten_queries,
+                    collection_ids=collection_ids,
+                    top_k=15
+                )
+                timings["document_retrieval_ms"] = round((time.perf_counter() - t0) * 1000)
 
-            yield SSEEvent(SSEEventType.STATUS, {"stage": "assembling", "message": "整理上下文..."})
-            t0 = time.perf_counter()
-            context = self.assembler.assemble(
-                mode=router_result.suggested_mode,
-                query=query,
-                search_result=search_result,
-                collection_info=collection_infos,
-                chat_history=chat_history
-            )
-            timings["context_assembly_ms"] = round((time.perf_counter() - t0) * 1000)
+                yield SSEEvent(SSEEventType.SOURCES, {
+                    "documents": [
+                        {
+                            "document_id": d.document_id,
+                            "document_name": d.document_name,
+                            "relevance_score": d.relevance_score,
+                            "source_type": d.source_type
+                        }
+                        for d in search_result.documents
+                    ],
+                    "total_found": search_result.total_found
+                })
+
+                yield SSEEvent(SSEEventType.STATUS, {"stage": "assembling", "message": "整理上下文..."})
+                t0 = time.perf_counter()
+                context = self.assembler.assemble(
+                    mode=router_result.suggested_mode,
+                    query=query,
+                    search_result=search_result,
+                    collection_info=collection_infos,
+                    chat_history=chat_history
+                )
+                timings["context_assembly_ms"] = round((time.perf_counter() - t0) * 1000)
 
             yield SSEEvent(SSEEventType.STATUS, {"stage": "generating", "message": "生成回答..."})
             llm = self.llms[context.mode]

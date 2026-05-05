@@ -93,3 +93,14 @@ class RetrievalOrchestrator:
                     collection_infos.append(col_info)
 
         return search_result, collection_infos
+
+    async def fetch_collection_overviews(self, collection_ids: list[str] = None) -> list[CollectionInfo]:
+        """Lightweight overview for chitchat/meta paths: no document search, just collection metadata."""
+        if not collection_ids:
+            return []
+        collection_infos = []
+        for cid in collection_ids:
+            col_info = await self.document_index.get_collection_info(cid)
+            if col_info:
+                collection_infos.append(col_info)
+        return collection_infos

@@ -8,22 +8,30 @@ logger = logging.getLogger(__name__)
 
 ROUTER_SYSTEM_PROMPT = """你是一个查询分析专家。你的任务是分析用户的问题，判断其意图类别、复杂度，并推荐处理模式。
 
-## 意图类别（8种）
+## 意图类别（11种）
 
-1. direct_answer - 直接回答：用户询问某个概念、属性、值，答案通常在某一段落中
-2. locate - 定位/存在：用户想知道某个信息"在哪里"、"有没有"，需要指出文档位置
-3. recommend - 推荐/导航：用户问"应该先看什么"、"推荐哪个"，需要基于文档目录做推荐
-4. summarize - 总结概括：用户要求总结某篇或某类文档的核心内容
-5. compare - 比较/对比：用户对比两个或多个对象，需要分别检索后对比
-6. procedure - 步骤/流程：用户问"怎么做"、"如何操作"，需要找到步骤说明
-7. synthesize - 跨文档整合：用户要求整合多个文档中关于同一主题的内容
-8. analyze - 分析/判断：用户问"一致吗"、"完整吗"、"有风险吗"，需要分析判断
+### 非知识查询类（前3类,不需要检索文档）
+
+1. chitchat - 闲聊/问候：用户说"你好"/"hi"/"谢谢"/"在吗"/"早上好"等寒暄,无实质问题需要回答。不需要检索文档,友好回应即可。
+2. meta - 元问题：用户在问助手身份/能力/当前知识库概况,如"你能做什么"/"这个知识库有什么"/"你是谁"。不需要检索文档,仅基于知识库元数据简介即可。
+3. off_topic - 完全无关：用户问天气/新闻/笑话/政治等明显与知识库无关的问题。不需要检索文档,友好说明能力边界即可。
+
+### 知识查询类（后8类,需要检索文档）
+
+4. direct_answer - 直接回答：用户询问某个概念、属性、值,答案通常在某一段落中
+5. locate - 定位/存在：用户想知道某个信息"在哪里"、"有没有",需要指出文档位置
+6. recommend - 推荐/导航：用户问"应该先看什么"、"推荐哪个",需要基于文档目录做推荐
+7. summarize - 总结概括：用户要求总结某篇或某类文档的核心内容
+8. compare - 比较/对比：用户对比两个或多个对象,需要分别检索后对比
+9. procedure - 步骤/流程：用户问"怎么做"、"如何操作",需要找到步骤说明
+10. synthesize - 跨文档整合：用户要求整合多个文档中关于同一主题的内容
+11. analyze - 分析/判断：用户问"一致吗"、"完整吗"、"有风险吗",需要分析判断
 
 ## 处理模式
 
-- fast: 简单事实查询，预计上下文 < 8k，用轻量模型
-- standard: 标准查询，预计上下文 8k-50k，用中等模型
-- deep: 复杂查询，预计上下文 > 50k 或需要跨文档分析，用大上下文模型
+- fast: 简单查询,预计上下文 < 8k,用轻量模型
+- standard: 标准查询,预计上下文 8k-50k,用中等模型
+- deep: 复杂查询,预计上下文 > 50k 或需要跨文档分析,用大上下文模型
 
 ## 输出格式（JSON）
 
@@ -33,14 +41,16 @@ ROUTER_SYSTEM_PROMPT = """你是一个查询分析专家。你的任务是分析
   "reason": "判定理由",
   "suggested_mode": "fast|standard|deep",
   "complexity_score": 5,
+  "requires_retrieval": true,
   "rewritten_queries": ["检索query1", "检索query2"]
 }
 
 规则：
 - confidence 必须 0.0-1.0
 - complexity_score 必须 1-10
-- rewritten_queries 必须至少有一个，针对原问题优化为适合检索的 query
-- 如果涉及多个对象（如 A 和 B 的区别），rewritten_queries 应分别针对每个对象
+- requires_retrieval: chitchat/meta/off_topic 为 false,其余为 true
+- rewritten_queries: 非检索类(chitchat/meta/off_topic)可为空数组,其余必须至少有一个
+- 如果涉及多个对象(如 A 和 B 的区别),rewritten_queries 应分别针对每个对象
 """
 
 
@@ -103,7 +113,8 @@ class QueryRouter:
         try:
             result = json.loads(cleaned)
             # Validate required fields
-            intent = result.get("intent", "direct_answer")
+            intent_str = result.get("intent", "direct_answer")
+            intent = QueryIntent(intent_str)
             confidence = float(result.get("confidence", 0.5))
             reason = result.get("reason", "")
             suggested_mode = result.get("suggested_mode", "standard")
@@ -111,13 +122,20 @@ class QueryRouter:
             rewritten_queries = result.get("rewritten_queries", [query])
             if not isinstance(rewritten_queries, list):
                 rewritten_queries = [query]
+            # Determine whether retrieval is needed
+            if "requires_retrieval" in result:
+                requires_retrieval = bool(result["requires_retrieval"])
+            else:
+                no_retrieval_intents = {QueryIntent.CHITCHAT.value, QueryIntent.META.value, QueryIntent.OFF_TOPIC.value}
+                requires_retrieval = intent_str not in no_retrieval_intents
             return RouterResult(
-                intent=QueryIntent(intent),
+                intent=intent,
                 confidence=confidence,
                 reason=reason,
                 suggested_mode=ProcessingMode(suggested_mode),
                 complexity_score=complexity_score,
-                rewritten_queries=rewritten_queries
+                rewritten_queries=rewritten_queries,
+                requires_retrieval=requires_retrieval
             )
         except Exception as e:
             logger.error(f"Router JSON parse failed: {e}, raw: {response}")
@@ -127,5 +145,6 @@ class QueryRouter:
                 reason=f"解析失败，回退到默认: {e}",
                 suggested_mode=ProcessingMode.STANDARD,
                 complexity_score=5,
-                rewritten_queries=[query]
+                rewritten_queries=[query],
+                requires_retrieval=True
             )

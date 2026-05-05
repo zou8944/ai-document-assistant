@@ -1,7 +1,8 @@
 import logging
 from dataclasses import replace
+from typing import Optional
 
-from chat.models import AssembledContext, ProcessingMode, SearchResult
+from chat.models import AssembledContext, CollectionInfo, ProcessingMode, QueryIntent, SearchResult
 from models.rag import ChatMessageRoleEnum
 
 logger = logging.getLogger(__name__)
@@ -125,9 +126,8 @@ class ContextAssembler:
         if collection_context:
             user_content_parts.append(f"以下是你正在协助用户查阅的知识库概览：\n{collection_context}")
         if context_text:
-            user_content_parts.append(f"以下是与问题相关的文档内容：\n{context_text}")
-        user_content_parts.append(f"请基于以上内容回答问题：{query}")
-        user_content_parts.append('如果文档中没有相关信息，请明确说明"在现有文档中未找到相关信息"。')
+            user_content_parts.append(f"以下是相关的文档片段：\n{context_text}")
+        user_content_parts.append(f"用户问题：{query}")
 
         final_messages = messages.copy()
         final_messages.append({
@@ -172,11 +172,104 @@ class ContextAssembler:
         return "\n".join(parts)
 
     def _default_system_prompt(self) -> str:
-        return """你是一个专业的文档助手。你的任务是基于提供的文档内容回答用户问题。
+        return """你是一个专业的 AI 文档助手。基于文档内容回答用户问题。
 
 规则：
-1. 只基于提供的文档内容回答，不要编造信息
-2. 如果文档中没有相关信息，明确说"在现有文档中未找到相关信息"
+1. 只基于文档内容回答，不要编造信息
+2. 若文档未涉及该内容，直接说明文档中未涉及即可
 3. 使用 [来源: 文档名] 格式标注引用来源
 4. 回答简洁准确，不要过度发挥
 """
+
+    def assemble_lite(self, intent: QueryIntent, query: str,
+                      collection_info: Optional[list] = None,
+                      chat_history: Optional[list[dict]] = None) -> AssembledContext:
+        """Assemble context for chitchat/meta/off-topic queries: no document search."""
+        budget = MODE_BUDGETS[ProcessingMode.FAST]
+        reserved = RESERVED_TOKENS[ProcessingMode.FAST]
+        available = budget - reserved
+        if available < 0:
+            available = 0
+
+        system_prompt = self._lite_system_prompt(intent)
+        available -= self._count_tokens(system_prompt)
+
+        collection_context = ""
+        if collection_info:
+            for col in collection_info:
+                brief = self._format_collection_info_brief(col)
+                tokens = self._count_tokens(brief)
+                if available - tokens >= 0:
+                    collection_context += brief
+                    available -= tokens
+
+        messages: list[dict[str, str]] = []
+        if chat_history:
+            for item in reversed(chat_history):
+                if hasattr(item, "role"):
+                    role = item.role.value if hasattr(item.role, "value") else str(item.role)
+                    content = item.message if hasattr(item, "message") else item.content
+                else:
+                    role = item.get("role", "")
+                    content = item.get("content", "") or item.get("message", "")
+
+                role_str = "user" if role in ("user", "USER", ChatMessageRoleEnum.USER) else "assistant"
+                msg_text = f"{role_str}: {content}"
+                msg_tokens = self._count_tokens(msg_text)
+                if available - msg_tokens >= 0:
+                    messages.insert(0, {"role": role_str, "content": content})
+                    available -= msg_tokens
+                else:
+                    break
+
+        user_parts = []
+        if collection_context:
+            user_parts.append(f"你当前正在协助用户查阅的知识库概况:\n{collection_context}")
+        user_parts.append(f"用户消息:{query}")
+
+        final_messages = messages.copy()
+        final_messages.append({
+            "role": "user",
+            "content": "\n\n".join(user_parts)
+        })
+
+        total_tokens = min(budget, budget - available)
+
+        return AssembledContext(
+            system_prompt=system_prompt,
+            messages=final_messages,
+            context_documents=[],
+            collection_info=collection_info or [],
+            estimated_tokens=total_tokens,
+            mode=ProcessingMode.FAST
+        )
+
+    def _lite_system_prompt(self, intent: QueryIntent) -> str:
+        if intent and getattr(intent, "value", None) == "meta":
+            return """你是一个友好的 AI 文档助手。当用户询问你的能力或当前知识库概况时:
+- 友好简洁地回应,介绍自己是知识库问答助手
+- 如果提供了知识库概况,顺带用一两句话介绍当前知识库的主题与范围
+- 欢迎用户针对文档内容提问
+- 不要捏造文档内容
+"""
+        return """你是一个友好的 AI 文档助手。当用户进行问候、寒暄或闲聊时:
+- 友好、简洁地回应,语气自然
+- 如果提供了知识库概况,顺带用一两句话介绍当前知识库的主题与范围,并欢迎用户提问
+- 不要捏造文档内容
+- 不要说"在文档中未找到相关信息"——用户此刻并未在提问知识点
+"""
+
+    def _format_collection_info_brief(self, col: CollectionInfo) -> str:
+        parts = [f"\n- 知识库: {col.name}"]
+        if col.description:
+            parts.append(f"  描述: {col.description}")
+        if col.readme_content:
+            readme = col.readme_content[:200]
+            if len(col.readme_content) > 200:
+                readme += "..."
+            parts.append(f"  README: {readme}")
+        if col.categories:
+            cats = ", ".join(c.get("name", "未命名") for c in col.categories[:5])
+            parts.append(f"  分组: {cats}")
+        parts.append(f"  共 {col.document_count} 篇文档")
+        return "\n".join(parts)
