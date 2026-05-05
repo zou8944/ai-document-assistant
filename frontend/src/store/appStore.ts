@@ -10,6 +10,10 @@ interface AppStore extends AppState {
   // Layout state
   sidebarWidth: number
 
+  // Doc chat sidebar state
+  docChatSidebarOpen: boolean
+  docChatSidebarWidth: number
+
   // Language display preference: 'source' = original language, 'zh' = Chinese
   displayLanguage: 'source' | 'zh'
 
@@ -18,6 +22,8 @@ interface AppStore extends AppState {
   setActiveKnowledgeBase: (id: string | null) => void
   setActiveChat: (id: string | null) => void
   setSidebarWidth: (width: number) => void
+  setDocChatSidebarOpen: (open: boolean) => void
+  setDocChatSidebarWidth: (width: number) => void
   setDisplayLanguage: (lang: 'source' | 'zh') => void
   addKnowledgeBase: (kb: KnowledgeBase) => void
   updateKnowledgeBase: (id: string, updates: Partial<KnowledgeBase>) => void
@@ -61,6 +67,8 @@ export const useAppStore = create<AppStore>()(
         // Initial state
         activeSidebarSection: 'knowledge',
         sidebarWidth: 256, // 16rem equivalent
+        docChatSidebarOpen: false,
+        docChatSidebarWidth: 320,
         displayLanguage: 'zh',
         knowledgeBases: [],
         chatSessions: [],
@@ -84,6 +92,20 @@ export const useAppStore = create<AppStore>()(
               200,
               Math.min(
                 typeof window !== 'undefined' ? window.innerWidth * 0.5 : 400,
+                width
+              )
+            )
+          }),
+
+        setDocChatSidebarOpen: (open) =>
+          set({ docChatSidebarOpen: open }),
+
+        setDocChatSidebarWidth: (width) =>
+          set({
+            docChatSidebarWidth: Math.max(
+              240,
+              Math.min(
+                typeof window !== 'undefined' ? window.innerWidth * 0.4 : 500,
                 width
               )
             )
@@ -180,6 +202,8 @@ export const useAppStore = create<AppStore>()(
           chatSessions: state.chatSessions,
           settings: state.settings,
           sidebarWidth: state.sidebarWidth,
+          docChatSidebarOpen: state.docChatSidebarOpen,
+          docChatSidebarWidth: state.docChatSidebarWidth,
           displayLanguage: state.displayLanguage,
         })
       }

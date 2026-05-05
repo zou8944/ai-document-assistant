@@ -27,6 +27,7 @@ import { UrlInputDialog } from '../InputDialog'
 import FileUploadModal from '../FileUploadModal'
 import ReadmePanel from './ReadmePanel'
 import DocReader from './DocReader'
+import DocChatSidebar from '../chat/DocChatSidebar'
 import {
   parseCategories,
   findCategoryForPath,
@@ -75,7 +76,18 @@ const getTaskBgClass = (task: APITask, isSelected: boolean): string => {
 export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = ({
   className,
 }) => {
-  const { getCurrentKnowledgeBase, setActiveKnowledgeBase, displayLanguage, setDisplayLanguage, deleteKnowledgeBase } = useAppStore()
+  const {
+    getCurrentKnowledgeBase,
+    setActiveKnowledgeBase,
+    displayLanguage,
+    setDisplayLanguage,
+    deleteKnowledgeBase,
+    addChatSession,
+    docChatSidebarOpen,
+    setDocChatSidebarOpen,
+    docChatSidebarWidth,
+    setDocChatSidebarWidth,
+  } = useAppStore()
   const apiClient = useAPIClient()
   const currentKb = getCurrentKnowledgeBase()
 
@@ -95,10 +107,13 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const [searching, setSearching] = useState(false)
 
   // Sidebar state
-  const [sidebarWidth, setSidebarWidth] = useState(260)
+  const [docListSidebarWidth, setDocListSidebarWidth] = useState(260)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
-  const [isDragging, setIsDragging] = useState(false)
   const sidebarRef = useRef<HTMLDivElement>(null)
+
+  // Bound chat state
+  const [boundChatId, setBoundChatId] = useState<string | null>(null)
+  const initializedCollectionsRef = useRef<Set<string>>(new Set())
 
   // Import & Task state
   const [importCollapsed, setImportCollapsed] = useState(true)
@@ -340,27 +355,27 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     })
   }, [])
 
-  // Drag to resize sidebar
-  const handleDragStart = useCallback((e: React.MouseEvent) => {
+  // Drag to resize left sidebar
+  const handleLeftDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
-    setIsDragging(true)
     const startX = e.clientX
-    const startWidth = sidebarWidth
+    const startWidth = docListSidebarWidth
 
     const handleMouseMove = (e: MouseEvent) => {
       const newWidth = Math.max(200, Math.min(500, startWidth + e.clientX - startX))
-      setSidebarWidth(newWidth)
+      setDocListSidebarWidth(newWidth)
     }
 
     const handleMouseUp = () => {
-      setIsDragging(false)
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
 
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
-  }, [sidebarWidth])
+  }, [docListSidebarWidth])
+
+  // Drag to resize right chat sidebar (handled by DocChatSidebar component)
 
   // Import handlers
   const handleUrlDialogConfirm = async (config: {
@@ -644,6 +659,66 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     }
     loadData()
   }, [currentKb?.id])
+
+  // Initialize or find bound chat for current collection
+  useEffect(() => {
+    if (!currentKb) {
+      setBoundChatId(null)
+      return
+    }
+
+    if (initializedCollectionsRef.current.has(currentKb.id)) return
+    initializedCollectionsRef.current.add(currentKb.id)
+
+    const initBoundChat = async () => {
+      try {
+        // Try to find on backend
+        const response = await apiClient.listChats()
+        const data = extractData(response)
+        const boundChat = data.chats.find(
+          (chat: any) => chat.bound_collection_id === currentKb.id
+        )
+
+        if (boundChat) {
+          // Add to store if not present
+          const newSession = {
+            id: boundChat.chat_id,
+            name: boundChat.name,
+            knowledgeBaseIds: boundChat.collection_ids,
+            createdAt: boundChat.created_at,
+            lastMessageAt: boundChat.last_message_at || boundChat.created_at,
+            messageCount: boundChat.message_count || 0,
+            boundCollectionId: boundChat.bound_collection_id,
+          }
+          addChatSession(newSession)
+          setBoundChatId(boundChat.chat_id)
+        } else {
+          // Create new bound chat
+          const createResponse = await apiClient.createChat({
+            name: currentKb.name,
+            collection_ids: [currentKb.id],
+            bound_collection_id: currentKb.id,
+          })
+          const newChat = extractData(createResponse)
+          const newSession = {
+            id: newChat.chat_id,
+            name: newChat.name,
+            knowledgeBaseIds: newChat.collection_ids,
+            createdAt: newChat.created_at,
+            lastMessageAt: newChat.last_message_at || newChat.created_at,
+            messageCount: newChat.message_count || 0,
+            boundCollectionId: newChat.bound_collection_id,
+          }
+          addChatSession(newSession)
+          setBoundChatId(newChat.chat_id)
+        }
+      } catch (error) {
+        console.error('初始化绑定聊天失败:', error)
+      }
+    }
+
+    initBoundChat()
+  }, [currentKb?.id, addChatSession, apiClient])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -989,13 +1064,13 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
         </div>
       </div>
 
-      {/* Main Content: Two-column layout */}
-      <div className={clsx('flex-1 flex overflow-hidden', isDragging && 'select-none')}>
+      {/* Main Content: Two or three-column layout */}
+      <div className="flex-1 flex overflow-hidden relative">
         {/* Left: Accordion Sidebar */}
         <div
           ref={sidebarRef}
           className="flex-shrink-0 border-r border-gray-200/50 bg-white/50 backdrop-blur-sm flex flex-col overflow-hidden"
-          style={{ width: sidebarWidth }}
+          style={{ width: docListSidebarWidth }}
         >
           {/* Sidebar header */}
           <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200/30 flex-shrink-0">
@@ -1150,16 +1225,15 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
           )}
         </div>
 
-        {/* Drag handle */}
+        {/* Left drag handle */}
         <div
-          className="w-1 flex-shrink-0 hover:bg-blue-400/50 active:bg-blue-500/60 transition-colors"
-          style={{ cursor: isDragging ? 'col-resize' : 'col-resize' }}
-          onMouseDown={handleDragStart}
+          className="w-1 flex-shrink-0 hover:bg-blue-400/50 active:bg-blue-500/60 transition-colors cursor-col-resize"
+          onMouseDown={handleLeftDragStart}
           title="拖动调整宽度"
         />
 
-        {/* Right: Detail Panel */}
-        <div className={clsx('flex-1 flex flex-col overflow-hidden bg-gray-50/30', isDragging && 'pointer-events-none')}>
+        {/* Middle: Detail Panel */}
+        <div className="flex-1 flex flex-col overflow-hidden bg-gray-50/30">
           {showReader && selectedDoc ? (
             <DocReader
               doc={{ id: selectedDoc.id, name: selectedDoc.name, nameTranslated: selectedDoc.nameTranslated, url: selectedDoc.url }}
@@ -1188,6 +1262,16 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
             </div>
           )}
         </div>
+
+        {/* Right: Doc Chat Sidebar */}
+        <DocChatSidebar
+          documentId={selectedDocId}
+          chatId={boundChatId}
+          isOpen={docChatSidebarOpen}
+          onToggle={() => setDocChatSidebarOpen(!docChatSidebarOpen)}
+          width={docChatSidebarWidth}
+          onResize={setDocChatSidebarWidth}
+        />
       </div>
 
       {/* Modals */}

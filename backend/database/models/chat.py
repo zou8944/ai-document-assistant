@@ -37,6 +37,14 @@ class Chat(Base):
         doc="Associated collection IDs (JSON array)"
     )
 
+    # Collection binding
+    bound_collection_id: Mapped[Optional[str]] = mapped_column(
+        String(32),
+        nullable=True,
+        unique=True,
+        doc="Bound collection ID for collection-bound chats"
+    )
+
     # Statistics
     message_count: Mapped[int] = mapped_column(
         Integer,
@@ -78,6 +86,7 @@ class Chat(Base):
         ),
         Index("idx_chats_updated_at", "updated_at"),
         Index("idx_chats_last_message_at", "last_message_at"),
+        Index("idx_chats_bound_collection_id", "bound_collection_id"),
     )
 
     def __repr__(self) -> str:

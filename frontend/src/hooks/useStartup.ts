@@ -78,7 +78,7 @@ export const useStartup = () => {
         .then(() => {
           onServerReady()
         })
-        .catch((error) => {
+        .catch((error: Error) => {
           setState({
             isLoading: false,
             isReady: false,

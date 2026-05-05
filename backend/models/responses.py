@@ -155,8 +155,10 @@ class ChatResponse(BaseModel):
     chat_id: str = Field(..., description="Chat ID")
     name: str = Field(..., description="Chat name")
     collection_ids: list[str] = Field(..., description="Knowledge base collection IDs")
+    bound_collection_id: Optional[str] = Field(None, description="Bound collection ID")
     message_count: int = Field(..., description="Number of messages in chat")
     created_at: str = Field(..., description="Creation timestamp")
+    updated_at: str = Field(..., description="Last update timestamp")
     last_message_at: Optional[str] = Field(None, description="Last message timestamp")
 
 

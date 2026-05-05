@@ -36,7 +36,8 @@ async def create_chat(request_data: CreateChatRequest, request: Request):
     # Create chat
     chat = await chat_service.create_chat(
         name=request_data.name,
-        collection_ids=request_data.collection_ids
+        collection_ids=request_data.collection_ids,
+        bound_collection_id=request_data.bound_collection_id
     )
 
     logger.info(f"Created chat {chat.chat_id} with name '{chat.name}'")

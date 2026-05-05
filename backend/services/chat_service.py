@@ -52,6 +52,7 @@ class ChatService:
             chat_id=chat.id,
             name=chat.name,
             collection_ids=json.loads(chat.collection_ids) if chat.collection_ids else [],
+            bound_collection_id=chat.bound_collection_id,
             message_count=chat.message_count or 0,
             created_at=chat.created_at.isoformat() if chat.created_at else "",
             last_message_at=chat.last_message_at.isoformat() if chat.last_message_at else None
@@ -73,12 +74,13 @@ class ChatService:
             created_at=message.created_at.isoformat() if message.created_at else ""
         )
 
-    async def create_chat(self, name: str, collection_ids: list[str]) -> ChatResponse:
+    async def create_chat(self, name: str, collection_ids: list[str], bound_collection_id: Optional[str] = None) -> ChatResponse:
         """Create a new chat"""
         created_chat = self.chat_repo.create_by_model(ChatDTO(
             name=name,
             collection_ids=json.dumps(collection_ids),
-            message_count=0
+            message_count=0,
+            bound_collection_id=bound_collection_id
         ))
         logger.info(f"Created chat {created_chat.id} with name '{name}'")
 

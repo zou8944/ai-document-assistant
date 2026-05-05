@@ -14,6 +14,10 @@ export { default as AddKnowledgeBaseModal } from './knowledge/AddKnowledgeBaseMo
 // Chat components
 export { default as ChatInterface } from './chat/ChatInterface'
 export { default as KnowledgeBaseSelector } from './chat/KnowledgeBaseSelector'
+export { default as MarkdownContent } from './chat/MarkdownContent'
+export { default as SourceReferences } from './chat/SourceReferences'
+export { default as DocChatSidebar } from './chat/DocChatSidebar'
+export { default as DocChatPanel } from './chat/DocChatPanel'
 
 // Settings components
 export { default as SettingsPage } from './settings/SettingsPage'

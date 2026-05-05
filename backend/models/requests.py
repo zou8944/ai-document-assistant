@@ -70,12 +70,14 @@ class CreateChatRequest(BaseModel):
     """Request model for creating a chat"""
     name: str = Field(..., description="Chat name", min_length=1, max_length=200)
     collection_ids: list[str] = Field(..., description="Knowledge base collection IDs")
+    bound_collection_id: Optional[str] = Field(None, description="Bound collection ID for collection-bound chats")
 
 
 class UpdateChatRequest(BaseModel):
     """Request model for updating a chat"""
     name: Optional[str] = Field(None, description="Chat name", min_length=1, max_length=200)
     collection_ids: Optional[list[str]] = Field(None, description="Knowledge base collection IDs")
+    # Note: bound_collection_id is not included because binding is immutable after creation
 
 
 class ChatMessageRequest(BaseModel):

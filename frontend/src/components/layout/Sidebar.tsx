@@ -24,6 +24,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
     setActiveSidebarSection,
     chatSessions,
     setActiveChat,
+    setActiveKnowledgeBase,
     activeChat,
     addChatSession,
     updateChatSession,
@@ -61,8 +62,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
   }
 
   const handleChatClick = (chatId: string) => {
-    setActiveChat(chatId)
-    setActiveSidebarSection('chat')
+    const chat = chatSessions.find(c => c.id === chatId)
+    if (chat?.boundCollectionId) {
+      // Bound chat: switch to knowledge section
+      setActiveKnowledgeBase(chat.boundCollectionId)
+      setActiveSidebarSection('knowledge')
+    } else {
+      setActiveChat(chatId)
+      setActiveSidebarSection('chat')
+    }
   }
 
   const handleChatRename = (chatId: string, newName: string) => {

@@ -67,6 +67,16 @@ class ChatRepository(BaseRepository[Chat, ChatDTO]):
             entities = list(session.scalars(sql))
             return [self.dto_class.from_orm(item) for item in entities]
 
+    def get_by_bound_collection(self, collection_id: str) -> Optional[ChatDTO]:
+        """Get collection-bound chat by collection ID."""
+        with session_context() as session:
+            entity = session.scalar(
+                select(Chat).where(Chat.bound_collection_id == collection_id)
+            )
+            if entity is None:
+                return None
+            return self.dto_class.from_orm(entity)
+
 
 class ChatMessageRepository(BaseRepository[ChatMessage, ChatMessageDTO]):
     """Repository for ChatMessage operations."""

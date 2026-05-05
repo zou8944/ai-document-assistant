@@ -20,6 +20,7 @@ export interface ChatSession {
   createdAt: string
   lastMessageAt: string
   messageCount: number
+  boundCollectionId?: string
 }
 
 export interface Document {
@@ -73,4 +74,8 @@ export interface AppState {
   activeKnowledgeBase: string | null
   activeChat: string | null
   settings: AppSettings
+  sidebarWidth: number
+  docChatSidebarOpen: boolean
+  docChatSidebarWidth: number
+  displayLanguage: 'source' | 'zh'
 }

@@ -92,13 +92,17 @@ export interface Chat {
   chat_id: string
   name: string
   collection_ids: string[]
+  bound_collection_id?: string
+  message_count: number
   created_at: string
   updated_at: string
+  last_message_at?: string
 }
 
 export interface CreateChatRequest {
   name: string
   collection_ids: string[]
+  bound_collection_id?: string
 }
 
 export interface UpdateChatRequest {
