@@ -11,12 +11,21 @@ import {
   SSEEvent,
 } from '../services/apiClient'
 
+export interface StageTiming {
+  intent_analysis_ms: number
+  document_retrieval_ms: number
+  context_assembly_ms: number
+  generation_ms: number
+  total_ms: number
+}
+
 export interface Message {
   id: string
   type: 'user' | 'assistant'
   content: string
   timestamp: string
   sources?: SourceReference[]
+  timings?: StageTiming
 }
 
 const mapAPIMessageToUIMessage = (msg: APIChatMessage): Message => {
@@ -161,6 +170,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
         {
           const finalContent = event.data?.content || streamingContentRef.current
           const finalSources = event.data?.sources || streamingSourcesRef.current
+          const finalTimings = event.data?.timings || undefined
 
           if (finalContent) {
             const aiMessage: Message = {
@@ -169,6 +179,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
               content: finalContent,
               timestamp: new Date().toISOString(),
               sources: finalSources,
+              timings: finalTimings,
             }
             setMessages((prev) => [...prev, aiMessage])
           }

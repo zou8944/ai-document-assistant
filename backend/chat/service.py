@@ -1,6 +1,7 @@
 import json
 import logging
-from typing import AsyncIterator
+import time
+from collections.abc import AsyncIterator
 
 from chat.context.assembler import ContextAssembler
 from chat.generation.base import BaseLLMService
@@ -51,6 +52,8 @@ class ChatService:
     async def process(self, chat_id: str, query: str) -> AsyncIterator[SSEEvent]:
         full_response = ""
         context = None
+        timings = {}
+        total_start = time.perf_counter()
 
         try:
             chat = self.chat_repo.get_by_id(chat_id)
@@ -75,7 +78,9 @@ class ChatService:
             )
 
             yield SSEEvent(SSEEventType.STATUS, {"stage": "analyzing", "message": "分析查询意图..."})
+            t0 = time.perf_counter()
             router_result = await self.router.analyze(query, chat_history_dicts)
+            timings["intent_analysis_ms"] = round((time.perf_counter() - t0) * 1000)
             yield SSEEvent(SSEEventType.INTENT, {
                 "intent": router_result.intent.value,
                 "confidence": router_result.confidence,
@@ -85,12 +90,14 @@ class ChatService:
 
             yield SSEEvent(SSEEventType.STATUS, {"stage": "searching", "message": "检索相关文档..."})
 
+            t0 = time.perf_counter()
             search_result, collection_infos = await self.orchestrator.retrieve(
                 intent=router_result.intent,
                 queries=router_result.rewritten_queries,
                 collection_ids=collection_ids,
                 top_k=15
             )
+            timings["document_retrieval_ms"] = round((time.perf_counter() - t0) * 1000)
 
             yield SSEEvent(SSEEventType.SOURCES, {
                 "documents": [
@@ -106,6 +113,7 @@ class ChatService:
             })
 
             yield SSEEvent(SSEEventType.STATUS, {"stage": "assembling", "message": "整理上下文..."})
+            t0 = time.perf_counter()
             context = self.assembler.assemble(
                 mode=router_result.suggested_mode,
                 query=query,
@@ -113,10 +121,12 @@ class ChatService:
                 collection_info=collection_infos,
                 chat_history=chat_history
             )
+            timings["context_assembly_ms"] = round((time.perf_counter() - t0) * 1000)
 
             yield SSEEvent(SSEEventType.STATUS, {"stage": "generating", "message": "生成回答..."})
             llm = self.llms[context.mode]
 
+            t0 = time.perf_counter()
             full_response = ""
             async for chunk in llm.stream_generate(
                 system_prompt=context.system_prompt,
@@ -127,8 +137,10 @@ class ChatService:
                 if chunk:
                     full_response += chunk
                     yield SSEEvent(SSEEventType.CONTENT, {"delta": chunk})
+            timings["generation_ms"] = round((time.perf_counter() - t0) * 1000)
+            timings["total_ms"] = round((time.perf_counter() - total_start) * 1000)
 
-            yield SSEEvent(SSEEventType.DONE, {})
+            yield SSEEvent(SSEEventType.DONE, {"timings": timings})
 
         except Exception as e:
             logger.error(f"Chat processing error: {e}", exc_info=True)

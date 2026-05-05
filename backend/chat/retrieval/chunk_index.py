@@ -20,6 +20,16 @@ class ChunkIndex(BaseIndex):
         targets = collection_ids or [self.collection_name]
         all_documents = []
 
+        # Generate query embedding using the same model used for indexing
+        try:
+            if hasattr(self.embedding_model, "aembed_query"):
+                query_embedding = await self.embedding_model.aembed_query(query)
+            else:
+                query_embedding = self.embedding_model.embed_query(query)
+        except Exception as e:
+            logger.error(f"Failed to embed query '{query}': {e}")
+            return SearchResult(documents=[], search_type="chunk_vector", total_found=0)
+
         for target in targets:
             try:
                 collection = await self.chroma.get_collection(target)
@@ -27,7 +37,7 @@ class ChunkIndex(BaseIndex):
                     logger.warning(f"Collection '{target}' not found")
                     continue
                 results = collection.query(
-                    query_texts=[query],
+                    query_embeddings=[query_embedding],
                     n_results=top_k,
                     where=filters
                 )

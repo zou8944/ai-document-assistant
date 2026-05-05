@@ -7,11 +7,40 @@ import {
   PaperAirplaneIcon,
   UserIcon,
   CpuChipIcon,
+  ClockIcon,
+  MagnifyingGlassIcon,
+  BookOpenIcon,
+  PuzzlePieceIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
-import { useChat } from '../../hooks/useChat'
+import { useChat, StageTiming } from '../../hooks/useChat'
 import MarkdownContent from './MarkdownContent'
 import SourceReferences from './SourceReferences'
+
+const TimingDisplay: React.FC<{ timings: StageTiming }> = ({ timings }) => {
+  const items = [
+    { label: '意图分析', ms: timings.intent_analysis_ms, Icon: SparklesIcon },
+    { label: '文档检索', ms: timings.document_retrieval_ms, Icon: MagnifyingGlassIcon },
+    { label: '整理上下文', ms: timings.context_assembly_ms, Icon: PuzzlePieceIcon },
+    { label: '生成回答', ms: timings.generation_ms, Icon: BookOpenIcon },
+  ]
+
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-gray-400">
+      <div className="flex items-center space-x-0.5">
+        <ClockIcon className="w-2.5 h-2.5" />
+        <span>总计 {(timings.total_ms / 1000).toFixed(1)}s</span>
+      </div>
+      {items.map((item) => (
+        <div key={item.label} className="flex items-center space-x-0.5" title={`${item.label}: ${item.ms}ms`}>
+          <item.Icon className="w-2.5 h-2.5" />
+          <span>{item.label} {item.ms}ms</span>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 interface DocChatPanelProps {
   chatId: string | null
@@ -112,6 +141,9 @@ export const DocChatPanel: React.FC<DocChatPanelProps> = ({ chatId, documentId }
                 )}>
                   {formatTime(msg.timestamp)}
                 </div>
+                {msg.type === 'assistant' && msg.timings && (
+                  <TimingDisplay timings={msg.timings} />
+                )}
               </div>
             </div>
           </div>
@@ -125,17 +157,18 @@ export const DocChatPanel: React.FC<DocChatPanelProps> = ({ chatId, documentId }
                 <CpuChipIcon className="w-3 h-3" />
               </div>
               <div className="flex-1 min-w-0">
+                {processingStatus && (
+                  <div className="mb-1 flex items-center space-x-1 text-[10px] text-gray-500">
+                    <div className="w-2.5 h-2.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    <span>{processingStatus}</span>
+                  </div>
+                )}
                 <div className="px-3 py-2 rounded-xl bg-white/80 backdrop-blur-sm border border-gray-200/50 text-gray-900 text-xs">
                   {streamingContent ? (
                     <>
                       <MarkdownContent content={streamingContent} />
                       <div className="mt-2 w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
                     </>
-                  ) : processingStatus ? (
-                    <div className="flex items-center space-x-2 text-xs text-gray-600">
-                      <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                      <span>{processingStatus}</span>
-                    </div>
                   ) : (
                     <div className="flex space-x-1">
                       <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" />

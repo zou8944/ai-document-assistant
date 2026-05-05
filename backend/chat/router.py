@@ -64,6 +64,7 @@ class QueryRouter:
         self.llm = llm
 
     async def analyze(self, query: str, chat_history: list[dict] = None) -> RouterResult:
+        logger.info(f"QueryRouter.analyze() started for query: {query[:50]}...")
         history_text = ""
         if chat_history:
             history_lines = []
@@ -85,12 +86,14 @@ class QueryRouter:
 
 请分析上述问题，按要求的 JSON 格式输出。"""
 
+        logger.info(f"QueryRouter.analyze() calling llm.generate() with model={getattr(self.llm, 'model', 'unknown')}")
         response = await self.llm.generate(
             system_prompt=ROUTER_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
             max_tokens=1024
         )
+        logger.info(f"QueryRouter.analyze() llm.generate() completed, response length={len(response)}")
 
         cleaned = _strip_markdown_code_fences(response)
 

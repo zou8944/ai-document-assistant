@@ -8,6 +8,11 @@ import {
   PaperAirplaneIcon,
   UserIcon,
   CpuChipIcon,
+  ClockIcon,
+  MagnifyingGlassIcon,
+  BookOpenIcon,
+  PuzzlePieceIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { useAppStore } from '../../store/appStore'
@@ -16,12 +21,36 @@ import {
   extractData,
   UpdateChatRequest,
 } from '../../services/apiClient'
-import { useChat } from '../../hooks/useChat'
+import { useChat, StageTiming } from '../../hooks/useChat'
 import KnowledgeBaseSelector from './KnowledgeBaseSelector'
 import DocumentPicker from './DocumentPicker'
 import RichTextInput from './RichTextInput'
 import MarkdownContent from './MarkdownContent'
 import SourceReferences from './SourceReferences'
+
+const TimingDisplay: React.FC<{ timings: StageTiming }> = ({ timings }) => {
+  const items = [
+    { label: '意图分析', ms: timings.intent_analysis_ms, Icon: SparklesIcon },
+    { label: '文档检索', ms: timings.document_retrieval_ms, Icon: MagnifyingGlassIcon },
+    { label: '整理上下文', ms: timings.context_assembly_ms, Icon: PuzzlePieceIcon },
+    { label: '生成回答', ms: timings.generation_ms, Icon: BookOpenIcon },
+  ]
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-gray-400">
+      <div className="flex items-center space-x-0.5">
+        <ClockIcon className="w-3 h-3" />
+        <span>总计 {(timings.total_ms / 1000).toFixed(1)}s</span>
+      </div>
+      {items.map((item) => (
+        <div key={item.label} className="flex items-center space-x-0.5" title={`${item.label}: ${item.ms}ms`}>
+          <item.Icon className="w-3 h-3" />
+          <span>{item.label} {item.ms}ms</span>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 interface DocumentMention {
   id: string
@@ -227,6 +256,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                 )}>
                   {formatTime(msg.timestamp)}
                 </div>
+                {msg.type === 'assistant' && msg.timings && (
+                  <TimingDisplay timings={msg.timings} />
+                )}
               </div>
             </div>
           </div>
@@ -240,17 +272,18 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                 <CpuChipIcon className="w-4 h-4" />
               </div>
               <div className="flex-1 min-w-0">
+                {processingStatus && (
+                  <div className="mb-1.5 flex items-center space-x-1.5 text-xs text-gray-500">
+                    <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    <span>{processingStatus}</span>
+                  </div>
+                )}
                 <div className="px-4 py-3 rounded-2xl bg-white/80 backdrop-blur-sm border border-gray-200/50 text-gray-900 text-sm">
                   {streamingContent ? (
                     <>
                       <MarkdownContent content={streamingContent} />
                       <div className="mt-2 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
                     </>
-                  ) : processingStatus ? (
-                    <div className="flex items-center space-x-2 text-sm text-gray-600">
-                      <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                      <span>{processingStatus}</span>
-                    </div>
                   ) : (
                     <div className="flex space-x-1">
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />

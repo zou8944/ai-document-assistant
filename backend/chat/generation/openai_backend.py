@@ -29,27 +29,36 @@ class OpenAILLMService(BaseLLMService):
 
     async def generate(self, system_prompt: str, messages: list[dict],
                       temperature: float = 0.7, max_tokens: int = 4096) -> str:
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "system", "content": system_prompt}] + messages,
-            temperature=temperature,
-            max_tokens=max_tokens
-        )
+        logger.info(f"OpenAILLMService.generate() calling model={self.model} base_url={self.client.base_url}")
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "system", "content": system_prompt}] + messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=30,
+            )
+        except Exception as e:
+            logger.error(f"OpenAI API call failed for model={self.model}: {e}")
+            raise
         # Defensive: handle empty choices or missing content
         if not response.choices or not response.choices[0].message:
             logger.warning("OpenAI API returned empty choices")
             return ""
+        logger.info(f"OpenAILLMService.generate() completed, response length={len(response.choices[0].message.content or '')}")
         return response.choices[0].message.content or ""
 
     async def stream_generate(self, system_prompt: str, messages: list[dict],
                              temperature: float = 0.7,
                              max_tokens: int = 4096) -> AsyncIterator[str]:
+        logger.info(f"OpenAILLMService.stream_generate() calling model={self.model}")
         stream = await self.client.chat.completions.create(
             model=self.model,
             messages=[{"role": "system", "content": system_prompt}] + messages,
             temperature=temperature,
             max_tokens=max_tokens,
-            stream=True
+            stream=True,
+            timeout=60,
         )
         async for chunk in stream:
             if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
