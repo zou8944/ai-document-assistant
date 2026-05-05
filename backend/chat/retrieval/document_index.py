@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 
 from sqlalchemy import text
 
@@ -52,22 +53,45 @@ class DocumentIndex(BaseIndex):
                 )
 
     async def search(self, query: str, top_k: int = 10,
-               filters: dict = None) -> SearchResult:
-        safe_query = self._escape_wildcard(query)
-        pattern = f"%{safe_query}%"
-
+               filters: dict | None = None, collection_ids: list[str] | None = None) -> SearchResult:
         with session_context() as session:
-            sql = """
+            # Build multi-token ILIKE conditions for better matching with long queries
+            raw_tokens = re.findall(r'\b[a-zA-Z]{2,}\b|[\u4e00-\u9fff]{2,}', query)
+            tokens = [t.lower() for t in raw_tokens]
+
+            params: dict = {"top_k": top_k}
+            if not tokens:
+                safe_query = self._escape_wildcard(query)
+                pattern = f"%{safe_query}%"
+                condition = "(name ILIKE :query ESCAPE '\\' OR summary ILIKE :query ESCAPE '\\')"
+                params["query"] = pattern
+            else:
+                conditions = []
+                for i, token in enumerate(tokens):
+                    safe_token = self._escape_wildcard(token)
+                    pattern = f"%{safe_token}%"
+                    params[f"t{i}"] = pattern
+                    conditions.append(f"name ILIKE :t{i} ESCAPE '\\'")
+                    conditions.append(f"summary ILIKE :t{i} ESCAPE '\\'")
+                condition = "(" + " OR ".join(conditions) + ")"
+
+            sql = f"""
                 SELECT id, name, summary, keywords, uri
                 FROM documents
                 WHERE status = 'indexed'
-                  AND (name ILIKE :query ESCAPE '\\' OR summary ILIKE :query ESCAPE '\\')
+                  AND {condition}
             """
-            params: dict = {"query": pattern, "top_k": top_k}
 
-            if filters and filters.get("collection_id"):
-                sql += " AND collection_id = :col_id"
-                params["col_id"] = filters["collection_id"]
+            # Support both single collection_id in filters and collection_ids list
+            effective_collection_ids = collection_ids
+            if filters and filters.get("collection_id") and not effective_collection_ids:
+                effective_collection_ids = [filters["collection_id"]]
+
+            if effective_collection_ids:
+                placeholders = ", ".join(f":cid{i}" for i in range(len(effective_collection_ids)))
+                sql += f" AND collection_id IN ({placeholders})"
+                for i, cid in enumerate(effective_collection_ids):
+                    params[f"cid{i}"] = cid
 
             sql += " ORDER BY name LIMIT :top_k"
 
@@ -75,12 +99,17 @@ class DocumentIndex(BaseIndex):
 
             documents = []
             for row in result:
+                name_lower = (row[1] or "").lower()
+                summary_lower = (row[2] or "").lower()
+                matched_tokens = sum(1 for t in tokens if t in name_lower or t in summary_lower)
+                relevance_score = 0.5 + 0.5 * min(matched_tokens / max(len(tokens), 1), 1.0)
+
                 documents.append(RetrievedDocument(
                     document_id=row[0],
                     document_name=row[1],
                     document_uri=row[4] or "",
                     content=f"{row[1]}\n{row[2] or ''}",
-                    relevance_score=0.8,
+                    relevance_score=relevance_score,
                     source_type="document_index"
                 ))
 
@@ -90,7 +119,7 @@ class DocumentIndex(BaseIndex):
                 total_found=len(documents)
             )
 
-    async def get_all_documents(self, collection_ids: list[str] = None,
+    async def get_all_documents(self, collection_ids: list[str] | None = None,
                           limit: int = 1000) -> SearchResult:
         with session_context() as session:
             sql = """

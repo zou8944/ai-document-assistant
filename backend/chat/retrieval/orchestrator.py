@@ -15,7 +15,7 @@ class RetrievalOrchestrator:
         self.keyword_index = keyword_index
 
     async def retrieve(self, intent: QueryIntent, queries: list[str],
-                       collection_ids: list[str] = None,
+                       collection_ids: list[str] | None = None,
                        top_k: int = 10) -> tuple[SearchResult, list[CollectionInfo]]:
         if not queries:
             logger.warning("RetrievalOrchestrator: empty queries list, cannot retrieve.")
@@ -24,51 +24,41 @@ class RetrievalOrchestrator:
         all_documents = []
         search_type_parts = []
 
+        # Chunk top-k per intent
+        chunk_top_k_map = {
+            QueryIntent.DIRECT_ANSWER: 5,
+            QueryIntent.LOCATE: 5,
+            QueryIntent.SUMMARIZE: 10,
+            QueryIntent.COMPARE: 5,
+            QueryIntent.PROCEDURE: 8,
+            QueryIntent.SYNTHESIZE: 15,
+            QueryIntent.ANALYZE: 10,
+        }
+
         for query in queries:
-            if intent == QueryIntent.DIRECT_ANSWER:
-                result = await self.chunk_index.search(query, top_k=5, collection_ids=collection_ids)
-                all_documents.extend(result.documents)
-                search_type_parts.append("chunk_vector")
-
-            elif intent == QueryIntent.LOCATE:
-                kw_result = await self.keyword_index.search(query, top_k=10)
-                doc_result = await self.document_index.search(query, top_k=5)
-                all_documents.extend(kw_result.documents)
-                all_documents.extend(doc_result.documents)
-                search_type_parts.append("keyword+document")
-
-            elif intent == QueryIntent.RECOMMEND:
+            if intent == QueryIntent.RECOMMEND:
                 result = await self.document_index.get_all_documents(collection_ids)
                 all_documents.extend(result.documents)
                 search_type_parts.append("document_all")
                 break
 
-            elif intent == QueryIntent.SUMMARIZE:
-                result = await self.chunk_index.search(query, top_k=10, collection_ids=collection_ids)
-                all_documents.extend(result.documents)
-                search_type_parts.append("chunk_vector")
+            chunk_top_k = chunk_top_k_map.get(intent, 5)
 
-            elif intent == QueryIntent.COMPARE:
-                result = await self.chunk_index.search(query, top_k=5, collection_ids=collection_ids)
-                all_documents.extend(result.documents)
-                search_type_parts.append("chunk_vector")
+            # Hybrid retrieval: vector chunks + document title + keywords
+            chunk_result = await self.chunk_index.search(
+                query, top_k=chunk_top_k, collection_ids=collection_ids
+            )
+            doc_result = await self.document_index.search(
+                query, top_k=10, collection_ids=collection_ids
+            )
+            kw_result = await self.keyword_index.search(
+                query, top_k=20, collection_ids=collection_ids
+            )
 
-            elif intent == QueryIntent.PROCEDURE:
-                result = await self.chunk_index.search(query, top_k=8, collection_ids=collection_ids)
-                all_documents.extend(result.documents)
-                search_type_parts.append("chunk_vector")
-
-            elif intent == QueryIntent.SYNTHESIZE:
-                result = await self.chunk_index.search(query, top_k=15, collection_ids=collection_ids)
-                all_documents.extend(result.documents)
-                search_type_parts.append("chunk_vector_broad")
-
-            elif intent == QueryIntent.ANALYZE:
-                chunk_result = await self.chunk_index.search(query, top_k=10, collection_ids=collection_ids)
-                doc_result = await self.document_index.search(query, top_k=5)
-                all_documents.extend(chunk_result.documents)
-                all_documents.extend(doc_result.documents)
-                search_type_parts.append("chunk_vector+document")
+            all_documents.extend(chunk_result.documents)
+            all_documents.extend(doc_result.documents)
+            all_documents.extend(kw_result.documents)
+            search_type_parts.append("hybrid")
 
         # Deduplicate by document_id + chunk_index, keeping the highest relevance score
         best_docs: dict[str, RetrievedDocument] = {}
@@ -94,7 +84,7 @@ class RetrievalOrchestrator:
 
         return search_result, collection_infos
 
-    async def fetch_collection_overviews(self, collection_ids: list[str] = None) -> list[CollectionInfo]:
+    async def fetch_collection_overviews(self, collection_ids: list[str] | None = None) -> list[CollectionInfo]:
         """Lightweight overview for chitchat/meta paths: no document search, just collection metadata."""
         if not collection_ids:
             return []

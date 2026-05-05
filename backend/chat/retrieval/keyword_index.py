@@ -89,13 +89,21 @@ class KeywordIndex(BaseIndex):
                 """), rows)
 
     async def search(self, query: str, top_k: int = 20,
-              filters: dict = None) -> SearchResult:
-        keywords = [k.strip() for k in query.split() if len(k.strip()) >= 2]
-        if not keywords:
-            keywords = [query.strip()]
+              filters: dict | None = None, collection_ids: list[str] | None = None) -> SearchResult:
+        # Extract keywords using the same logic as indexing
+        words: set[str] = set()
+        for match in re.finditer(r'\b[a-zA-Z]{4,}\b', query):
+            words.add(match.group().lower())
+        try:
+            import jieba
+            for word in jieba.cut(query):
+                if len(word) >= 2:
+                    words.add(word)
+        except ImportError:
+            pass
 
-        # Guard against empty query
-        if not keywords or not any(keywords):
+        keywords = list(words)
+        if not keywords:
             return SearchResult(
                 documents=[],
                 search_type="keyword",
@@ -108,16 +116,29 @@ class KeywordIndex(BaseIndex):
         params["top_k"] = top_k
 
         with session_context() as session:
-            result = session.execute(text(f"""
-                SELECT document_id, document_name,
-                       COUNT(DISTINCT keyword) as match_count,
-                       STRING_AGG(DISTINCT context_snippet, ' | ') as snippets
-                FROM keyword_occurrences
-                WHERE keyword IN ({placeholders})
-                GROUP BY document_id, document_name
+            sql = f"""
+                SELECT ko.document_id, d.name as document_name,
+                       COUNT(DISTINCT ko.keyword) as match_count,
+                       STRING_AGG(DISTINCT ko.context_snippet, ' | ') as snippets
+                FROM keyword_occurrences ko
+                JOIN documents d ON ko.document_id = d.id
+                WHERE ko.keyword IN ({placeholders})
+                  AND d.status = 'indexed'
+            """
+
+            if collection_ids:
+                col_placeholders = ", ".join(f":cid{i}" for i in range(len(collection_ids)))
+                sql += f" AND d.collection_id IN ({col_placeholders})"
+                for i, cid in enumerate(collection_ids):
+                    params[f"cid{i}"] = cid
+
+            sql += """
+                GROUP BY ko.document_id, d.name
                 ORDER BY match_count DESC
                 LIMIT :top_k
-            """), params)
+            """
+
+            result = session.execute(text(sql), params)
 
             documents = []
             for row in result:
