@@ -5,19 +5,28 @@ from chat.models import CollectionInfo, QueryIntent, RetrievedDocument, SearchRe
 from chat.retrieval.chunk_index import ChunkIndex
 from chat.retrieval.document_index import DocumentIndex
 from chat.retrieval.keyword_index import KeywordIndex
+from chat.retrieval.relevance_judge import RelevanceJudge
 
 logger = logging.getLogger(__name__)
 
 
 class RetrievalOrchestrator:
-    def __init__(self, document_index: DocumentIndex, chunk_index: ChunkIndex, keyword_index: KeywordIndex):
+    def __init__(
+        self,
+        document_index: DocumentIndex,
+        chunk_index: ChunkIndex,
+        keyword_index: KeywordIndex,
+        relevance_judge: RelevanceJudge | None = None
+    ):
         self.document_index = document_index
         self.chunk_index = chunk_index
         self.keyword_index = keyword_index
+        self.relevance_judge = relevance_judge
 
     async def retrieve(self, intent: QueryIntent, queries: list[str],
                        collection_ids: list[str] | None = None,
-                       top_k: int = 25) -> tuple[SearchResult, list[CollectionInfo]]:
+                       top_k: int = 25,
+                       core_keywords: list[str] | None = None) -> tuple[SearchResult, list[CollectionInfo]]:
         if not queries:
             logger.warning("RetrievalOrchestrator: empty queries list, cannot retrieve.")
             return SearchResult(documents=[], search_type="", total_found=0), []
@@ -71,7 +80,7 @@ class RetrievalOrchestrator:
         for doc in all_documents:
             weight = source_weights.get(doc.source_type, 1.0)
             weighted_score = doc.relevance_score * weight
-            key = f"{doc.document_id}:{doc.chunk_index or 0}"
+            key = f"{doc.document_id}:{doc.chunk_index if doc.chunk_index is not None else 'full'}"
             if key not in best_docs or weighted_score > best_docs[key].relevance_score:
                 best_docs[key] = RetrievedDocument(
                     document_id=doc.document_id,
@@ -84,6 +93,15 @@ class RetrievalOrchestrator:
                 )
 
         unique_docs = sorted(best_docs.values(), key=lambda d: d.relevance_score, reverse=True)
+
+        # Apply document-level relevance filtering
+        if self.relevance_judge and intent not in {QueryIntent.CHITCHAT, QueryIntent.META, QueryIntent.OFF_TOPIC}:
+            unique_docs = await self.relevance_judge.filter_documents(
+                query=queries[0] if queries else "",
+                documents=unique_docs,
+                intent=intent,
+                core_keywords=core_keywords
+            )
 
         search_result = SearchResult(
             documents=unique_docs[:top_k],

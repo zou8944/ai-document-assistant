@@ -4,17 +4,19 @@ Application state management with type safety.
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 from fastapi import FastAPI, Request
 
 from models.config import AppConfig
 from chat.service import ChatService as NewChatService
 from chat.context.assembler import ContextAssembler
+from chat.context.expander import ContextExpander
 from chat.retrieval.document_index import DocumentIndex
 from chat.retrieval.chunk_index import ChunkIndex
 from chat.retrieval.keyword_index import KeywordIndex
 from chat.retrieval.orchestrator import RetrievalOrchestrator
+from chat.retrieval.relevance_judge import RelevanceJudge
+from repository.document import DocumentRepository
 from chat.generation.claude_backend import ClaudeLLMService
 from chat.generation.openai_backend import OpenAILLMService
 from services.chat_service import ChatService
@@ -34,7 +36,7 @@ class AppState:
     document_service: DocumentService
     collection_service: CollectionService
     task_service: TaskService
-    new_chat_service: Optional[NewChatService] = None
+    new_chat_service: NewChatService | None = None
 
     @classmethod
     def create_from_config(cls, config: AppConfig) -> "AppState":
@@ -51,16 +53,11 @@ class AppState:
                 embedding_model=llm_service.embeddings,
             )
             keyword_index = KeywordIndex()
-            orchestrator = RetrievalOrchestrator(
-                document_index=document_index,
-                chunk_index=chunk_index,
-                keyword_index=keyword_index,
-            )
-            assembler = ContextAssembler()
+            document_repo = DocumentRepository()
 
             # Multi-model configuration - wrapped in try/except so failure
             # of new chat service does not prevent app from starting
-            new_chat_service: Optional[NewChatService] = None
+            new_chat_service: NewChatService | None = None
             try:
                 router_llm = OpenAILLMService(
                     api_key=config.llm.api_key,
@@ -83,6 +80,17 @@ class AppState:
                     base_url=config.llm.anthropic_base_url or None,
                 )
 
+                relevance_judge = RelevanceJudge(fast_llm)
+                expander = ContextExpander(document_repo)
+
+                orchestrator = RetrievalOrchestrator(
+                    document_index=document_index,
+                    chunk_index=chunk_index,
+                    keyword_index=keyword_index,
+                    relevance_judge=relevance_judge,
+                )
+                assembler = ContextAssembler(expander=expander)
+
                 chat_repo = ChatRepository()
                 chat_message_repo = ChatMessageRepository()
 
@@ -95,12 +103,20 @@ class AppState:
                     assembler=assembler,
                     chat_repo=chat_repo,
                     chat_message_repo=chat_message_repo,
+                    document_repo=document_repo,
                 )
                 logger.info("New chat service initialized successfully")
             except Exception as e:
                 logger.warning(
                     f"Failed to initialize new chat service (will fall back to legacy): {e}"
                 )
+                # Fallback: create basic orchestrator and assembler without enhancements
+                orchestrator = RetrievalOrchestrator(
+                    document_index=document_index,
+                    chunk_index=chunk_index,
+                    keyword_index=keyword_index,
+                )
+                assembler = ContextAssembler()
 
             # Legacy services for backward compatibility
             chat_service = ChatService(config, llm_service)
@@ -166,8 +182,8 @@ class AppState:
             logger.error(f"Error closing services: {e}")
 
 
-_current_app_state: Optional[AppState] = None
-_current_app: Optional[FastAPI] = None
+_current_app_state: AppState | None = None
+_current_app: FastAPI | None = None
 
 
 def set_app_state(app: FastAPI, state: AppState):

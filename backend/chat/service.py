@@ -8,6 +8,8 @@ from chat.evaluation import SelfEvaluator
 from chat.generation.base import BaseLLMService
 from chat.models import (
     ProcessingMode,
+    RetrievedDocument,
+    SearchResult,
     SSEEvent,
     SSEEventType,
 )
@@ -27,7 +29,8 @@ class ChatService:
                  orchestrator: RetrievalOrchestrator,
                  assembler: ContextAssembler,
                  chat_repo,
-                 chat_message_repo):
+                 chat_message_repo,
+                 document_repo=None):
         self.router = QueryRouter(router_llm)
         self.llms = {
             ProcessingMode.FAST: fast_llm,
@@ -38,6 +41,7 @@ class ChatService:
         self.assembler = assembler
         self.chat_repo = chat_repo
         self.chat_message_repo = chat_message_repo
+        self.document_repo = document_repo
         self.evaluator = SelfEvaluator(fast_llm)
 
     def _get_chat_history(self, chat_id: str, max_messages: int = 10):
@@ -152,7 +156,7 @@ class ChatService:
 
                 yield SSEEvent(SSEEventType.STATUS, {"stage": "assembling", "message": "整理上下文..."})
                 t0 = time.perf_counter()
-                context = self.assembler.assemble(
+                context = await self.assembler.assemble(
                     mode=router_result.suggested_mode,
                     query=query,
                     search_result=search_result,
@@ -177,78 +181,54 @@ class ChatService:
                         yield SSEEvent(SSEEventType.CONTENT, {"delta": chunk})
                 timings["generation_ms"] = round((time.perf_counter() - t0) * 1000)
 
-                # Self-evaluation round (only for retrieval-based queries)
-                t0 = time.perf_counter()
-                eval_result = await self.evaluator.evaluate(
-                    query=query,
-                    draft=full_response,
-                    context_docs=context.context_documents
-                )
-                timings["evaluation_ms"] = round((time.perf_counter() - t0) * 1000)
+                # Self-evaluation loop (up to 3 rounds)
+                current_search_result = search_result
+                max_rounds = 3
 
-                if eval_result.confidence_score < 0.8 and eval_result.supplementary_queries:
+                for round_idx in range(max_rounds):
+                    t0 = time.perf_counter()
+                    eval_result = await self.evaluator.evaluate(
+                        query=query,
+                        draft=full_response,
+                        context_docs=context.context_documents
+                    )
+                    if round_idx == 0:
+                        timings["evaluation_ms"] = round((time.perf_counter() - t0) * 1000)
+                    else:
+                        timings["evaluation_ms"] += round((time.perf_counter() - t0) * 1000)
+
+                    if eval_result.confidence_score >= 0.8 and eval_result.context_completeness >= 0.8:
+                        break
+
+                    if eval_result.supplementary_strategy == "none":
+                        break
+                    if eval_result.supplementary_strategy == "full_doc" and not self.document_repo:
+                        break
+
                     yield SSEEvent(SSEEventType.STATUS, {"stage": "refining", "message": "正在深入检索更多信息..."})
 
-                    # Second round retrieval with supplementary queries
-                    t0 = time.perf_counter()
-                    supplementary_result, _ = await self.orchestrator.retrieve(
-                        intent=router_result.intent,
-                        queries=eval_result.supplementary_queries,
-                        collection_ids=collection_ids,
-                        top_k=25
-                    )
-                    timings["document_retrieval_ms"] += round((time.perf_counter() - t0) * 1000)
+                    if eval_result.supplementary_strategy == "full_doc" and self.document_repo:
+                        # Expand current high-relevance documents with full content
+                        t0 = time.perf_counter()
+                        merged_search_result = await self._expand_search_result_with_full_docs(
+                            current_search_result
+                        )
+                        timings["document_retrieval_ms"] += round((time.perf_counter() - t0) * 1000)
+                    else:
+                        # Vector-based supplementary retrieval
+                        t0 = time.perf_counter()
+                        supplementary_result, _ = await self.orchestrator.retrieve(
+                            intent=router_result.intent,
+                            queries=eval_result.supplementary_queries,
+                            collection_ids=collection_ids,
+                            top_k=25,
+                            core_keywords=router_result.core_keywords
+                        )
+                        timings["document_retrieval_ms"] += round((time.perf_counter() - t0) * 1000)
 
-                    # Merge results: combine documents from both rounds, keeping highest score
-                    merged_docs: dict[str, dict] = {}
-                    for doc in search_result.documents:
-                        key = f"{doc.document_id}:{doc.chunk_index or 0}"
-                        merged_docs[key] = {
-                            "document_id": doc.document_id,
-                            "document_name": doc.document_name,
-                            "document_uri": doc.document_uri,
-                            "content": doc.content,
-                            "relevance_score": doc.relevance_score,
-                            "source_type": doc.source_type,
-                            "chunk_index": doc.chunk_index
-                        }
-                    for doc in supplementary_result.documents:
-                        key = f"{doc.document_id}:{doc.chunk_index or 0}"
-                        if key in merged_docs:
-                            if doc.relevance_score > merged_docs[key]["relevance_score"]:
-                                merged_docs[key]["relevance_score"] = doc.relevance_score
-                        else:
-                            merged_docs[key] = {
-                                "document_id": doc.document_id,
-                                "document_name": doc.document_name,
-                                "document_uri": doc.document_uri,
-                                "content": doc.content,
-                                "relevance_score": doc.relevance_score,
-                                "source_type": doc.source_type,
-                                "chunk_index": doc.chunk_index
-                            }
-
-                    from chat.models import RetrievedDocument, SearchResult
-                    merged_search_result = SearchResult(
-                        documents=sorted(
-                            [
-                                RetrievedDocument(
-                                    document_id=d["document_id"],
-                                    document_name=d["document_name"],
-                                    document_uri=d["document_uri"],
-                                    content=d["content"],
-                                    relevance_score=d["relevance_score"],
-                                    source_type=d["source_type"],
-                                    chunk_index=d["chunk_index"]
-                                )
-                                for d in merged_docs.values()
-                            ],
-                            key=lambda d: d.relevance_score,
-                            reverse=True
-                        )[:25],
-                        search_type="hybrid+refined",
-                        total_found=len(merged_docs)
-                    )
+                        merged_search_result = self._merge_search_results(
+                            current_search_result, supplementary_result
+                        )
 
                     yield SSEEvent(SSEEventType.SOURCES, {
                         "documents": [
@@ -265,7 +245,7 @@ class ChatService:
 
                     yield SSEEvent(SSEEventType.STATUS, {"stage": "assembling", "message": "重新整理上下文..."})
                     t0 = time.perf_counter()
-                    context = self.assembler.assemble(
+                    context = await self.assembler.assemble(
                         mode=router_result.suggested_mode,
                         query=query,
                         search_result=merged_search_result,
@@ -288,7 +268,12 @@ class ChatService:
                         if chunk:
                             full_response += chunk
                             yield SSEEvent(SSEEventType.CONTENT, {"delta": chunk})
-                    timings["generation_ms"] += round((time.perf_counter() - t0) * 1000)
+                    if round_idx == 0:
+                        timings["generation_ms"] += round((time.perf_counter() - t0) * 1000)
+                    else:
+                        timings["generation_ms"] += round((time.perf_counter() - t0) * 1000)
+
+                    current_search_result = merged_search_result
 
                 timings["total_ms"] = round((time.perf_counter() - total_start) * 1000)
                 yield SSEEvent(SSEEventType.DONE, {"timings": timings})
@@ -315,6 +300,50 @@ class ChatService:
                 )
         except Exception as e:
             logger.error(f"Failed to persist assistant message: {e}", exc_info=True)
+
+    async def _expand_search_result_with_full_docs(self, search_result: SearchResult) -> SearchResult:
+        """Replace chunks with full document content for high-relevance documents."""
+        if not self.document_repo:
+            return search_result
+
+        if self.assembler and self.assembler.expander:
+            expanded = await self.assembler.expander.expand(
+                documents=search_result.documents,
+                token_budget=100000
+            )
+        else:
+            from chat.context.expander import ContextExpander
+
+            expander = ContextExpander(self.document_repo)
+            expanded = await expander.expand(
+                documents=search_result.documents,
+                token_budget=100000
+            )
+        return SearchResult(
+            documents=expanded,
+            search_type=search_result.search_type + "+full_doc",
+            total_found=len(expanded)
+        )
+
+    def _merge_search_results(self, original: SearchResult, supplementary: SearchResult) -> SearchResult:
+        """Merge two search results, keeping highest score per chunk."""
+        merged: dict[str, RetrievedDocument] = {}
+        for doc in original.documents:
+            key = f"{doc.document_id}:{doc.chunk_index if doc.chunk_index is not None else 'full'}"
+            merged[key] = doc
+        for doc in supplementary.documents:
+            key = f"{doc.document_id}:{doc.chunk_index if doc.chunk_index is not None else 'full'}"
+            if key in merged:
+                if doc.relevance_score > merged[key].relevance_score:
+                    merged[key] = doc
+            else:
+                merged[key] = doc
+
+        return SearchResult(
+            documents=sorted(merged.values(), key=lambda d: d.relevance_score, reverse=True)[:25],
+            search_type="hybrid+refined",
+            total_found=len(merged)
+        )
 
     def close(self) -> None:
         """Close all LLM clients."""

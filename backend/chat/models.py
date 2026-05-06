@@ -1,8 +1,5 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
-
-
 class QueryIntent(Enum):
     CHITCHAT = "chitchat"
     META = "meta"
@@ -45,7 +42,7 @@ class RetrievedDocument:
     content: str
     relevance_score: float
     source_type: str
-    chunk_index: Optional[int] = None
+    chunk_index: int | None = None
 
 
 @dataclass
@@ -71,6 +68,9 @@ class EvaluationResult:
     confidence_score: float
     missing_aspects: list[str]
     supplementary_queries: list[str]
+    context_completeness: float = 0.0
+    source_sufficiency: float = 0.0
+    supplementary_strategy: str = "vector"
 
 
 @dataclass

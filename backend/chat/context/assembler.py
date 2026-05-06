@@ -1,6 +1,6 @@
 import logging
-from typing import Optional
 
+from chat.context.expander import ContextExpander
 from chat.models import AssembledContext, CollectionInfo, ProcessingMode, QueryIntent, SearchResult
 from models.rag import ChatMessageRoleEnum
 
@@ -20,18 +20,19 @@ RESERVED_TOKENS = {
 
 
 class ContextAssembler:
-    def __init__(self, tokenizer=None):
+    def __init__(self, tokenizer=None, expander: ContextExpander | None = None):
         self.tokenizer = tokenizer
+        self.expander = expander
 
     def _count_tokens(self, text: str) -> int:
         if self.tokenizer:
             return self.tokenizer(text)
         return len(text) // 4
 
-    def assemble(self, mode: ProcessingMode, query: str, search_result: SearchResult,
-                 collection_info: list = None,
-                 chat_history: list[dict] = None,
-                 system_prompt_template: str = None) -> AssembledContext:
+    async def assemble(self, mode: ProcessingMode, query: str, search_result: SearchResult,
+                       collection_info: list = None,
+                       chat_history: list[dict] = None,
+                       system_prompt_template: str = None) -> AssembledContext:
         budget = MODE_BUDGETS[mode]
         reserved = RESERVED_TOKENS[mode]
         available = budget - reserved
@@ -96,6 +97,21 @@ class ContextAssembler:
                     available -= msg_tokens
                 else:
                     break
+
+        # Expand documents to full markdown if possible
+        if self.expander and search_result.documents:
+            expanded = await self.expander.expand(
+                documents=search_result.documents,
+                token_budget=available
+            )
+            search_result = SearchResult(
+                documents=expanded,
+                search_type=search_result.search_type,
+                total_found=search_result.total_found
+            )
+            # Recalculate available budget after expansion
+            expanded_tokens = sum(len(d.content) // 4 for d in expanded)
+            available = max(0, available - expanded_tokens)
 
         # Group chunks by document for structured formatting
         doc_groups: dict[str, list] = {}
@@ -193,8 +209,8 @@ class ContextAssembler:
 """
 
     def assemble_lite(self, intent: QueryIntent, query: str,
-                      collection_info: Optional[list] = None,
-                      chat_history: Optional[list[dict]] = None) -> AssembledContext:
+                      collection_info: list | None = None,
+                      chat_history: list[dict] | None = None) -> AssembledContext:
         """Assemble context for chitchat/meta/off-topic queries: no document search."""
         budget = MODE_BUDGETS[ProcessingMode.FAST]
         reserved = RESERVED_TOKENS[ProcessingMode.FAST]
