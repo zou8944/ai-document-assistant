@@ -47,6 +47,7 @@ export interface UseChatReturn {
   streamingContent: string
   processingStatus: string | null
   sendMessage: (content: string, documentIds?: string[]) => Promise<void>
+  stopGeneration: () => void
   loadMessages: () => Promise<void>
 }
 
@@ -240,6 +241,33 @@ export const useChat = (chatId: string | null): UseChatReturn => {
     alert('生成回复失败: ' + error.message)
   }, [])
 
+  const stopGeneration = useCallback(() => {
+    apiClient.cancelRequests()
+
+    const partialContent = streamingContentRef.current
+    const partialSources = streamingSourcesRef.current
+    const partialMessageId = streamingMessageIdRef.current
+
+    if (partialContent) {
+      const aiMessage: Message = {
+        id: partialMessageId || `ai_${Date.now()}`,
+        type: 'assistant',
+        content: partialContent + '\n\n_(已停止生成)_',
+        timestamp: new Date().toISOString(),
+        sources: partialSources,
+      }
+      setMessages((prev) => [...prev, aiMessage])
+    }
+
+    setIsLoading(false)
+    setIsStreaming(false)
+    setStreamingContent('')
+    setProcessingStatus(null)
+    streamingContentRef.current = ''
+    streamingSourcesRef.current = []
+    streamingMessageIdRef.current = null
+  }, [apiClient])
+
   const sendMessage = useCallback(async (content: string, documentIds?: string[]) => {
     if (!content.trim() || isLoading || !chatId) return
 
@@ -289,6 +317,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
     streamingContent,
     processingStatus,
     sendMessage,
+    stopGeneration,
     loadMessages
   }
 }

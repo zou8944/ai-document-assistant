@@ -6,6 +6,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import {
   PlusIcon,
   PaperAirplaneIcon,
+  StopIcon,
   UserIcon,
   CpuChipIcon,
   ClockIcon,
@@ -85,6 +86,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
     streamingContent,
     processingStatus,
     sendMessage,
+    stopGeneration,
   } = useChat(currentChat?.id || null)
 
   // Scroll to bottom when new messages arrive
@@ -346,13 +348,23 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                 className="w-full resize-none rounded-lg border border-gray-300 bg-white/80 backdrop-blur-sm px-4 py-3 pr-12 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
-            <button
-              onClick={handleSendMessage}
-              disabled={!getRealUserInput(message).trim() || isLoading || isStreaming}
-              className="flex-shrink-0 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white p-3 rounded-lg transition-colors disabled:cursor-not-allowed"
-            >
-              <PaperAirplaneIcon className="w-5 h-5" />
-            </button>
+            {isLoading || isStreaming ? (
+              <button
+                onClick={stopGeneration}
+                className="flex-shrink-0 bg-red-500 hover:bg-red-600 text-white p-3 rounded-lg transition-colors"
+                title="停止生成"
+              >
+                <StopIcon className="w-5 h-5" />
+              </button>
+            ) : (
+              <button
+                onClick={handleSendMessage}
+                disabled={!getRealUserInput(message).trim()}
+                className="flex-shrink-0 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white p-3 rounded-lg transition-colors disabled:cursor-not-allowed"
+              >
+                <PaperAirplaneIcon className="w-5 h-5" />
+              </button>
+            )}
           </div>
         </div>
       </div>
