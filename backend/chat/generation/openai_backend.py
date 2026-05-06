@@ -36,7 +36,7 @@ class OpenAILLMService(BaseLLMService):
                 messages=[{"role": "system", "content": system_prompt}] + messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                timeout=30,
+                timeout=60,
             )
         except Exception as e:
             logger.error(f"OpenAI API call failed for model={self.model}: {e}")

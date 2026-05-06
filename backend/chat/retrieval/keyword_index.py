@@ -119,6 +119,8 @@ class KeywordIndex(BaseIndex):
             sql = f"""
                 SELECT ko.document_id, d.name as document_name,
                        COUNT(DISTINCT ko.keyword) as match_count,
+                       SUM(CASE WHEN d.name ILIKE '%' || ko.keyword || '%' THEN 2 ELSE 1 END) as weighted_score,
+                       COUNT(ko.keyword) as term_frequency,
                        STRING_AGG(DISTINCT ko.context_snippet, ' | ') as snippets
                 FROM keyword_occurrences ko
                 JOIN documents d ON ko.document_id = d.id
@@ -134,7 +136,7 @@ class KeywordIndex(BaseIndex):
 
             sql += """
                 GROUP BY ko.document_id, d.name
-                ORDER BY match_count DESC
+                ORDER BY weighted_score DESC
                 LIMIT :top_k
             """
 
@@ -142,12 +144,21 @@ class KeywordIndex(BaseIndex):
 
             documents = []
             for row in result:
+                match_count = row[2] or 0
+                weighted_score = row[3] or 0
+                term_frequency = row[4] or 0
+                snippets = row[5] or ""
+                relevance_score = min(
+                    (weighted_score / (len(keywords) * 3)) * 0.7 +
+                    (min(term_frequency / 10, 1.0)) * 0.3,
+                    1.0
+                )
                 documents.append(RetrievedDocument(
                     document_id=row[0],
                     document_name=row[1] or "",
                     document_uri="",
-                    content=f"匹配关键词数: {row[2]}\n片段: {(row[3] or '')[:500]}",
-                    relevance_score=min(row[2] / len(keywords), 1.0),
+                    content=f"匹配关键词数: {match_count}\n片段: {snippets[:500]}",
+                    relevance_score=relevance_score,
                     source_type="keyword"
                 ))
 

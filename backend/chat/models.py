@@ -32,6 +32,9 @@ class RouterResult:
     complexity_score: int
     rewritten_queries: list[str]
     requires_retrieval: bool = True
+    core_keywords: list[str] | None = None
+    semantic_expansions: list[str] | None = None
+    implicit_aspects: list[str] | None = None
 
 
 @dataclass
@@ -61,6 +64,13 @@ class CollectionInfo:
     categories: list[dict]
     document_count: int
     total_tokens: int
+
+
+@dataclass
+class EvaluationResult:
+    confidence_score: float
+    missing_aspects: list[str]
+    supplementary_queries: list[str]
 
 
 @dataclass

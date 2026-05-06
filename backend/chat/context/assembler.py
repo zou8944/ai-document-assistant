@@ -1,5 +1,4 @@
 import logging
-from dataclasses import replace
 from typing import Optional
 
 from chat.models import AssembledContext, CollectionInfo, ProcessingMode, QueryIntent, SearchResult
@@ -98,25 +97,34 @@ class ContextAssembler:
                 else:
                     break
 
+        # Group chunks by document for structured formatting
+        doc_groups: dict[str, list] = {}
+        for doc in search_result.documents:
+            if doc.document_id not in doc_groups:
+                doc_groups[doc.document_id] = []
+            doc_groups[doc.document_id].append(doc)
+
         context_docs = []
         context_text = ""
-        for doc in search_result.documents:
-            doc_text = f"\n[来源: {doc.document_name}]\n{doc.content}\n"
+        for i, (_, docs) in enumerate(doc_groups.items(), 1):
+            doc = docs[0]
+            combined_content = "\n".join(d.content for d in docs)
+            doc_text = f"\n[来源 {i}] 文档名: {doc.document_name}（相关度: {doc.relevance_score:.2f}）\n{combined_content}\n\n---\n"
             doc_tokens = self._count_tokens(doc_text)
             if available - doc_tokens >= 0:
                 context_text += doc_text
-                context_docs.append(doc)
+                context_docs.extend(docs)
                 available -= doc_tokens
             else:
                 # Try to fit a truncated version
-                max_chars = max(0, available * 4 - 20)
+                max_chars = max(0, available * 4 - 50)
                 if max_chars > 0:
-                    truncated = doc.content[:max_chars] + "..."
-                    truncated_text = f"\n[来源: {doc.document_name}]\n{truncated}\n"
+                    truncated = combined_content[:max_chars] + "..."
+                    truncated_text = f"\n[来源 {i}] 文档名: {doc.document_name}（相关度: {doc.relevance_score:.2f}）\n{truncated}\n\n---\n"
                     truncated_tokens = self._count_tokens(truncated_text)
                     if truncated_tokens <= available:
                         context_text += truncated_text
-                        context_docs.append(replace(doc, content=truncated))
+                        context_docs.extend(docs)
                         available = max(0, available - truncated_tokens)
                         continue
                 # Cannot fit even truncated version
@@ -179,6 +187,9 @@ class ContextAssembler:
 2. 若文档未涉及该内容，直接说明文档中未涉及即可
 3. 使用 [来源: 文档名] 格式标注引用来源
 4. 回答简洁准确，不要过度发挥
+5. 优先参考相关度更高的来源，相关度分数在来源标题中已标注
+6. 如果文档片段不足以回答问题，诚实说明文档未覆盖该内容，不要推测
+7. 涉及多个方面时，确保每个论断都有对应的文档来源支撑
 """
 
     def assemble_lite(self, intent: QueryIntent, query: str,

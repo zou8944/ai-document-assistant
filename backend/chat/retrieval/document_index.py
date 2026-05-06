@@ -93,8 +93,6 @@ class DocumentIndex(BaseIndex):
                 for i, cid in enumerate(effective_collection_ids):
                     params[f"cid{i}"] = cid
 
-            sql += " ORDER BY name LIMIT :top_k"
-
             result = session.execute(text(sql), params)
 
             documents = []
@@ -112,6 +110,9 @@ class DocumentIndex(BaseIndex):
                     relevance_score=relevance_score,
                     source_type="document_index"
                 ))
+
+            documents.sort(key=lambda d: d.relevance_score, reverse=True)
+            documents = documents[:top_k]
 
             return SearchResult(
                 documents=documents,

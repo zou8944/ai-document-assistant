@@ -42,7 +42,10 @@ ROUTER_SYSTEM_PROMPT = """你是一个查询分析专家。你的任务是分析
   "suggested_mode": "fast|standard|deep",
   "complexity_score": 5,
   "requires_retrieval": true,
-  "rewritten_queries": ["检索query1", "检索query2"]
+  "rewritten_queries": ["检索query1", "检索query2"],
+  "core_keywords": ["核心词1", "核心词2"],
+  "semantic_expansions": ["同义词1", "英文同义词1", "相关术语1"],
+  "implicit_aspects": ["隐含子问题1", "隐含子问题2"]
 }
 
 规则：
@@ -51,6 +54,9 @@ ROUTER_SYSTEM_PROMPT = """你是一个查询分析专家。你的任务是分析
 - requires_retrieval: chitchat/meta/off_topic 为 false,其余为 true
 - rewritten_queries: 非检索类(chitchat/meta/off_topic)可为空数组,其余必须至少有一个
 - 如果涉及多个对象(如 A 和 B 的区别),rewritten_queries 应分别针对每个对象
+- core_keywords: 从用户问题中提取的关键实体词、核心概念词（2-5个）
+- semantic_expansions: 核心关键词的同义词、近义词、英文对应术语，用于扩展检索范围（3-8个）
+- implicit_aspects: 用户问题中隐含的可能需要回答的子问题或方面（1-3个）
 """
 
 
@@ -128,6 +134,17 @@ class QueryRouter:
             else:
                 no_retrieval_intents = {QueryIntent.CHITCHAT.value, QueryIntent.META.value, QueryIntent.OFF_TOPIC.value}
                 requires_retrieval = intent_str not in no_retrieval_intents
+            if requires_retrieval and not rewritten_queries:
+                rewritten_queries = [query]
+            core_keywords = result.get("core_keywords")
+            semantic_expansions = result.get("semantic_expansions")
+            implicit_aspects = result.get("implicit_aspects")
+            if core_keywords is not None and not isinstance(core_keywords, list):
+                core_keywords = None
+            if semantic_expansions is not None and not isinstance(semantic_expansions, list):
+                semantic_expansions = None
+            if implicit_aspects is not None and not isinstance(implicit_aspects, list):
+                implicit_aspects = None
             return RouterResult(
                 intent=intent,
                 confidence=confidence,
@@ -135,7 +152,10 @@ class QueryRouter:
                 suggested_mode=ProcessingMode(suggested_mode),
                 complexity_score=complexity_score,
                 rewritten_queries=rewritten_queries,
-                requires_retrieval=requires_retrieval
+                requires_retrieval=requires_retrieval,
+                core_keywords=core_keywords,
+                semantic_expansions=semantic_expansions,
+                implicit_aspects=implicit_aspects
             )
         except Exception as e:
             logger.error(f"Router JSON parse failed: {e}, raw: {response}")
@@ -146,5 +166,8 @@ class QueryRouter:
                 suggested_mode=ProcessingMode.STANDARD,
                 complexity_score=5,
                 rewritten_queries=[query],
-                requires_retrieval=True
+                requires_retrieval=True,
+                core_keywords=None,
+                semantic_expansions=None,
+                implicit_aspects=None
             )

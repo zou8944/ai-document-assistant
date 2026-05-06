@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from chat.models import CollectionInfo, QueryIntent, RetrievedDocument, SearchResult
@@ -16,10 +17,16 @@ class RetrievalOrchestrator:
 
     async def retrieve(self, intent: QueryIntent, queries: list[str],
                        collection_ids: list[str] | None = None,
-                       top_k: int = 10) -> tuple[SearchResult, list[CollectionInfo]]:
+                       top_k: int = 25) -> tuple[SearchResult, list[CollectionInfo]]:
         if not queries:
             logger.warning("RetrievalOrchestrator: empty queries list, cannot retrieve.")
             return SearchResult(documents=[], search_type="", total_found=0), []
+
+        source_weights = {
+            "chunk_vector": 1.0,
+            "keyword": 0.8,
+            "document_index": 0.5,
+        }
 
         all_documents = []
         search_type_parts = []
@@ -35,6 +42,8 @@ class RetrievalOrchestrator:
             QueryIntent.ANALYZE: 10,
         }
 
+        # Run all queries through all three indexes in parallel
+        tasks = []
         for query in queries:
             if intent == QueryIntent.RECOMMEND:
                 result = await self.document_index.get_all_documents(collection_ids)
@@ -44,28 +53,35 @@ class RetrievalOrchestrator:
 
             chunk_top_k = chunk_top_k_map.get(intent, 5)
 
-            # Hybrid retrieval: vector chunks + document title + keywords
-            chunk_result = await self.chunk_index.search(
-                query, top_k=chunk_top_k, collection_ids=collection_ids
-            )
-            doc_result = await self.document_index.search(
-                query, top_k=10, collection_ids=collection_ids
-            )
-            kw_result = await self.keyword_index.search(
-                query, top_k=20, collection_ids=collection_ids
-            )
-
-            all_documents.extend(chunk_result.documents)
-            all_documents.extend(doc_result.documents)
-            all_documents.extend(kw_result.documents)
+            tasks.append(self.chunk_index.search(query, top_k=chunk_top_k, collection_ids=collection_ids))
+            tasks.append(self.document_index.search(query, top_k=15, collection_ids=collection_ids))
+            tasks.append(self.keyword_index.search(query, top_k=30, collection_ids=collection_ids))
             search_type_parts.append("hybrid")
 
-        # Deduplicate by document_id + chunk_index, keeping the highest relevance score
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.warning(f"RetrievalOrchestrator: search task failed: {result}")
+                    continue
+                all_documents.extend(result.documents)
+
+        # Apply source weighting and deduplicate by (document_id, chunk_index)
         best_docs: dict[str, RetrievedDocument] = {}
         for doc in all_documents:
+            weight = source_weights.get(doc.source_type, 1.0)
+            weighted_score = doc.relevance_score * weight
             key = f"{doc.document_id}:{doc.chunk_index or 0}"
-            if key not in best_docs or doc.relevance_score > best_docs[key].relevance_score:
-                best_docs[key] = doc
+            if key not in best_docs or weighted_score > best_docs[key].relevance_score:
+                best_docs[key] = RetrievedDocument(
+                    document_id=doc.document_id,
+                    document_name=doc.document_name,
+                    document_uri=doc.document_uri,
+                    content=doc.content,
+                    relevance_score=weighted_score,
+                    source_type=doc.source_type,
+                    chunk_index=doc.chunk_index
+                )
 
         unique_docs = sorted(best_docs.values(), key=lambda d: d.relevance_score, reverse=True)
 
