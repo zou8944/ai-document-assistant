@@ -4,7 +4,7 @@
 
 import React, { useState } from 'react'
 import { XMarkIcon, BookOpenIcon } from '@heroicons/react/24/outline'
-import { useAppStore } from '../../store/appStore'
+import { useAPIClient, extractData, Collection } from '../../services/apiClient'
 
 interface KnowledgeBaseSelectorProps {
   isOpen: boolean
@@ -20,17 +20,59 @@ export const KnowledgeBaseSelector: React.FC<KnowledgeBaseSelectorProps> = ({
   selectedIds: initialSelectedIds = []
 }) => {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
-  const { knowledgeBases } = useAppStore()
+  const [collections, setCollections] = useState<Collection[]>([])
+  const [loading, setLoading] = useState(false)
+  const apiClient = useAPIClient()
 
-  // Reset selection when modal opens
+  // Reset selection and fetch latest collections from backend when modal opens.
+  // We intentionally do NOT read from the persisted Zustand store here, because
+  // the store keeps stale knowledge bases (collections deleted on the backend
+  // remain in localStorage). The backend `collections` table is the source of
+  // truth for what is currently available.
   React.useEffect(() => {
-    if (isOpen) {
-      setSelectedIds([...initialSelectedIds])
-    }
-  }, [isOpen, initialSelectedIds])
+    if (!isOpen) return
+    setSelectedIds([...initialSelectedIds])
+    // initialSelectedIds is intentionally excluded from the dep array below to
+    // avoid re-fetching when the parent re-renders with a new array reference.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen])
 
-  // Show all knowledge bases
-  const availableKnowledgeBases = knowledgeBases
+  React.useEffect(() => {
+    if (!isOpen) return
+    let cancelled = false
+    const load = async () => {
+      try {
+        setLoading(true)
+        const response = await apiClient.listCollections()
+        const data = extractData(response)
+        if (!cancelled) {
+          setCollections(data.collections)
+        }
+      } catch (error) {
+        console.error('加载知识库失败:', error)
+        if (!cancelled) {
+          setCollections([])
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, apiClient])
+
+  // Map backend collections to the shape the modal renders
+  const availableKnowledgeBases = collections.map((collection) => ({
+    id: collection.id,
+    name: collection.name,
+    description: collection.description || '',
+    documentCount: collection.document_count,
+    createdAt: collection.created_at,
+  }))
 
   const handleToggleSelection = (kbId: string) => {
     setSelectedIds(prev => 
@@ -86,7 +128,11 @@ export const KnowledgeBaseSelector: React.FC<KnowledgeBaseSelectorProps> = ({
               </h3>
 
               <div className="max-h-64 overflow-y-auto">
-                {availableKnowledgeBases.length === 0 ? (
+                {loading ? (
+                  <div className="text-center text-gray-500 py-8">
+                    <p>加载中...</p>
+                  </div>
+                ) : availableKnowledgeBases.length === 0 ? (
                   <div className="text-center text-gray-500 py-8">
                     <BookOpenIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
                     <p>暂无知识库</p>
@@ -130,7 +176,7 @@ export const KnowledgeBaseSelector: React.FC<KnowledgeBaseSelectorProps> = ({
                 )}
               </div>
 
-              {availableKnowledgeBases.length > 0 && (
+              {!loading && availableKnowledgeBases.length > 0 && (
                 <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse space-y-3 sm:space-y-0 sm:space-x-3 sm:space-x-reverse">
                   <button
                     type="button"
