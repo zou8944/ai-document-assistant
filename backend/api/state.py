@@ -7,24 +7,27 @@ from dataclasses import dataclass
 
 from fastapi import FastAPI, Request
 
-from models.config import AppConfig
-from chat.service import ChatService as NewChatService
+from chat.agent.llm.claude import ClaudeToolBackend
+from chat.agent_service import AgentChatService
 from chat.context.assembler import ContextAssembler
 from chat.context.expander import ContextExpander
-from chat.retrieval.document_index import DocumentIndex
+from chat.generation.claude_backend import ClaudeLLMService
+from chat.generation.openai_backend import OpenAILLMService
 from chat.retrieval.chunk_index import ChunkIndex
+from chat.retrieval.document_index import DocumentIndex
 from chat.retrieval.keyword_index import KeywordIndex
 from chat.retrieval.orchestrator import RetrievalOrchestrator
 from chat.retrieval.relevance_judge import RelevanceJudge
+from chat.service import ChatService as NewChatService
+from models.config import AgentConfig, AppConfig
+from repository.chat import ChatMessageRepository, ChatRepository
+from repository.collection import CollectionRepository
 from repository.document import DocumentRepository
-from chat.generation.claude_backend import ClaudeLLMService
-from chat.generation.openai_backend import OpenAILLMService
 from services.chat_service import ChatService
 from services.collection_service import CollectionService
 from services.document_service import DocumentService
 from services.llm_service import LLMService
 from services.task_service import TaskService
-from repository.chat import ChatRepository, ChatMessageRepository
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +40,7 @@ class AppState:
     collection_service: CollectionService
     task_service: TaskService
     new_chat_service: NewChatService | None = None
+    agent_chat_service: AgentChatService | None = None
 
     @classmethod
     def create_from_config(cls, config: AppConfig) -> "AppState":
@@ -54,10 +58,12 @@ class AppState:
             )
             keyword_index = KeywordIndex()
             document_repo = DocumentRepository()
+            collection_repo = CollectionRepository()
 
             # Multi-model configuration - wrapped in try/except so failure
             # of new chat service does not prevent app from starting
             new_chat_service: NewChatService | None = None
+            agent_chat_service: AgentChatService | None = None
             try:
                 router_llm = OpenAILLMService(
                     api_key=config.llm.api_key,
@@ -106,6 +112,37 @@ class AppState:
                     document_repo=document_repo,
                 )
                 logger.info("New chat service initialized successfully")
+
+                # Agent chat service (tool-use based RAG)
+                try:
+                    agent_backend = ClaudeToolBackend(
+                        client=deep_llm.client,
+                        model=config.llm.deep_model,
+                    )
+                    agent_fast_backend = ClaudeToolBackend(
+                        client=deep_llm.client,
+                        model=config.llm.fast_model,
+                    )
+                    agent_config = AgentConfig(
+                        max_iterations=15,
+                        context_window=200_000,
+                        model="standard",
+                        transcript_dir="./var/agent_transcripts",
+                    )
+                    agent_chat_service = AgentChatService(
+                        backend=agent_backend,
+                        fast_backend=agent_fast_backend,
+                        config=agent_config,
+                        chat_repo=chat_repo,
+                        chat_message_repo=chat_message_repo,
+                        document_repo=document_repo,
+                        collection_repo=collection_repo,
+                    )
+                    logger.info("Agent chat service initialized successfully")
+                except Exception as agent_err:
+                    logger.warning(
+                        f"Failed to initialize agent chat service: {agent_err}"
+                    )
             except Exception as e:
                 logger.warning(
                     f"Failed to initialize new chat service (will fall back to legacy): {e}"
@@ -136,6 +173,7 @@ class AppState:
                 collection_service=collection_service,
                 task_service=task_service,
                 new_chat_service=new_chat_service,
+                agent_chat_service=agent_chat_service,
             )
         except Exception as e:
             logger.error(f"Failed to create AppState: {e}")

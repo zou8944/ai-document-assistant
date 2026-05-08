@@ -28,6 +28,7 @@ import DocumentPicker from './DocumentPicker'
 import RichTextInput from './RichTextInput'
 import MarkdownContent from './MarkdownContent'
 import SourceReferences from './SourceReferences'
+import AgentTrace from './AgentTrace'
 
 const TimingDisplay: React.FC<{ timings: StageTiming }> = ({ timings }) => {
   const items = [
@@ -238,6 +239,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
 
               {/* Message Content */}
               <div className="flex-1 min-w-0">
+                {msg.type === 'assistant' && msg.agentState && (
+                  <AgentTrace state={msg.agentState} />
+                )}
                 <div
                   className={clsx(
                     'px-4 py-3 rounded-2xl text-sm',

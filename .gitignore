@@ -58,3 +58,4 @@ prePRPs/
 *.code-workspace
 
 .env.deploy
+**/coverage.xml

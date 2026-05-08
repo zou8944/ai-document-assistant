@@ -10,6 +10,7 @@ import {
   SourceReference,
   SSEEvent,
 } from '../services/apiClient'
+import { AgentMessageState } from '../types/agent'
 
 export interface StageTiming {
   intent_analysis_ms: number
@@ -26,6 +27,7 @@ export interface Message {
   timestamp: string
   sources?: SourceReference[]
   timings?: StageTiming
+  agentState?: AgentMessageState
 }
 
 const mapAPIMessageToUIMessage = (msg: APIChatMessage): Message => {
@@ -61,6 +63,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
   const streamingSourcesRef = useRef<SourceReference[]>([])
   const streamingMessageIdRef = useRef<string | null>(null)
   const streamingContentRef = useRef('')
+  const streamingAgentStateRef = useRef<AgentMessageState | null>(null)
 
   // Load chat messages from API
   const loadMessages = useCallback(async () => {
@@ -174,15 +177,19 @@ export const useChat = (chatId: string | null): UseChatReturn => {
           const finalContent = event.data?.content || streamingContentRef.current
           const finalSources = event.data?.sources || streamingSourcesRef.current
           const finalTimings = event.data?.timings || undefined
+          const agentState = streamingAgentStateRef.current
 
-          if (finalContent) {
+          if (finalContent || agentState) {
             const aiMessage: Message = {
               id: event.data?.message_id || streamingMessageIdRef.current || `ai_${Date.now()}`,
               type: 'assistant',
-              content: finalContent,
+              content: finalContent || agentState?.finalText || '',
               timestamp: new Date().toISOString(),
               sources: finalSources,
               timings: finalTimings,
+              agentState: agentState
+                ? { ...agentState, status: 'done' as const }
+                : undefined,
             }
             setMessages((prev) => [...prev, aiMessage])
           }
@@ -192,21 +199,182 @@ export const useChat = (chatId: string | null): UseChatReturn => {
         streamingContentRef.current = ''
         streamingSourcesRef.current = []
         streamingMessageIdRef.current = null
+        streamingAgentStateRef.current = null
         break
 
       case 'error':
         console.error('Stream error:', event.data)
         setIsLoading(false)
         setIsStreaming(false)
+
+        {
+          const agentState = streamingAgentStateRef.current
+          if (agentState) {
+            const aiMessage: Message = {
+              id: streamingMessageIdRef.current || `ai_${Date.now()}`,
+              type: 'assistant',
+              content: agentState.finalText || streamingContentRef.current || '',
+              timestamp: new Date().toISOString(),
+              sources: streamingSourcesRef.current,
+              agentState: { ...agentState, status: 'error' as const },
+            }
+            setMessages((prev) => [...prev, aiMessage])
+          }
+        }
+
         setStreamingContent('')
         streamingContentRef.current = ''
         streamingSourcesRef.current = []
         streamingMessageIdRef.current = null
+        streamingAgentStateRef.current = null
         setProcessingStatus(null)
         alert(
           '生成回复失败: ' + (event.data?.message || event.data?.detail || '未知错误')
         )
         break
+
+      // Agent mode events
+      case 'agent_start': {
+        streamingAgentStateRef.current = {
+          steps: [],
+          finalText: '',
+          iterations: 0,
+          status: 'running',
+        }
+        if (event.data?.message_id) {
+          streamingMessageIdRef.current = event.data.message_id
+        }
+        break
+      }
+
+      case 'iteration_start': {
+        const state = streamingAgentStateRef.current
+        if (!state) break
+        const iteration = event.data?.iteration ?? state.iterations + 1
+        state.iterations = iteration
+        state.steps.push({
+          kind: 'thinking',
+          iteration,
+          text: '',
+        })
+        streamingAgentStateRef.current = { ...state }
+        break
+      }
+
+      case 'agent_thinking': {
+        const state = streamingAgentStateRef.current
+        if (!state) break
+        const iteration = event.data?.iteration ?? state.iterations
+        const delta = event.data?.delta || ''
+        const stepIndex = (() => {
+          for (let i = state.steps.length - 1; i >= 0; i--) {
+            const s = state.steps[i]
+            if (s.kind === 'thinking' && s.iteration === iteration && !s.hidden) {
+              return i
+            }
+          }
+          return -1
+        })()
+        if (stepIndex >= 0) {
+          const updatedSteps = [...state.steps]
+          updatedSteps[stepIndex] = {
+            ...updatedSteps[stepIndex],
+            text: (updatedSteps[stepIndex].text || '') + delta,
+          }
+          streamingAgentStateRef.current = { ...state, steps: updatedSteps }
+        }
+        break
+      }
+
+      case 'tool_call': {
+        const state = streamingAgentStateRef.current
+        if (!state) break
+        state.steps.push({
+          kind: 'tool',
+          iteration: state.iterations,
+          toolId: event.data?.id || '',
+          toolName: event.data?.name || '',
+          toolInput: event.data?.input || {},
+          toolStatus: 'running',
+        })
+        streamingAgentStateRef.current = { ...state }
+        break
+      }
+
+      case 'tool_result': {
+        const state = streamingAgentStateRef.current
+        if (!state) break
+        const toolId = event.data?.id || ''
+        const stepIndex = state.steps.findLastIndex(
+          (s) => s.kind === 'tool' && s.toolId === toolId
+        )
+        if (stepIndex >= 0) {
+          const updatedSteps = [...state.steps]
+          updatedSteps[stepIndex] = {
+            ...updatedSteps[stepIndex],
+            toolStatus: event.data?.is_error ? 'error' : 'done',
+            toolPreview: event.data?.preview || '',
+            toolMs: event.data?.ms,
+          }
+          streamingAgentStateRef.current = { ...state, steps: updatedSteps }
+        }
+        break
+      }
+
+      case 'compact_triggered': {
+        const state = streamingAgentStateRef.current
+        if (!state) break
+        state.steps.push({
+          kind: 'compact',
+          iteration: state.iterations,
+          beforeTokens: event.data?.before_tokens,
+          afterTokens: event.data?.after_tokens,
+        })
+        streamingAgentStateRef.current = { ...state }
+        break
+      }
+
+      case 'final_text_promote': {
+        const state = streamingAgentStateRef.current
+        if (!state) break
+        const iteration = event.data?.iteration ?? state.iterations
+        const stepIndex = (() => {
+          for (let i = state.steps.length - 1; i >= 0; i--) {
+            const s = state.steps[i]
+            if (s.kind === 'thinking' && s.iteration === iteration && !s.hidden) {
+              return i
+            }
+          }
+          return -1
+        })()
+        if (stepIndex >= 0) {
+          const promotedText = state.steps[stepIndex].text || ''
+          const updatedSteps = state.steps.filter((_, i) => i !== stepIndex)
+          const newFinalText = state.finalText
+            ? state.finalText + '\n\n' + promotedText
+            : promotedText
+          streamingAgentStateRef.current = {
+            ...state,
+            steps: updatedSteps,
+            finalText: newFinalText,
+          }
+          // Also update streaming content so bubble shows final text
+          streamingContentRef.current = newFinalText
+          setStreamingContent(newFinalText)
+        }
+        break
+      }
+
+      case 'agent_halted': {
+        const state = streamingAgentStateRef.current
+        if (!state) break
+        streamingAgentStateRef.current = {
+          ...state,
+          status: 'done',
+          halted: true,
+        }
+        break
+      }
 
       default:
         if (event.event === 'data' && event.data) {
@@ -237,6 +405,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
     streamingContentRef.current = ''
     streamingSourcesRef.current = []
     streamingMessageIdRef.current = null
+    streamingAgentStateRef.current = null
     setProcessingStatus(null)
     alert('生成回复失败: ' + error.message)
   }, [])
@@ -247,14 +416,18 @@ export const useChat = (chatId: string | null): UseChatReturn => {
     const partialContent = streamingContentRef.current
     const partialSources = streamingSourcesRef.current
     const partialMessageId = streamingMessageIdRef.current
+    const agentState = streamingAgentStateRef.current
 
-    if (partialContent) {
+    if (partialContent || agentState) {
       const aiMessage: Message = {
         id: partialMessageId || `ai_${Date.now()}`,
         type: 'assistant',
-        content: partialContent + '\n\n_(已停止生成)_',
+        content: partialContent || agentState?.finalText || '',
         timestamp: new Date().toISOString(),
         sources: partialSources,
+        agentState: agentState
+          ? { ...agentState, status: 'cancelled' as const }
+          : undefined,
       }
       setMessages((prev) => [...prev, aiMessage])
     }
@@ -266,6 +439,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
     streamingContentRef.current = ''
     streamingSourcesRef.current = []
     streamingMessageIdRef.current = null
+    streamingAgentStateRef.current = null
   }, [apiClient])
 
   const sendMessage = useCallback(async (content: string, documentIds?: string[]) => {
@@ -289,6 +463,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
     streamingContentRef.current = ''
     streamingSourcesRef.current = []
     streamingMessageIdRef.current = null
+    streamingAgentStateRef.current = null
     setProcessingStatus(null)
 
     try {

@@ -17,7 +17,16 @@ from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 from api.middleware import UnifiedResponseMiddleware  # noqa: E402
-from api.routes import chats, collections, documents, health, ingest, settings, tasks  # noqa: E402
+from api.routes import (  # noqa: E402
+    chats,
+    chats_trace,
+    collections,
+    documents,
+    health,
+    ingest,
+    settings,
+    tasks,
+)
 from api.state import AppState, get_app_state_direct, set_app_state  # noqa: E402
 from config import get_config  # noqa: E402
 
@@ -108,5 +117,6 @@ app.include_router(ingest.router, prefix="/api/v1", tags=["ingest"])
 app.include_router(settings.router, prefix="/api/v1", tags=["settings"])
 app.include_router(tasks.router, prefix="/api/v1", tags=["tasks"])
 app.include_router(chats.router, prefix="/api/v1", tags=["chats"])
+app.include_router(chats_trace.router, prefix="/api/v1", tags=["chats"])
 
 

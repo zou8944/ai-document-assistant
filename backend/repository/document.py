@@ -115,6 +115,56 @@ class DocumentRepository(BaseRepository[Document, DocumentDTO]):
             sql = select(Document).where(Document.source_task_id == task_id)
             return [self.dto_class.from_orm(item) for item in session.scalars(sql)]
 
+    def search_by_keywords(
+        self,
+        keywords: list[str],
+        collection_ids: list[str] | None = None,
+        category: str | None = None,
+        limit: int = 15,
+    ) -> list[DocumentDTO]:
+        with session_context() as session:
+            query = select(Document)
+            conditions = []
+            for kw in keywords:
+                like = f"%{kw}%"
+                conditions.append(
+                    Document.name.ilike(like)
+                    | Document.summary.ilike(like)
+                    | Document.keywords.ilike(like)
+                    | Document.category.ilike(like)
+                )
+            if conditions:
+                query = query.where(*conditions)
+            if collection_ids:
+                query = query.where(Document.collection_id.in_(collection_ids))
+            if category:
+                query = query.where(Document.category.ilike(f"%{category}%"))
+            query = query.order_by(Document.updated_at.desc()).limit(limit)
+            return [self.dto_class.from_orm(item) for item in session.scalars(query)]
+
+    def get_summary_only(self, document_id: str) -> dict | None:
+        with session_context() as session:
+            result = session.execute(
+                select(
+                    Document.id,
+                    Document.name,
+                    Document.summary,
+                    Document.keywords,
+                    Document.category,
+                    Document.total_tokens,
+                ).where(Document.id == document_id)
+            ).first()
+            if result is None:
+                return None
+            return {
+                "id": result.id,
+                "name": result.name,
+                "summary": result.summary,
+                "keywords": result.keywords,
+                "category": result.category,
+                "total_tokens": result.total_tokens,
+            }
+
 
 class DocumentChunkRepository(BaseRepository[DocumentChunk, DocumentChunkDTO]):
     """Repository for DocumentChunk operations."""

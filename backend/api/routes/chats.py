@@ -2,6 +2,7 @@
 Chat management and conversation routes.
 """
 
+import asyncio
 import json
 import logging
 
@@ -9,6 +10,7 @@ from fastapi import APIRouter, Request, status
 from sse_starlette.sse import EventSourceResponse
 
 from api.state import get_app_state
+from chat.agent_service import get_cancel_token
 from exception import (
     HTTPBadRequestException,
     HTTPInternalServerErrorException,
@@ -205,26 +207,43 @@ async def send_message_stream(
     Send a message and get AI response (streaming via SSE)
     """
     app_state = get_app_state(request)
+    agent_service = app_state.agent_chat_service
 
-    # Use new chat service if available and no specific document IDs requested
-    # (legacy service supports document_ids filtering; new service handles
-    # document selection via intent-based retrieval)
-    if app_state.new_chat_service and not request_data.document_ids:
-        async def event_generator():
-            async for event in app_state.new_chat_service.process(
+    if agent_service is None:
+        raise HTTPInternalServerErrorException("Agent chat service not initialized")
+
+    async def event_generator():
+        message_id: str | None = None
+
+        async def disconnect_watcher():
+            while True:
+                if await request.is_disconnected():
+                    if message_id:
+                        token = get_cancel_token(chat_id, message_id)
+                        if token:
+                            token.cancel()
+                            logger.info("Cancelled chat %s message %s (client disconnect)", chat_id, message_id)
+                    break
+                await asyncio.sleep(0.1)
+
+        watcher_task = asyncio.create_task(disconnect_watcher())
+
+        try:
+            async for event in agent_service.process(
                 chat_id=chat_id,
-                query=request_data.message
+                query=request_data.message,
             ):
+                if event.type == "agent_start" and message_id is None:
+                    message_id = event.data.get("message_id")
                 yield {
                     "event": event.type.value,
-                    "data": json.dumps(event.data)
+                    "data": json.dumps(event.data),
                 }
-        return EventSourceResponse(event_generator())
+        finally:
+            watcher_task.cancel()
+            try:
+                await watcher_task
+            except asyncio.CancelledError:
+                pass
 
-    # Fallback to legacy chat service (supports document_ids filtering)
-    chat_service = app_state.chat_service
-    return EventSourceResponse(chat_service.chat_stream_generator(
-        chat_id=chat_id,
-        user_message=request_data.message,
-        document_ids=request_data.document_ids or []
-    ))
+    return EventSourceResponse(event_generator())

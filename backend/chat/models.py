@@ -93,6 +93,16 @@ class SSEEventType(Enum):
     CONTENT = "content"
     DONE = "done"
     ERROR = "error"
+    # Agent protocol events
+    AGENT_START = "agent_start"
+    ITERATION_START = "iteration_start"
+    AGENT_THINKING = "agent_thinking"
+    TOOL_CALL = "tool_call"
+    TOOL_PROGRESS = "tool_progress"
+    TOOL_RESULT = "tool_result"
+    COMPACT_TRIGGERED = "compact_triggered"
+    FINAL_TEXT_PROMOTE = "final_text_promote"
+    AGENT_HALTED = "agent_halted"
 
 
 @dataclass

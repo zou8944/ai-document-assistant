@@ -135,6 +135,25 @@ class SystemConfig:
 
 
 @dataclass
+class AgentConfig:
+    """Agent loop configuration."""
+
+    max_iterations: int = 15
+    context_window: int = 200_000
+    compact_threshold: float = 0.8
+    keep_recent_tool_results: int = 2
+    transcript_dir: str = "./var/agent_transcripts"
+    model: str = "standard"  # fast | standard | deep
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        return cls(**data)
+
+
+@dataclass
 class AppConfig:
     """Complete application configuration."""
     llm: LLMConfig = field(default_factory=LLMConfig)
@@ -142,6 +161,7 @@ class AppConfig:
     knowledge_base: KnowledgeBaseConfig = field(default_factory=KnowledgeBaseConfig)
     system: SystemConfig = field(default_factory=SystemConfig)
     retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
+    agent: AgentConfig = field(default_factory=AgentConfig)
 
     def to_dict(self) -> dict:
         return asdict(self)
