@@ -5,7 +5,6 @@ from chat.models import CollectionInfo, QueryIntent, RetrievedDocument, SearchRe
 from chat.retrieval.chunk_index import ChunkIndex
 from chat.retrieval.document_index import DocumentIndex
 from chat.retrieval.keyword_index import KeywordIndex
-from chat.retrieval.relevance_judge import RelevanceJudge
 
 logger = logging.getLogger(__name__)
 
@@ -16,12 +15,10 @@ class RetrievalOrchestrator:
         document_index: DocumentIndex,
         chunk_index: ChunkIndex,
         keyword_index: KeywordIndex,
-        relevance_judge: RelevanceJudge | None = None
     ):
         self.document_index = document_index
         self.chunk_index = chunk_index
         self.keyword_index = keyword_index
-        self.relevance_judge = relevance_judge
 
     async def retrieve(self, intent: QueryIntent, queries: list[str],
                        collection_ids: list[str] | None = None,
@@ -93,15 +90,6 @@ class RetrievalOrchestrator:
                 )
 
         unique_docs = sorted(best_docs.values(), key=lambda d: d.relevance_score, reverse=True)
-
-        # Apply document-level relevance filtering
-        if self.relevance_judge and intent not in {QueryIntent.CHITCHAT, QueryIntent.META, QueryIntent.OFF_TOPIC}:
-            unique_docs = await self.relevance_judge.filter_documents(
-                query=queries[0] if queries else "",
-                documents=unique_docs,
-                intent=intent,
-                core_keywords=core_keywords
-            )
 
         search_result = SearchResult(
             documents=unique_docs[:top_k],

@@ -171,32 +171,6 @@ async def get_chat_messages(
     }
 
 
-@router.post("/chats/{chat_id}/chat")
-async def send_message(
-    chat_id: str,
-    request_data: ChatMessageRequest,
-    request: Request
-):
-    """
-    Send a message and get AI response (synchronous)
-    """
-    chat_service = get_app_state(request).chat_service
-
-    # Send message and get response
-    response_message = await chat_service.chat(
-        chat_id=chat_id,
-        user_message=request_data.message,
-        document_ids=request_data.document_ids or []
-    )
-
-    if not response_message:
-        raise HTTPInternalServerErrorException("Failed to generate AI response")
-
-    logger.info(f"Generated response for chat {chat_id}")
-
-    return response_message
-
-
 @router.post("/chats/{chat_id}/chat/stream")
 async def send_message_stream(
     chat_id: str,
@@ -233,7 +207,7 @@ async def send_message_stream(
                 chat_id=chat_id,
                 query=request_data.message,
             ):
-                if event.type == "agent_start" and message_id is None:
+                if event.type.value == "agent_start" and message_id is None:
                     message_id = event.data.get("message_id")
                 yield {
                     "event": event.type.value,

@@ -21,10 +21,8 @@ class LLMConfig:
     anthropic_base_url: str = ""
     anthropic_chat_model: str = "claude-sonnet-4-20250514"
 
-    # Multi-model routing configuration
-    router_model: str = "gpt-4o-mini"
+    # Agent model configuration
     fast_model: str = "gpt-4o-mini"
-    standard_model: str = "gpt-4o"
     deep_model: str = "claude-sonnet-4-20250514"
 
     def to_dict(self) -> dict:
@@ -48,9 +46,7 @@ class LLMConfig:
             anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
             anthropic_base_url=os.getenv("ANTHROPIC_BASE_URL", ""),
             anthropic_chat_model=os.getenv("ANTHROPIC_CHAT_MODEL", "claude-sonnet-4-20250514"),
-            router_model=os.getenv("ROUTER_MODEL", chat_model),
             fast_model=os.getenv("FAST_MODEL", chat_model),
-            standard_model=os.getenv("STANDARD_MODEL", chat_model),
             deep_model=os.getenv("DEEP_MODEL", "claude-sonnet-4-20250514"),
         )
 
@@ -89,30 +85,6 @@ class KnowledgeBaseConfig:
     @classmethod
     def from_dict(cls, data: dict):
         return cls(**data)
-
-
-@dataclass
-class RetrievalConfig:
-    context_window_tokens: int = 160000
-    tier1_max_tokens: int = 80000
-    tier2_max_summary_tokens: int = 20000
-    tier2_max_full_tokens: int = 80000
-
-    def to_dict(self) -> dict:
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, data: dict):
-        return cls(**data)
-
-    @classmethod
-    def from_env(cls):
-        return cls(
-            context_window_tokens=int(os.getenv("CONTEXT_WINDOW_TOKENS", "160000")),
-            tier1_max_tokens=int(os.getenv("TIER1_MAX_TOKENS", "80000")),
-            tier2_max_summary_tokens=int(os.getenv("TIER2_MAX_SUMMARY_TOKENS", "20000")),
-            tier2_max_full_tokens=int(os.getenv("TIER2_MAX_FULL_TOKENS", "80000")),
-        )
 
 
 @dataclass
@@ -160,7 +132,6 @@ class AppConfig:
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     knowledge_base: KnowledgeBaseConfig = field(default_factory=KnowledgeBaseConfig)
     system: SystemConfig = field(default_factory=SystemConfig)
-    retrieval: RetrievalConfig = field(default_factory=RetrievalConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
 
     def to_dict(self) -> dict:
@@ -172,8 +143,7 @@ class AppConfig:
             llm=LLMConfig.from_dict(data.get("llm", {})),
             embedding=EmbeddingConfig.from_dict(data.get("embedding", {})),
             knowledge_base=KnowledgeBaseConfig.from_dict(data.get("knowledge_base", {})),
-            system=SystemConfig.from_dict(data.get("system", {})),
-            retrieval=RetrievalConfig.from_dict(data.get("retrieval", {}))
+            system=SystemConfig.from_dict(data.get("system", {}))
         )
 
     @classmethod
@@ -212,8 +182,7 @@ class AppConfig:
             llm=LLMConfig(**data.get("llm", {})),
             embedding=EmbeddingConfig(**data.get("embedding", {})),
             knowledge_base=KnowledgeBaseConfig(**data.get("knowledge_base", {})),
-            system=SystemConfig(**data.get("system", {})),
-            retrieval=RetrievalConfig(**data.get("retrieval", {}))
+            system=SystemConfig(**data.get("system", {}))
         )
 
     @classmethod
@@ -224,7 +193,6 @@ class AppConfig:
             embedding=EmbeddingConfig.from_env(),
             knowledge_base=KnowledgeBaseConfig(),
             system=SystemConfig.from_env(),
-            retrieval=RetrievalConfig.from_env(),
         )
 
     def to_toml_file(self, file_path: Optional[Path] = None) -> None:

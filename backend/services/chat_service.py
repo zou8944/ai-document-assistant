@@ -1,47 +1,27 @@
 """
-Chat service for managing conversations and AI responses.
+Chat service for managing conversations (CRUD only).
+AI response generation has been moved to AgentChatService.
 """
 
 import json
 import logging
-from typing import Any, Optional
+from typing import Optional
 
-from exception import HTTPNotFoundException
 from models.dto import ChatDTO, ChatMessageDTO
-from models.rag import ChatMessageRoleEnum, CollectionSummary, DocChunk, HistoryItem
-from models.responses import ChatMessageResponse, ChatResponse, SourceReference
-from rag.retrieval_strategy import DocumentRetrievalService
+from models.responses import ChatMessageResponse, ChatResponse
 from repository.chat import ChatMessageRepository, ChatRepository
-from repository.collection import CollectionRepository
-from repository.document import DocumentRepository
-from services.llm_service import LLMService
-from vector_store.chroma_client import create_chroma_manager
 
 logger = logging.getLogger(__name__)
 
 
 class ChatService:
-    """Service for managing conversations and AI responses"""
+    """Service for managing chat conversations (CRUD only)."""
 
-    def __init__(self, config, llm_service: LLMService):
-        """Initialize chat service"""
+    def __init__(self, config=None, llm_service=None):
+        """Initialize chat service."""
         self.config = config
-
-        # Initialize repository instance
         self.chat_repo = ChatRepository()
         self.chat_message_repo = ChatMessageRepository()
-        self.collection_repo = CollectionRepository()
-        self.document_repo = DocumentRepository()
-
-        # Initialize components that will be reused
-        self.chroma_manager = create_chroma_manager()
-
-        # Initialize LLM service
-        self.llm_service = llm_service
-
-        # Initialize retrieval service
-        self.retrieval_service = DocumentRetrievalService(config, llm_service, self.document_repo, self.chroma_manager)
-
         logger.info("ChatService initialized successfully")
 
     def _to_chat_response(self, chat: ChatDTO) -> ChatResponse:
@@ -144,265 +124,5 @@ class ChatService:
         """Count total chat messages"""
         return self.chat_message_repo.count_by_chat(chat_id)
 
-    async def _retrieve_from_multiple_collections(
-        self, collection_ids: list[str], queries: list[str], top_k_per_collection: int = 5
-    ) -> list[dict[str, Any]]:
-        """Retrieve documents from multiple collections with intent-based strategy"""
-        all_results = []
-        score_threshold = 0.4
-
-        for query in queries:
-            query_embedding = await self.llm_service.embed_query(query)
-            for collection_id in collection_ids:
-                results = await self.chroma_manager.search_similar(
-                    collection_name=collection_id,
-                    query_embedding=query_embedding,
-                    limit=top_k_per_collection,
-                    score_threshold=score_threshold
-                )
-                for result in results:
-                    result['collection_id'] = collection_id
-
-                all_results.extend(results)
-
-        # Sort by relevance score and take top results
-        all_results.sort(key=lambda x: x.get('score', 0), reverse=True)
-
-        return all_results[:top_k_per_collection * 2]
-
-    def _format_sources(self, documents: list[dict[str, Any]]) -> list[SourceReference]:
-        """Format retrieved documents as source references"""
-        sources = []
-
-        for doc in documents:
-            source_ref = SourceReference(
-                document_id=doc.get('document_id', ''),
-                document_name=doc.get('document_name', 'Unknown Document'),
-                document_uri=doc.get('document_uri', ''),
-                chunk_index=doc.get('chunk_index', 0),
-                content_preview=doc.get('content', '')[:100] + "..." if len(doc.get('content', '')) > 100 else doc.get('content', ''),
-                relevance_score=doc.get('score', 0.0)
-            )
-            sources.append(source_ref)
-
-        return sources
-
-    def _get_collection_summaries(self, collection_ids: list[str]) -> list[CollectionSummary]:
-        summaries = []
-        for collection_id in collection_ids:
-            collection = self.collection_repo.get_by_id(collection_id)
-            assert collection and collection.name
-            summaries.append(CollectionSummary(
-                name=collection.name,
-                summary=collection.summary or ""
-            ))
-        return summaries
-
-    def _get_chat_history(self, chat_id: str, max_messages: int = 10) -> list[HistoryItem]:
-        history = self.chat_message_repo.get_conversation_history(chat_id, max_messages)
-        history_items = []
-        for chat_message in history:
-            if chat_message.role == "user":
-                role_enum = ChatMessageRoleEnum.USER
-            else:
-                role_enum = ChatMessageRoleEnum.ASSISTANT
-            history_items.append(HistoryItem(
-                role=role_enum,
-                message=chat_message.content or ""
-            ))
-        return history_items
-
-    def _format_doc_chunks(
-        self, documents: list[dict[str, Any]], colletcion_summaries: list[CollectionSummary],
-    ) -> list[DocChunk]:
-        result = []
-        for doc in documents:
-            doc_name = doc.get('document_name', 'Unknown')
-            content = doc.get('content', '')
-            collection_id = doc.get('collection_id', 'unknown')
-            collection_name = next((col.name for col in colletcion_summaries if col.name == collection_id), collection_id)
-            result.append(DocChunk(
-                doc_name=doc_name,
-                collection_name=collection_name,
-                content=content,
-            ))
-        return result
-
-    async def chat(self, chat_id: str, user_message: str, document_ids: list[str]) -> Optional[ChatMessageResponse]:
-        """Send a message and get AI response with intent-based processing"""
-        # Get chat information
-        chat = await self.get_chat(chat_id)
-        if not chat:
-            raise HTTPNotFoundException(detail=f"Chat '{chat_id}' not found")
-
-        # 用户提问先入库
-        self.chat_message_repo.add_message(
-            chat_id=chat_id,
-            role="user",
-            content=user_message
-        )
-
-        collection_summaries = self._get_collection_summaries(chat.collection_ids)
-        chat_histories = self._get_chat_history(chat_id, max_messages=10)
-
-        # 如果指定了文档 id，则直接使用这些文档
-        sources = []
-        doc_chunks = []
-        if document_ids:
-            docs = [self.document_repo.get_by_id(document_id) for document_id in document_ids]
-            doc_chunks = [DocChunk(
-                doc_name=doc.name or "Unknown Document",
-                collection_name=next((col.name for col in collection_summaries if col.name == doc.collection_id), doc.collection_id or "Unknown Collection"),
-                content=doc.content or ""
-            ) for doc in docs if doc]
-            sources = [SourceReference(
-                document_id=doc.id or "",
-                document_name=doc.name or "Unknown Document",
-                document_uri=doc.uri or "",
-                chunk_index=0,
-                content_preview="",
-                relevance_score=1.0
-            ) for doc in docs if doc]
-        else:
-            retrieval_result = await self.retrieval_service.retrieve(
-                collection_ids=chat.collection_ids,
-                user_query=user_message,
-                collection_summaries=collection_summaries,
-            )
-            doc_chunks = retrieval_result.doc_chunks
-            sources = retrieval_result.sources
-        # 提示词构建
-        prompt = self.llm_service.build_rag_prompt(
-            collections=collection_summaries,
-            histories=chat_histories,
-            reference_chunks=doc_chunks,
-            user_query=user_message
-        )
-        # 阻塞式 AI 生成
-        ai_response = await self.llm_service.generate_chat_response(prompt)
-
-        # 结果入库
-        ai_msg = self.chat_message_repo.add_message(
-            chat_id=chat_id,
-            role="assistant",
-            content=ai_response,
-            sources=json.dumps([source.model_dump() for source in sources]),
-            metadata=json.dumps({
-                "model": self.config.llm.chat_model,
-                "sources_count": len(sources),
-                "collections_searched": chat.collection_ids,
-                "document_retrieval": True
-            })
-        )
-
-        logger.info(f"Generated AI response for chat {chat_id} with {len(sources)} sources")
-
-        # 返回 AI 回复
-        return self._to_message_response(ai_msg)
-
-    async def chat_stream_generator(self, chat_id: str, user_message: str, document_ids: list[str]):
-        # Get chat information
-        chat = await self.get_chat(chat_id)
-        if not chat:
-            raise HTTPNotFoundException(detail=f"Chat '{chat_id}' not found")
-
-        # 用户提问先入库
-        self.chat_message_repo.add_message(
-            chat_id=chat_id,
-            role="user",
-            content=user_message
-        )
-
-        collection_summaries = self._get_collection_summaries(chat.collection_ids)
-        chat_histories = self._get_chat_history(chat_id, max_messages=10)
-
-        doc_chunks = []
-        sources = []
-        if document_ids:
-            docs = [self.document_repo.get_by_id(document_id) for document_id in document_ids]
-            doc_chunks = [DocChunk(
-                doc_name=doc.name or "Unknown Document",
-                collection_name=next((col.name for col in collection_summaries if col.name == doc.collection_id), doc.collection_id or "Unknown Collection"),
-                content=doc.content or ""
-            ) for doc in docs if doc]
-            sources = [SourceReference(
-                document_id=doc.id or "",
-                document_name=doc.name or "Unknown Document",
-                document_uri=doc.uri or "",
-                chunk_index=0,
-                content_preview="",
-                relevance_score=1.0
-            ) for doc in docs if doc]
-        else:
-            yield {
-                "event": "status",
-                "data": json.dumps({"status": "retrieving_documents"})
-            }
-            retrieval_result = await self.retrieval_service.retrieve(
-                collection_ids=chat.collection_ids,
-                user_query=user_message,
-                collection_summaries=collection_summaries,
-            )
-            doc_chunks = retrieval_result.doc_chunks
-            sources = retrieval_result.sources
-            if sources:
-                yield {
-                    "event": "sources",
-                    "data": json.dumps({
-                        "sources": [source.model_dump() for source in sources],
-                        "count": len(sources)
-                    })
-                }
-
-        # AI 生成
-        yield {
-            "event": "status",
-            "data": json.dumps({"status": "generating_response"})
-        }
-        # 提示词构建
-        prompt = self.llm_service.build_rag_prompt(
-            collections=collection_summaries,
-            histories=chat_histories,
-            reference_chunks=doc_chunks,
-            user_query=user_message
-        )
-
-        # 结果流式相应
-        full_response = ""
-        async for content in self.llm_service.stream_chat_response(prompt):
-            if content:
-                full_response += str(content)
-                yield {
-                    "event": "content",
-                    "data": json.dumps({"content": content}, ensure_ascii=False)
-                }
-
-        # 完成后，AI 回复入库
-        ai_msg = self.chat_message_repo.add_message(
-            chat_id=chat_id,
-            role="assistant",
-            content=full_response,
-            sources=json.dumps([source.model_dump() for source in sources]),
-            metadata=json.dumps({
-                "model": self.config.llm.chat_model,
-                "sources_count": len(sources),
-                "collections_searched": chat.collection_ids
-            })
-        )
-
-        # 发送结束事件
-        yield {
-            "event": "done",
-            "data": json.dumps({
-                "message_id": ai_msg.id,
-                "sources_count": len(sources),
-                "total_content_length": len(full_response)
-            })
-        }
-
-        logger.info(f"Generated AI response for chat {chat_id} with {len(sources)} sources")
-
     def close(self):
-        self.chroma_manager.close()
-        self.llm_service.close()
         logger.info("ChatService resources closed")
