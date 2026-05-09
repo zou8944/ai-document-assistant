@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from chat.agent.cancellation import CancellationToken
 from chat.models import SSEEvent
@@ -26,6 +26,9 @@ class ToolContext:
     cancellation: CancellationToken
     emit: Callable[[SSEEvent], Awaitable[None]]
     deps: "AgentDeps"
+    # Set of document IDs that have been accessed during this agent run.
+    # Maintained by AgentRuntime — tools must treat this as read-only.
+    visited_doc_ids: set[str] = field(default_factory=set)
 
 
 @dataclass

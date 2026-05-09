@@ -70,6 +70,7 @@ class AgentRuntime:
         original_query = query
         loop_detector = LoopDetector(self.config) if self.config.loop_detector_enabled else None
         warning_issued = False
+        visited_doc_ids: set[str] = set()
 
         for iteration in range(1, self.config.max_iterations + 1):
             cancellation.raise_if_cancelled()
@@ -170,6 +171,7 @@ class AgentRuntime:
                 cancellation=cancellation,
                 emit=emit,
                 deps=deps,
+                visited_doc_ids=visited_doc_ids,
             )
 
             results: list[dict] = []
@@ -203,6 +205,37 @@ class AgentRuntime:
                             "name": tu.name,
                             "is_error": out.is_error,
                         })
+
+                    # Track which documents were visited this run so cite_sources
+                    # can validate the LLM's claimed references.
+                    if not out.is_error:
+                        if tu.name in ("search_documents", "grep_documents"):
+                            if out.structured and isinstance(
+                                out.structured.get("doc_ids"), list
+                            ):
+                                visited_doc_ids.update(
+                                    str(did) for did in out.structured["doc_ids"]
+                                )
+                        elif tu.name in ("get_document", "get_document_summary"):
+                            raw_id = str(tu.input.get("document_id", "") or "").strip()
+                            if raw_id.startswith("doc_"):
+                                raw_id = raw_id[4:]
+                            if raw_id:
+                                visited_doc_ids.add(raw_id)
+
+                    # cite_sources -> emit a SOURCES SSE event so AgentChatService
+                    # can persist the LLM-declared references on the message.
+                    if (
+                        tu.name == "cite_sources"
+                        and not out.is_error
+                        and out.structured
+                        and "sources" in out.structured
+                    ):
+                        yield SSEEvent(
+                            type=SSEEventType.SOURCES,
+                            data={"documents": out.structured["sources"]},
+                        )
+
                     results.append(
                         {
                             "type": "tool_result",
@@ -351,6 +384,7 @@ class AgentRuntime:
         cancellation: CancellationToken,
         emit: Callable[[SSEEvent], Awaitable[None]],
         deps: "AgentDeps",
+        visited_doc_ids: set[str],
     ) -> "ToolContext":
         from chat.agent.tools.base import ToolContext
 
@@ -360,4 +394,5 @@ class AgentRuntime:
             cancellation=cancellation,
             emit=emit,
             deps=deps,
+            visited_doc_ids=visited_doc_ids,
         )

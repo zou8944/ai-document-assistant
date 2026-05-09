@@ -148,6 +148,7 @@ class DocumentRepository(BaseRepository[Document, DocumentDTO]):
                 select(
                     Document.id,
                     Document.name,
+                    Document.uri,
                     Document.summary,
                     Document.keywords,
                     Document.category,
@@ -159,6 +160,7 @@ class DocumentRepository(BaseRepository[Document, DocumentDTO]):
             return {
                 "id": result.id,
                 "name": result.name,
+                "uri": result.uri,
                 "summary": result.summary,
                 "keywords": result.keywords,
                 "category": result.category,

@@ -63,7 +63,10 @@ class SearchDocumentsTool(Tool):
                 )
             )
 
-        return ToolResult(content="\n".join(lines))
+        return ToolResult(
+            content="\n".join(lines),
+            structured={"doc_ids": [doc.id for doc in docs]},
+        )
 
 
 class GrepDocumentsTool(Tool):
@@ -168,4 +171,14 @@ class GrepDocumentsTool(Tool):
                 "Refine your pattern for more precise results.)"
             )
 
-        return ToolResult(content="\n".join(lines))
+        unique_doc_ids: list[str] = []
+        seen: set[str] = set()
+        for doc_id, _doc_name, _line_num, _context in matches:
+            if doc_id not in seen:
+                seen.add(doc_id)
+                unique_doc_ids.append(doc_id)
+
+        return ToolResult(
+            content="\n".join(lines),
+            structured={"doc_ids": unique_doc_ids},
+        )
