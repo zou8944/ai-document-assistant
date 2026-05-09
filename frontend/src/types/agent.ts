@@ -22,10 +22,18 @@ export interface AgentStep {
   afterTokens?: number
 }
 
+export interface AgentTimings {
+  total_ms: number
+  llm_total_ms: number
+  tools_total_ms: number
+  iteration_count: number
+}
+
 export interface AgentMessageState {
   steps: AgentStep[]
   finalText: string
   iterations: number
   status: "running" | "done" | "error" | "cancelled"
   halted?: boolean
+  timings?: AgentTimings
 }

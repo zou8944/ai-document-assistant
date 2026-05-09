@@ -12,33 +12,24 @@ import {
 } from '../services/apiClient'
 import { AgentMessageState } from '../types/agent'
 
-export interface StageTiming {
-  intent_analysis_ms: number
-  document_retrieval_ms: number
-  context_assembly_ms: number
-  generation_ms: number
-  total_ms: number
-}
-
 export interface Message {
   id: string
   type: 'user' | 'assistant'
   content: string
   timestamp: string
   sources?: SourceReference[]
-  timings?: StageTiming
   agentState?: AgentMessageState
 }
 
 const mapAPIMessageToUIMessage = (msg: APIChatMessage): Message => {
-  const timings = msg.metadata?.timings as StageTiming | undefined
+  const agentState = msg.metadata?.ui_state as AgentMessageState | undefined
   return {
     id: msg.message_id,
     type: msg.role,
     content: msg.content,
     timestamp: msg.created_at,
     sources: msg.sources || [],
-    timings,
+    agentState,
   }
 }
 
@@ -178,20 +169,25 @@ export const useChat = (chatId: string | null): UseChatReturn => {
         {
           const finalContent = event.data?.content || streamingContentRef.current
           const finalSources = event.data?.sources || streamingSourcesRef.current
-          const finalTimings = event.data?.timings || undefined
           const agentState = streamingAgentStateRef.current
 
           if (finalContent || agentState) {
+            const finalAgentState = agentState
+              ? {
+                  ...agentState,
+                  status: 'done' as const,
+                  timings: event.data?.agent_timings
+                    ? (event.data.agent_timings as AgentMessageState['timings'])
+                    : agentState.timings,
+                }
+              : undefined
             const aiMessage: Message = {
               id: event.data?.message_id || streamingMessageIdRef.current || `ai_${Date.now()}`,
               type: 'assistant',
               content: finalContent || agentState?.finalText || '',
               timestamp: new Date().toISOString(),
               sources: finalSources,
-              timings: finalTimings,
-              agentState: agentState
-                ? { ...agentState, status: 'done' as const }
-                : undefined,
+              agentState: finalAgentState,
             }
             setMessages((prev) => [...prev, aiMessage])
           }

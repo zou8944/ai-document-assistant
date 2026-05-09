@@ -8,41 +8,12 @@ import {
   StopIcon,
   UserIcon,
   CpuChipIcon,
-  ClockIcon,
-  MagnifyingGlassIcon,
-  BookOpenIcon,
-  PuzzlePieceIcon,
-  SparklesIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
-import { useChat, StageTiming } from '../../hooks/useChat'
+import { useChat } from '../../hooks/useChat'
 import MarkdownContent from './MarkdownContent'
 import SourceReferences from './SourceReferences'
 import AgentTrace from './AgentTrace'
-
-const TimingDisplay: React.FC<{ timings: StageTiming }> = ({ timings }) => {
-  const items = [
-    { label: '意图分析', ms: timings.intent_analysis_ms, Icon: SparklesIcon },
-    { label: '文档检索', ms: timings.document_retrieval_ms, Icon: MagnifyingGlassIcon },
-    { label: '整理上下文', ms: timings.context_assembly_ms, Icon: PuzzlePieceIcon },
-    { label: '生成回答', ms: timings.generation_ms, Icon: BookOpenIcon },
-  ]
-
-  return (
-    <div className="mt-2 pt-1.5 border-t border-gray-200/50 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-gray-400">
-      <div className="flex items-center space-x-0.5">
-        <ClockIcon className="w-2.5 h-2.5" />
-        <span>总计 {(timings.total_ms / 1000).toFixed(1)}s</span>
-      </div>
-      {items.map((item) => (
-        <div key={item.label} className="flex items-center space-x-0.5" title={`${item.label}: ${item.ms}ms`}>
-          <item.Icon className="w-2.5 h-2.5" />
-          <span>{item.label} {(item.ms / 1000).toFixed(1)}s</span>
-        </div>
-      ))}
-    </div>
-  )
-}
 
 interface DocChatPanelProps {
   chatId: string | null
@@ -128,6 +99,9 @@ export const DocChatPanel: React.FC<DocChatPanelProps> = ({ chatId, documentId }
 
               {/* Message Content */}
               <div className="flex-1 min-w-0">
+                {msg.type === 'assistant' && msg.agentState && (
+                  <AgentTrace state={msg.agentState} />
+                )}
                 <div
                   className={clsx(
                     'px-3 py-2 rounded-xl text-xs',
@@ -138,9 +112,6 @@ export const DocChatPanel: React.FC<DocChatPanelProps> = ({ chatId, documentId }
                 >
                   <MarkdownContent content={msg.content} isUser={msg.type === 'user'} />
                   <SourceReferences sources={msg.sources || []} />
-                  {msg.type === 'assistant' && msg.timings && (
-                    <TimingDisplay timings={msg.timings} />
-                  )}
                 </div>
                 <div className={clsx(
                   'mt-0.5 text-[10px] text-gray-500',

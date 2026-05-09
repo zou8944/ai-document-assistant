@@ -65,6 +65,7 @@ class AgentRuntime:
         if transcript:
             transcript.write_event("agent_start", {"query": query})
 
+        overall_t0 = time.monotonic()
         timings: list[IterationTiming] = []
         original_query = query
         loop_detector = LoopDetector(self.config) if self.config.loop_detector_enabled else None
@@ -138,6 +139,9 @@ class AgentRuntime:
                 if transcript:
                     transcript.write_event("final_text_promote", {"iteration": iteration})
 
+                total_ms = int((time.monotonic() - overall_t0) * 1000)
+                llm_total_ms = sum(t.llm_ms for t in timings)
+                tools_total_ms = sum(t.tools_ms for t in timings)
                 yield SSEEvent(
                     type=SSEEventType.DONE,
                     data={
@@ -145,6 +149,12 @@ class AgentRuntime:
                         "usage": {
                             "input_tokens": turn.usage.input_tokens,
                             "output_tokens": turn.usage.output_tokens,
+                        },
+                        "agent_timings": {
+                            "total_ms": total_ms,
+                            "llm_total_ms": llm_total_ms,
+                            "tools_total_ms": tools_total_ms,
+                            "iteration_count": iteration,
                         },
                     },
                 )
@@ -251,7 +261,7 @@ class AgentRuntime:
                         if transcript:
                             transcript.write_event("agent_halted", {"reason": "loop_detected"})
                         async for event in self._force_final_answer(
-                            messages, collection_ids, cancellation, iteration, "loop_detected", transcript
+                            messages, collection_ids, cancellation, iteration, "loop_detected", transcript, overall_t0, timings
                         ):
                             yield event
                         return
@@ -264,7 +274,7 @@ class AgentRuntime:
         if transcript:
             transcript.write_event("agent_halted", {"reason": "max_iterations"})
         async for event in self._force_final_answer(
-            messages, collection_ids, cancellation, self.config.max_iterations, "max_iterations", transcript
+            messages, collection_ids, cancellation, self.config.max_iterations, "max_iterations", transcript, overall_t0, timings
         ):
             yield event
 
@@ -276,6 +286,8 @@ class AgentRuntime:
         iteration: int,
         reason: str,
         transcript: TranscriptWriter | None,
+        overall_t0: float,
+        timings: list[IterationTiming],
     ) -> AsyncIterator[SSEEvent]:
         """Force a final answer without tools."""
         text_queue: asyncio.Queue[SSEEvent] = asyncio.Queue()
@@ -305,6 +317,9 @@ class AgentRuntime:
         if transcript:
             transcript.write_event("final_text_promote", {"iteration": -1})
 
+        total_ms = int((time.monotonic() - overall_t0) * 1000)
+        llm_total_ms = sum(t.llm_ms for t in timings)
+        tools_total_ms = sum(t.tools_ms for t in timings)
         yield SSEEvent(
             type=SSEEventType.DONE,
             data={
@@ -314,6 +329,12 @@ class AgentRuntime:
                 "usage": {
                     "input_tokens": final_turn.usage.input_tokens,
                     "output_tokens": final_turn.usage.output_tokens,
+                },
+                "agent_timings": {
+                    "total_ms": total_ms,
+                    "llm_total_ms": llm_total_ms,
+                    "tools_total_ms": tools_total_ms,
+                    "iteration_count": iteration,
                 },
             },
         )

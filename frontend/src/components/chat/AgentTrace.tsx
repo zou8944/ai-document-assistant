@@ -51,18 +51,19 @@ export const AgentTrace: React.FC<AgentTraceProps> = ({ state }) => {
     if (stepCount > 0) {
       parts.push(`${stepCount} step${stepCount > 1 ? 's' : ''}`)
     }
-    if (totalToolMs > 0) {
+    const totalMs = state.timings?.total_ms ?? totalToolMs
+    if (totalMs > 0) {
       parts.push(
-        totalToolMs >= 1000
-          ? `${(totalToolMs / 1000).toFixed(1)}s`
-          : `${totalToolMs}ms`
+        totalMs >= 1000
+          ? `${(totalMs / 1000).toFixed(1)}s`
+          : `${totalMs}ms`
       )
     }
     if (parts.length === 0) {
       return isRunning ? 'Agent' : 'Agent finished'
     }
     return `Agent (${parts.join(' \u00b7 ')})`
-  }, [stepCount, totalToolMs, isRunning])
+  }, [stepCount, totalToolMs, isRunning, state.timings])
 
   const StatusIcon = useMemo(() => {
     if (isError) return XCircleIcon
@@ -131,6 +132,21 @@ export const AgentTrace: React.FC<AgentTraceProps> = ({ state }) => {
                   <CheckCircleIcon className="w-3.5 h-3.5 text-emerald-400" />
                 </div>
                 <span className="text-xs text-emerald-300">Final answer</span>
+              </div>
+            </div>
+          )}
+
+          {/* Timing details */}
+          {state.timings && (
+            <div className="relative pt-2 mt-1 border-t border-white/5">
+              <div className="text-[10px] text-gray-500 space-x-1.5">
+                <span>总计 {(state.timings.total_ms / 1000).toFixed(1)}s</span>
+                <span>·</span>
+                <span>LLM {(state.timings.llm_total_ms / 1000).toFixed(1)}s</span>
+                <span>·</span>
+                <span>Tools {(state.timings.tools_total_ms / 1000).toFixed(1)}s</span>
+                <span>·</span>
+                <span>{state.timings.iteration_count} 轮迭代</span>
               </div>
             </div>
           )}

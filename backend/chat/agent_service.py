@@ -2,6 +2,7 @@
 
 import json
 import logging
+import time
 import uuid
 from collections.abc import AsyncIterator
 
@@ -99,6 +100,14 @@ class AgentChatService:
                     "usage": {"input_tokens": 0, "output_tokens": 0},
                     "timings": {},
                 }
+                ui_state: dict = {
+                    "steps": [],
+                    "finalText": "",
+                    "iterations": 0,
+                    "status": "running",
+                    "halted": False,
+                }
+                start_time = time.monotonic()
 
                 first_event = True
                 async for event in runtime.run(
@@ -115,13 +124,74 @@ class AgentChatService:
                         event.data["message_id"] = message_id
                         first_event = False
 
-                    if event.type == SSEEventType.AGENT_THINKING:
-                        thinking_buffer += event.data.get("delta", "")
-                    elif event.type == SSEEventType.SOURCES:
-                        docs = event.data.get("documents", [])
-                        if isinstance(docs, list):
-                            sources.extend(docs)
+                    # Update ui_state to mirror frontend AgentMessageState
+                    if event.type == SSEEventType.ITERATION_START:
+                        iteration = event.data.get("iteration", ui_state["iterations"] + 1)
+                        ui_state["iterations"] = iteration
+                        ui_state["steps"].append({"kind": "thinking", "iteration": iteration, "text": ""})
+                    elif event.type == SSEEventType.AGENT_THINKING:
+                        delta = event.data.get("delta", "")
+                        iteration = event.data.get("iteration", ui_state["iterations"])
+                        for i in range(len(ui_state["steps"]) - 1, -1, -1):
+                            step = ui_state["steps"][i]
+                            if step["kind"] == "thinking" and step["iteration"] == iteration and not step.get("hidden"):
+                                step["text"] = step.get("text", "") + delta
+                                break
+                        else:
+                            ui_state["steps"].append({"kind": "thinking", "iteration": iteration, "text": delta})
+                    elif event.type == SSEEventType.TOOL_CALL:
+                        ui_state["steps"].append({
+                            "kind": "tool",
+                            "iteration": ui_state["iterations"],
+                            "toolId": event.data.get("id", ""),
+                            "toolName": event.data.get("name", ""),
+                            "toolInput": event.data.get("input", {}),
+                            "toolStatus": "running",
+                        })
+                    elif event.type == SSEEventType.TOOL_RESULT:
+                        tool_id = event.data.get("id", "")
+                        for i in range(len(ui_state["steps"]) - 1, -1, -1):
+                            step = ui_state["steps"][i]
+                            if step["kind"] == "tool" and step.get("toolId") == tool_id:
+                                step["toolStatus"] = "error" if event.data.get("is_error") else "done"
+                                step["toolPreview"] = event.data.get("preview", "")
+                                step["toolMs"] = event.data.get("ms")
+                                break
+                    elif event.type == SSEEventType.COMPACT_TRIGGERED:
+                        ui_state["steps"].append({
+                            "kind": "compact",
+                            "iteration": ui_state["iterations"],
+                            "beforeTokens": event.data.get("before_tokens"),
+                            "afterTokens": event.data.get("after_tokens"),
+                        })
+                    elif event.type == SSEEventType.FINAL_TEXT_PROMOTE:
+                        iteration = event.data.get("iteration", ui_state["iterations"])
+                        for i in range(len(ui_state["steps"]) - 1, -1, -1):
+                            step = ui_state["steps"][i]
+                            if step["kind"] == "thinking" and step["iteration"] == iteration and not step.get("hidden"):
+                                promoted_text = step.get("text", "")
+                                ui_state["steps"].pop(i)
+                                ui_state["finalText"] = (
+                                    ui_state["finalText"] + "\n\n" + promoted_text
+                                    if ui_state["finalText"]
+                                    else promoted_text
+                                )
+                                break
+                    elif event.type == SSEEventType.AGENT_HALTED:
+                        reason = event.data.get("reason")
+                        if reason != "loop_warning":
+                            ui_state["status"] = "done"
+                            ui_state["halted"] = True
                     elif event.type == SSEEventType.DONE:
+                        ui_state["status"] = "done"
+                        total_ms = int((time.monotonic() - start_time) * 1000)
+                        agent_timings = event.data.get("agent_timings", {})
+                        ui_state["timings"] = {
+                            "total_ms": total_ms,
+                            "llm_total_ms": agent_timings.get("llm_total_ms", 0),
+                            "tools_total_ms": agent_timings.get("tools_total_ms", 0),
+                            "iteration_count": agent_timings.get("iteration_count", 0),
+                        }
                         agent_trace["iterations"] = event.data.get("iterations", 0)
                         agent_trace["stop_reason"] = (
                             "halted" if event.data.get("halted") else "end_turn"
@@ -132,12 +202,20 @@ class AgentChatService:
                             "output_tokens": usage.get("output_tokens", 0),
                         }
 
+                    if event.type == SSEEventType.AGENT_THINKING:
+                        thinking_buffer += event.data.get("delta", "")
+                    elif event.type == SSEEventType.SOURCES:
+                        docs = event.data.get("documents", [])
+                        if isinstance(docs, list):
+                            sources.extend(docs)
+
                     yield event
 
                 # Snapshot messages into agent_trace before persisting
                 # runtime.run() does not expose its internal messages array,
                 # so we reconstruct from the yielded events and history.
                 agent_trace["messages"] = self._reconstruct_messages(history, query, thinking_buffer, sources)
+                agent_trace["ui_state"] = ui_state
 
                 # Persist final answer
                 self.chat_message_repo.update(

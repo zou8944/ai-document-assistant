@@ -9,11 +9,6 @@ import {
   StopIcon,
   UserIcon,
   CpuChipIcon,
-  ClockIcon,
-  MagnifyingGlassIcon,
-  BookOpenIcon,
-  PuzzlePieceIcon,
-  SparklesIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { useAppStore } from '../../store/appStore'
@@ -22,37 +17,13 @@ import {
   extractData,
   UpdateChatRequest,
 } from '../../services/apiClient'
-import { useChat, StageTiming } from '../../hooks/useChat'
+import { useChat } from '../../hooks/useChat'
 import KnowledgeBaseSelector from './KnowledgeBaseSelector'
 import DocumentPicker from './DocumentPicker'
 import RichTextInput from './RichTextInput'
 import MarkdownContent from './MarkdownContent'
 import SourceReferences from './SourceReferences'
 import AgentTrace from './AgentTrace'
-
-const TimingDisplay: React.FC<{ timings: StageTiming }> = ({ timings }) => {
-  const items = [
-    { label: '意图分析', ms: timings.intent_analysis_ms, Icon: SparklesIcon },
-    { label: '文档检索', ms: timings.document_retrieval_ms, Icon: MagnifyingGlassIcon },
-    { label: '整理上下文', ms: timings.context_assembly_ms, Icon: PuzzlePieceIcon },
-    { label: '生成回答', ms: timings.generation_ms, Icon: BookOpenIcon },
-  ]
-
-  return (
-    <div className="mt-2 pt-2 border-t border-gray-200/50 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-gray-400">
-      <div className="flex items-center space-x-0.5">
-        <ClockIcon className="w-3 h-3" />
-        <span>总计 {(timings.total_ms / 1000).toFixed(1)}s</span>
-      </div>
-      {items.map((item) => (
-        <div key={item.label} className="flex items-center space-x-0.5" title={`${item.label}: ${item.ms}ms`}>
-          <item.Icon className="w-3 h-3" />
-          <span>{item.label} {(item.ms / 1000).toFixed(1)}s</span>
-        </div>
-      ))}
-    </div>
-  )
-}
 
 interface DocumentMention {
   id: string
@@ -255,9 +226,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
 
                   {/* Sources */}
                   <SourceReferences sources={msg.sources || []} />
-                  {msg.type === 'assistant' && msg.timings && (
-                    <TimingDisplay timings={msg.timings} />
-                  )}
                 </div>
 
                 <div className={clsx(
