@@ -180,127 +180,129 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={clsx(
-              'flex',
-              msg.type === 'user' ? 'justify-end' : 'justify-start'
-            )}
-          >
+      <div className="flex-1 overflow-y-auto">
+        <div className="w-[60%] mx-auto py-6 space-y-4">
+          {messages.map((msg) => (
             <div
+              key={msg.id}
               className={clsx(
-                'flex max-w-3xl space-x-3',
-                msg.type === 'user' ? 'flex-row-reverse space-x-reverse' : 'flex-row'
+                'flex',
+                msg.type === 'user' ? 'justify-end' : 'justify-start'
               )}
             >
-              {/* Avatar */}
-              <div className={clsx(
-                'flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center',
-                msg.type === 'user'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-200 text-gray-600'
-              )}>
-                {msg.type === 'user' ? (
-                  <UserIcon className="w-4 h-4" />
-                ) : (
-                  <CpuChipIcon className="w-4 h-4" />
+              <div
+                className={clsx(
+                  'flex max-w-[90%] space-x-3',
+                  msg.type === 'user' ? 'flex-row-reverse space-x-reverse' : 'flex-row'
                 )}
-              </div>
-
-              {/* Message Content */}
-              <div className="flex-1 min-w-0">
-                {msg.type === 'assistant' && msg.agentState && (
-                  <AgentTrace state={msg.agentState} />
-                )}
-                <div
-                  className={clsx(
-                    'px-4 py-3 rounded-2xl text-sm',
-                    msg.type === 'user'
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-white/80 backdrop-blur-sm border border-gray-200/50 text-gray-900'
+              >
+                {/* Avatar */}
+                <div className={clsx(
+                  'flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center',
+                  msg.type === 'user'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-200 text-gray-600'
+                )}>
+                  {msg.type === 'user' ? (
+                    <UserIcon className="w-4 h-4" />
+                  ) : (
+                    <CpuChipIcon className="w-4 h-4" />
                   )}
-                >
-                  <MarkdownContent content={msg.content} isUser={msg.type === 'user'} />
-
-                  {/* Sources */}
-                  <SourceReferences sources={msg.sources || []} />
                 </div>
 
-                <div className={clsx(
-                  'mt-1 text-xs text-gray-500',
-                  msg.type === 'user' ? 'text-right' : 'text-left'
-                )}>
-                  {formatTime(msg.timestamp)}
+                {/* Message Content */}
+                <div className="flex-1 min-w-0">
+                  {msg.type === 'assistant' && msg.agentState && (
+                    <AgentTrace state={msg.agentState} />
+                  )}
+                  <div
+                    className={clsx(
+                      'px-4 py-3 rounded-2xl text-sm',
+                      msg.type === 'user'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-white/80 backdrop-blur-sm border border-gray-200/50 text-gray-900'
+                    )}
+                  >
+                    <MarkdownContent content={msg.content} isUser={msg.type === 'user'} />
+
+                    {/* Sources */}
+                    <SourceReferences sources={msg.sources || []} />
+                  </div>
+
+                  <div className={clsx(
+                    'mt-1 text-xs text-gray-500',
+                    msg.type === 'user' ? 'text-right' : 'text-left'
+                  )}>
+                    {formatTime(msg.timestamp)}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
 
-        {/* Streaming content */}
-        {isStreaming && (
-          <div className="flex justify-start">
-            <div className="flex max-w-3xl space-x-3">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center">
-                <CpuChipIcon className="w-4 h-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                {processingStatus && (
-                  <div className="mb-1.5 flex items-center space-x-1.5 text-xs text-gray-500">
-                    <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                    <span>{processingStatus}</span>
+          {/* Streaming content */}
+          {isStreaming && (
+            <div className="flex justify-start">
+              <div className="flex max-w-[90%] space-x-3">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center">
+                  <CpuChipIcon className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  {processingStatus && (
+                    <div className="mb-1.5 flex items-center space-x-1.5 text-xs text-gray-500">
+                      <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                      <span>{processingStatus}</span>
+                    </div>
+                  )}
+                  {streamingAgentState && (
+                    <AgentTrace state={streamingAgentState} />
+                  )}
+                  <div className="px-4 py-3 rounded-2xl bg-white/80 backdrop-blur-sm border border-gray-200/50 text-gray-900 text-sm">
+                    {streamingContent ? (
+                      <>
+                        <MarkdownContent content={streamingContent} />
+                        <div className="mt-2 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                      </>
+                    ) : (
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                      </div>
+                    )}
                   </div>
-                )}
-                {streamingAgentState && (
-                  <AgentTrace state={streamingAgentState} />
-                )}
-                <div className="px-4 py-3 rounded-2xl bg-white/80 backdrop-blur-sm border border-gray-200/50 text-gray-900 text-sm">
-                  {streamingContent ? (
-                    <>
-                      <MarkdownContent content={streamingContent} />
-                      <div className="mt-2 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                    </>
-                  ) : (
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Loading indicator - only show when not streaming */}
+          {isLoading && !isStreaming && (
+            <div className="flex justify-start">
+              <div className="flex max-w-[90%] space-x-3">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center">
+                  <CpuChipIcon className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="px-4 py-3 rounded-2xl bg-white/80 backdrop-blur-sm border border-gray-200/50">
                     <div className="flex space-x-1">
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                     </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Loading indicator - only show when not streaming */}
-        {isLoading && !isStreaming && (
-          <div className="flex justify-start">
-            <div className="flex max-w-3xl space-x-3">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center">
-                <CpuChipIcon className="w-4 h-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="px-4 py-3 rounded-2xl bg-white/80 backdrop-blur-sm border border-gray-200/50">
-                  <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        <div ref={messagesEndRef} />
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {/* Input Area */}
-      <div className="flex-shrink-0 p-4 border-t border-gray-200/50 bg-white/50 backdrop-blur-sm">
-        <div className="space-y-2">
+      <div className="flex-shrink-0 border-t border-gray-200/50 bg-white/50 backdrop-blur-sm">
+        <div className="w-[60%] mx-auto p-4 space-y-2">
           {/* Document picker */}
           <DocumentPicker
             selectedDocumentIds={selectedDocumentIds}
