@@ -160,7 +160,7 @@ class ChatMessage(Base):
             name="chk_message_role"
         ),
         CheckConstraint(
-            "length(content) > 0",
+            "length(content) >= 0",
             name="chk_message_content_length"
         ),
         Index("idx_chat_messages_chat_id", "chat_id"),
