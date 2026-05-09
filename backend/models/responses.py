@@ -84,6 +84,9 @@ class DocumentResponse(BaseModel):
     chunk_count: int = Field(..., description="Number of chunks")
     status: str = Field(..., description="Processing status")
     source_path: Optional[str] = Field(None, description="Source path for crawled documents")
+    category: Optional[str] = Field(None, description="Document category")
+    keywords: Optional[str] = Field(None, description="JSON list of keywords")
+    total_tokens: int = Field(0, description="Total token count")
     created_at: str = Field(..., description="Creation timestamp")
     updated_at: str = Field(..., description="Last update timestamp")
 

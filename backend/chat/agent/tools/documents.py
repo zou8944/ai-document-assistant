@@ -28,6 +28,10 @@ class GetDocumentTool(Tool):
         page: int = kwargs.get("page", 1)
         page_size_tokens: int = kwargs.get("page_size_tokens", 2000)
 
+        # Defensive: strip "doc_" prefix if LLM hallucinates it (legacy format or misread)
+        if document_id.startswith("doc_"):
+            document_id = document_id[4:]
+
         if not document_id:
             return ToolResult(content="Error: document_id is required", is_error=True)
 
@@ -95,6 +99,10 @@ class GetDocumentSummaryTool(Tool):
     async def run(self, ctx: ToolContext, **kwargs) -> ToolResult:
         document_id: str = kwargs.get("document_id", "")
 
+        # Defensive: strip "doc_" prefix if LLM hallucinates it (legacy format or misread)
+        if document_id.startswith("doc_"):
+            document_id = document_id[4:]
+
         if not document_id:
             return ToolResult(content="Error: document_id is required", is_error=True)
 
@@ -110,9 +118,13 @@ class GetDocumentSummaryTool(Tool):
                 is_error=True,
             )
 
+        from chat.agent.tools._formatting import parse_json_keywords
+
         name = summary.get("name") or "(unnamed)"
         category = summary.get("category") or "(none)"
-        keywords = summary.get("keywords") or "[]"
+        keywords_raw = summary.get("keywords")
+        kw_list = parse_json_keywords(keywords_raw)
+        keywords = ", ".join(kw_list) if kw_list else "(none)"
         total_tokens = summary.get("total_tokens") or 0
         doc_summary = summary.get("summary") or "(no summary)"
 

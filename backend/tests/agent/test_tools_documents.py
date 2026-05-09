@@ -103,6 +103,22 @@ class TestGetDocumentTool:
         assert result.is_error
         assert "document_id is required" in result.content
 
+    async def test_strips_doc_prefix(self):
+        mock_doc = MagicMock()
+        mock_doc.id = "d1"
+        mock_doc.name = "readme.md"
+        mock_doc.content = "Hello world"
+
+        repo = MagicMock()
+        repo.get_by_id.return_value = mock_doc
+
+        ctx = _make_ctx(document_repo=repo)
+        tool = GetDocumentTool()
+        result = await tool.run(ctx, document_id="doc_d1")
+
+        assert not result.is_error
+        repo.get_by_id.assert_called_once_with("d1")
+
 
 class TestGetDocumentSummaryTool:
     async def test_success_returns_markdown(self):
@@ -155,3 +171,21 @@ class TestGetDocumentSummaryTool:
 
         assert result.is_error
         assert "document_id is required" in result.content
+
+    async def test_strips_doc_prefix(self):
+        repo = MagicMock()
+        repo.get_summary_only.return_value = {
+            "id": "d1",
+            "name": "readme",
+            "summary": "Overview",
+            "keywords": "[intro]",
+            "category": "guide",
+            "total_tokens": 120,
+        }
+
+        ctx = _make_ctx(document_repo=repo)
+        tool = GetDocumentSummaryTool()
+        result = await tool.run(ctx, document_id="doc_d1")
+
+        assert not result.is_error
+        repo.get_summary_only.assert_called_once_with("d1")

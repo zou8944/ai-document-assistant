@@ -29,7 +29,7 @@ class TestSearchDocumentsTool:
         mock_doc.name = "Intro"
         mock_doc.category = "guide"
         mock_doc.summary = "Getting started"
-        mock_doc.keywords = "[quickstart]"
+        mock_doc.keywords = '["quickstart"]'
 
         repo = MagicMock()
         repo.search_by_keywords.return_value = [mock_doc]
@@ -40,7 +40,7 @@ class TestSearchDocumentsTool:
 
         assert not result.is_error
         assert "Found 1 documents" in result.content
-        assert "[doc:d1]" in result.content
+        assert "[id=d1]" in result.content
         repo.search_by_keywords.assert_called_once_with(
             keywords=["intro"],
             collection_ids=None,

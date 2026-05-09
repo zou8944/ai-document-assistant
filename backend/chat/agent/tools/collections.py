@@ -2,7 +2,7 @@
 
 import json
 
-from chat.agent.tools._formatting import format_doc_summary
+from chat.agent.tools._formatting import format_doc_summary, parse_json_keywords
 from chat.agent.tools.base import Tool, ToolContext, ToolResult
 
 
@@ -86,7 +86,7 @@ class GetCollectionOverviewTool(Tool):
                 try:
                     parsed = json.loads(col.categories_json)
                     if isinstance(parsed, list):
-                        categories = parsed
+                        categories = [str(c) for c in parsed]
                 except json.JSONDecodeError:
                     pass
             if categories:
@@ -112,9 +112,9 @@ class GetCollectionOverviewTool(Tool):
                         format_doc_summary(
                             doc_id=doc.id or "",
                             title=doc.name or "",
-                            category=None,
+                            category=doc.category,
                             summary=doc.summary,
-                            keywords=None,
+                            keywords=parse_json_keywords(doc.keywords),
                         )
                     )
             else:

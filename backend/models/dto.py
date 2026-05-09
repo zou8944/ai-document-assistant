@@ -95,6 +95,9 @@ class DocumentDTO(DTOConvertible[Document, "DocumentDTO"]):
     error_message: str | None = None
     hash_md5: str | None = None
     source_task_id: str | None = None
+    category: str | None = None
+    keywords: str | None = None
+    total_tokens: int | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

@@ -2,7 +2,7 @@
 
 import re
 
-from chat.agent.tools._formatting import format_doc_summary, format_grep_match
+from chat.agent.tools._formatting import format_doc_summary, format_grep_match, parse_json_keywords
 from chat.agent.tools.base import Tool, ToolContext, ToolResult
 
 
@@ -59,7 +59,7 @@ class SearchDocumentsTool(Tool):
                     title=doc.name,
                     category=doc.category,
                     summary=doc.summary,
-                    keywords=doc.keywords,
+                    keywords=parse_json_keywords(doc.keywords),
                 )
             )
 
