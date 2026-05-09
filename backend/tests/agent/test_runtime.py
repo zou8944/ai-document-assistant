@@ -10,7 +10,7 @@ from chat.agent.llm.base import AssistantTurn, ToolCallingBackend, ToolUseBlock,
 from chat.agent.registry import ToolRegistry
 from chat.agent.runtime import AgentConfig, AgentRuntime
 from chat.agent.tools.base import AgentDeps, Tool, ToolContext, ToolResult
-from chat.models import SSEEvent
+from chat.models import SSEEventType
 
 
 class MockTool(Tool):
@@ -88,8 +88,7 @@ class TestSingleTurnEndTurn:
                 usage=Usage(input_tokens=10, output_tokens=5),
             )
         )
-        fast_backend = MagicMock(spec=ToolCallingBackend)
-        runtime = AgentRuntime(backend, fast_backend, registry, config)
+        runtime = AgentRuntime(backend, registry, config)
         emit = AsyncMock()
 
         events = await _collect_events(
@@ -106,12 +105,12 @@ class TestSingleTurnEndTurn:
 
         types = [e.type for e in events]
         assert types == [
-            "agent_start",
-            "iteration_start",
-            "agent_thinking",
-            "agent_thinking",
-            "final_text_promote",
-            "done",
+            SSEEventType.AGENT_START,
+            SSEEventType.ITERATION_START,
+            SSEEventType.AGENT_THINKING,
+            SSEEventType.AGENT_THINKING,
+            SSEEventType.FINAL_TEXT_PROMOTE,
+            SSEEventType.DONE,
         ]
 
         assert events[0].data == {"max_iter": 3, "model": "standard"}
@@ -122,7 +121,7 @@ class TestSingleTurnEndTurn:
         assert events[5].data["iterations"] == 1
 
         # emit should not be called for text deltas (runtime drains queue instead)
-        emit_calls = [c for c in emit.call_args_list if c.args[0].type == "agent_thinking"]
+        emit_calls = [c for c in emit.call_args_list if c.args[0].type == SSEEventType.AGENT_THINKING]
         assert len(emit_calls) == 0
 
     async def test_messages_final_state(self, registry, agent_deps, config):
@@ -134,8 +133,7 @@ class TestSingleTurnEndTurn:
                 usage=Usage(input_tokens=10, output_tokens=5),
             )
         )
-        fast_backend = MagicMock(spec=ToolCallingBackend)
-        runtime = AgentRuntime(backend, fast_backend, registry, config)
+        runtime = AgentRuntime(backend, registry, config)
         emit = AsyncMock()
 
         # We need to inspect messages after run completes.
@@ -197,8 +195,7 @@ class TestMultiRoundToolUse:
                 usage=Usage(input_tokens=15, output_tokens=3),
             ),
         )
-        fast_backend = MagicMock(spec=ToolCallingBackend)
-        runtime = AgentRuntime(backend, fast_backend, registry, config)
+        runtime = AgentRuntime(backend, registry, config)
         emit = AsyncMock()
 
         import chat.agent.runtime as runtime_mod
@@ -225,21 +222,21 @@ class TestMultiRoundToolUse:
             runtime_mod.auto_compact = original_auto
 
         types = [e.type for e in events]
-        assert "tool_call" in types
-        assert "tool_result" in types
+        assert SSEEventType.TOOL_CALL in types
+        assert SSEEventType.TOOL_RESULT in types
 
         # Find second iteration_start
-        iter_starts = [i for i, e in enumerate(events) if e.type == "iteration_start"]
+        iter_starts = [i for i, e in enumerate(events) if e.type == SSEEventType.ITERATION_START]
         assert len(iter_starts) == 2
 
         # After second iteration, final_text_promote and done
         final_promote_idx = next(
-            i for i, e in enumerate(events) if e.type == "final_text_promote"
+            i for i, e in enumerate(events) if e.type == SSEEventType.FINAL_TEXT_PROMOTE
         )
         assert final_promote_idx > iter_starts[1]
 
         done_event = events[-1]
-        assert done_event.type == "done"
+        assert done_event.type == SSEEventType.DONE
         assert done_event.data["iterations"] == 2
 
 
@@ -273,8 +270,7 @@ class TestMaxIterations:
                 usage=Usage(input_tokens=20, output_tokens=5),
             ),
         )
-        fast_backend = MagicMock(spec=ToolCallingBackend)
-        runtime = AgentRuntime(backend, fast_backend, registry, config)
+        runtime = AgentRuntime(backend, registry, config)
         emit = AsyncMock()
 
         import chat.agent.runtime as runtime_mod
@@ -301,10 +297,10 @@ class TestMaxIterations:
             runtime_mod.auto_compact = original_auto
 
         types = [e.type for e in events]
-        assert "agent_halted" in types
+        assert SSEEventType.AGENT_HALTED in types
 
-        halted_idx = types.index("agent_halted")
-        done_idx = types.index("done")
+        halted_idx = types.index(SSEEventType.AGENT_HALTED)
+        done_idx = types.index(SSEEventType.DONE)
         assert done_idx > halted_idx
 
         done_event = events[done_idx]
@@ -342,8 +338,7 @@ class TestCancellation:
 
         backend = MagicMock(spec=ToolCallingBackend)
         backend.generate_with_tools = AsyncMock(side_effect=mock_generate)
-        fast_backend = MagicMock(spec=ToolCallingBackend)
-        runtime = AgentRuntime(backend, fast_backend, registry, config)
+        runtime = AgentRuntime(backend, registry, config)
         emit = AsyncMock()
 
         import chat.agent.runtime as runtime_mod

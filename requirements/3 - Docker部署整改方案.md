@@ -181,8 +181,12 @@ class Config:
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/app.db")
     CHROMA_HOST = os.getenv("CHROMA_HOST", "chroma")
     CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8000"))
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")
+    CRAWL_API_KEY = os.getenv("CRAWL_API_KEY")
+    CRAWL_BASE_URL = os.getenv("CRAWL_BASE_URL")
+    AGENT_API_KEY = os.getenv("AGENT_API_KEY")
+    AGENT_BASE_URL = os.getenv("AGENT_BASE_URL")
+    EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY")
+    EMBEDDING_BASE_URL = os.getenv("EMBEDDING_BASE_URL")
 ```
 
 ### 3. Docker 配置
@@ -339,8 +343,12 @@ services:
     environment:
       - CHROMA_HOST=chroma
       - CHROMA_PORT=8000
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
+      - CRAWL_API_KEY=${CRAWL_API_KEY}
+      - CRAWL_BASE_URL=${CRAWL_BASE_URL}
+      - AGENT_API_KEY=${AGENT_API_KEY}
+      - AGENT_BASE_URL=${AGENT_BASE_URL}
+      - EMBEDDING_API_KEY=${EMBEDDING_API_KEY}
+      - EMBEDDING_BASE_URL=${EMBEDDING_BASE_URL}
       - DATABASE_URL=sqlite:////app/data/app.db
     volumes:
       - backend-data:/app/data
@@ -428,9 +436,17 @@ coverage
 #### 4.1 创建 .env 文件
 ```bash
 # .env (根目录)
-# OpenAI API 配置
-OPENAI_API_KEY=sk-xxxxxx
-OPENAI_BASE_URL=https://api.siliconflow.cn/v1
+# Crawl LLM 配置
+CRAWL_API_KEY=sk-xxxxxx
+CRAWL_BASE_URL=https://api.siliconflow.cn/v1
+
+# Agent LLM 配置
+AGENT_API_KEY=sk-xxxxxx
+AGENT_BASE_URL=
+
+# Embedding 配置
+EMBEDDING_API_KEY=sk-xxxxxx
+EMBEDDING_BASE_URL=https://api.openai.com/v1
 
 # Chroma 配置
 ANONYMIZED_TELEMETRY=FALSE
@@ -442,8 +458,12 @@ LOG_LEVEL=info
 #### 4.2 创建 .env.example
 ```bash
 # .env.example
-OPENAI_API_KEY=your_api_key_here
-OPENAI_BASE_URL=https://api.openai.com/v1
+CRAWL_API_KEY=your_api_key_here
+CRAWL_BASE_URL=https://api.siliconflow.cn/v1
+AGENT_API_KEY=your_anthropic_api_key_here
+AGENT_BASE_URL=
+EMBEDDING_API_KEY=your_api_key_here
+EMBEDDING_BASE_URL=https://api.openai.com/v1
 ANONYMIZED_TELEMETRY=FALSE
 LOG_LEVEL=info
 ```

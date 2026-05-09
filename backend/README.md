@@ -61,8 +61,11 @@ cp ../.env.example ../.env
 | 变量 | 说明 |
 |------|------|
 | `DATABASE_URL` | PostgreSQL 连接串，如 `postgresql://postgres:postgres@localhost:5432/ai_document_assistant` |
-| `OPENAI_API_KEY` | LLM / Embedding API Key |
-| `OPENAI_BASE_URL` | API Base URL，默认 `https://api.openai.com/v1` |
+| `CRAWL_API_KEY` | 爬取阶段 LLM API Key |
+| `CRAWL_BASE_URL` | 爬取阶段 API Base URL |
+| `AGENT_API_KEY` | 聊天 Agent LLM API Key（Anthropic） |
+| `EMBEDDING_API_KEY` | Embedding API Key |
+| `EMBEDDING_BASE_URL` | Embedding API Base URL，默认 `https://api.openai.com/v1` |
 
 ### 4. 启动数据库
 

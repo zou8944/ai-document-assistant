@@ -1,15 +1,12 @@
 """Tests for AgentChatService."""
 
 import json
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from chat.agent.llm.base import AssistantTurn, ToolCallingBackend, Usage
-from chat.agent.runtime import AgentConfig, AgentRuntime
+from chat.agent.runtime import AgentConfig
 from chat.agent_service import AgentChatService
-from chat.models import SSEEvent
+from chat.models import SSEEventType
 from models.dto import ChatDTO, ChatMessageDTO
 
 
@@ -82,7 +79,6 @@ def _make_collection_repo():
 class TestProcessNormalFlow:
     async def test_yields_expected_event_sequence(self, tmp_path):
         backend = _FakeBackend()
-        fast_backend = _FakeBackend()
         config = AgentConfig(
             max_iterations=3,
             transcript_dir=str(tmp_path / "transcripts"),
@@ -91,7 +87,6 @@ class TestProcessNormalFlow:
         message_repo = _make_message_repo()
         service = AgentChatService(
             backend=backend,
-            fast_backend=fast_backend,
             config=config,
             chat_repo=chat_repo,
             chat_message_repo=message_repo,
@@ -104,13 +99,12 @@ class TestProcessNormalFlow:
             events.append(event)
 
         types = [e.type for e in events]
-        assert types[0] == "agent_start"
+        assert types[0] == SSEEventType.AGENT_START
         assert "message_id" in events[0].data
-        assert types[-1] == "done"
+        assert types[-1] == SSEEventType.DONE
 
     async def test_persists_user_message_with_engine_marker(self, tmp_path):
         backend = _FakeBackend()
-        fast_backend = _FakeBackend()
         config = AgentConfig(
             max_iterations=3,
             transcript_dir=str(tmp_path / "transcripts"),
@@ -119,7 +113,6 @@ class TestProcessNormalFlow:
         message_repo = _make_message_repo()
         service = AgentChatService(
             backend=backend,
-            fast_backend=fast_backend,
             config=config,
             chat_repo=chat_repo,
             chat_message_repo=message_repo,
@@ -140,7 +133,6 @@ class TestProcessNormalFlow:
 
     async def test_updates_placeholder_with_agent_trace(self, tmp_path):
         backend = _FakeBackend()
-        fast_backend = _FakeBackend()
         config = AgentConfig(
             max_iterations=3,
             transcript_dir=str(tmp_path / "transcripts"),
@@ -149,7 +141,6 @@ class TestProcessNormalFlow:
         message_repo = _make_message_repo()
         service = AgentChatService(
             backend=backend,
-            fast_backend=fast_backend,
             config=config,
             chat_repo=chat_repo,
             chat_message_repo=message_repo,
@@ -173,7 +164,6 @@ class TestProcessNormalFlow:
     async def test_transcript_file_created(self, tmp_path):
         transcript_dir = tmp_path / "transcripts"
         backend = _FakeBackend()
-        fast_backend = _FakeBackend()
         config = AgentConfig(
             max_iterations=3,
             transcript_dir=str(transcript_dir),
@@ -182,7 +172,6 @@ class TestProcessNormalFlow:
         message_repo = _make_message_repo()
         service = AgentChatService(
             backend=backend,
-            fast_backend=fast_backend,
             config=config,
             chat_repo=chat_repo,
             chat_message_repo=message_repo,
@@ -225,7 +214,6 @@ class TestLoadHistory:
         message_repo = _make_message_repo(messages=messages)
         service = AgentChatService(
             backend=MagicMock(spec=ToolCallingBackend),
-            fast_backend=MagicMock(spec=ToolCallingBackend),
             config=AgentConfig(),
             chat_repo=chat_repo,
             chat_message_repo=message_repo,
@@ -244,7 +232,6 @@ class TestLoadHistory:
         message_repo.get_by_chat.side_effect = RuntimeError("db error")
         service = AgentChatService(
             backend=MagicMock(spec=ToolCallingBackend),
-            fast_backend=MagicMock(spec=ToolCallingBackend),
             config=AgentConfig(),
             chat_repo=chat_repo,
             chat_message_repo=message_repo,
@@ -261,7 +248,6 @@ class TestGetCollectionIds:
         chat_repo = _make_chat_repo("c1", collection_ids=["col-a", "col-b"])
         service = AgentChatService(
             backend=MagicMock(spec=ToolCallingBackend),
-            fast_backend=MagicMock(spec=ToolCallingBackend),
             config=AgentConfig(),
             chat_repo=chat_repo,
             chat_message_repo=_make_message_repo(),
@@ -277,7 +263,6 @@ class TestGetCollectionIds:
         chat_repo.get_by_id.return_value = None
         service = AgentChatService(
             backend=MagicMock(spec=ToolCallingBackend),
-            fast_backend=MagicMock(spec=ToolCallingBackend),
             config=AgentConfig(),
             chat_repo=chat_repo,
             chat_message_repo=_make_message_repo(),
@@ -294,7 +279,6 @@ class TestGetCollectionIds:
         chat_repo.get_by_id.return_value = dto
         service = AgentChatService(
             backend=MagicMock(spec=ToolCallingBackend),
-            fast_backend=MagicMock(spec=ToolCallingBackend),
             config=AgentConfig(),
             chat_repo=chat_repo,
             chat_message_repo=_make_message_repo(),
@@ -310,7 +294,6 @@ class TestReconstructMessages:
     def test_reconstructs_basic_conversation(self):
         service = AgentChatService(
             backend=MagicMock(spec=ToolCallingBackend),
-            fast_backend=MagicMock(spec=ToolCallingBackend),
             config=AgentConfig(),
             chat_repo=MagicMock(),
             chat_message_repo=MagicMock(),
@@ -329,7 +312,6 @@ class TestReconstructMessages:
     def test_uses_sources_when_thinking_empty(self):
         service = AgentChatService(
             backend=MagicMock(spec=ToolCallingBackend),
-            fast_backend=MagicMock(spec=ToolCallingBackend),
             config=AgentConfig(),
             chat_repo=MagicMock(),
             chat_message_repo=MagicMock(),

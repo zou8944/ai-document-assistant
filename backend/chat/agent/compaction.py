@@ -4,6 +4,7 @@ import json
 import logging
 from typing import TYPE_CHECKING
 
+from chat.agent.cancellation import CancellationToken
 from chat.agent.prompts import COMPACT_SUMMARY_PROMPT
 
 if TYPE_CHECKING:
@@ -121,7 +122,7 @@ def _format_messages_for_summary(messages: list[dict]) -> str:
 
 async def auto_compact(
     messages: list[dict],
-    fast_backend: "ToolCallingBackend",
+    backend: "ToolCallingBackend",
     original_query: str,
 ) -> list[dict]:
     """Heavy compaction: summarise middle portion into a single user message.
@@ -145,13 +146,13 @@ async def auto_compact(
     )
 
     try:
-        turn = await fast_backend.generate_with_tools(
+        turn = await backend.generate_with_tools(
             system=prompt,
             messages=[{"role": "user", "content": "Please summarise."}],
             tools=[],
             max_tokens=4096,
             temperature=0.0,
-            cancellation=None,  # type: ignore[arg-type]
+            cancellation=CancellationToken(),
         )
         # Extract text from assistant turn
         summary_text = ""

@@ -12,7 +12,7 @@ from chat.agent.compaction import auto_compact, estimate_tokens, micro_compact
 from chat.agent.prompts import MAX_ITER_PROMPT_SUFFIX, RAG_SYSTEM_PROMPT
 from chat.agent.registry import ToolRegistry
 from chat.agent.trace import TranscriptWriter
-from chat.models import SSEEvent
+from chat.models import SSEEvent, SSEEventType
 
 if TYPE_CHECKING:
     from chat.agent.llm.base import ToolCallingBackend
@@ -44,12 +44,10 @@ class AgentRuntime:
     def __init__(
         self,
         backend: "ToolCallingBackend",
-        fast_backend: "ToolCallingBackend",
         registry: ToolRegistry,
         config: AgentConfig,
     ):
         self.backend = backend
-        self.fast_backend = fast_backend
         self.registry = registry
         self.config = config
 
@@ -69,7 +67,7 @@ class AgentRuntime:
         messages.append({"role": "user", "content": query})
 
         yield SSEEvent(
-            type="agent_start",
+            type=SSEEventType.AGENT_START,
             data={"max_iter": self.config.max_iterations, "model": self.config.model},
         )
         if transcript:
@@ -86,12 +84,12 @@ class AgentRuntime:
             threshold = int(self.config.compact_threshold * self.config.context_window)
             if token_est > threshold:
                 yield SSEEvent(
-                    type="compact_triggered",
+                    type=SSEEventType.COMPACT_TRIGGERED,
                     data={"kind": "auto", "before_tokens": token_est},
                 )
                 if transcript:
                     transcript.write_event("compact_triggered", {"kind": "auto", "before_tokens": token_est})
-                messages = await auto_compact(messages, self.fast_backend, original_query)
+                messages = await auto_compact(messages, self.backend, original_query)
             else:
                 micro_compact(
                     messages,
@@ -99,7 +97,7 @@ class AgentRuntime:
                     keep_recent=self.config.keep_recent_tool_results,
                 )
 
-            yield SSEEvent(type="iteration_start", data={"iteration": iteration})
+            yield SSEEvent(type=SSEEventType.ITERATION_START, data={"iteration": iteration})
             if transcript:
                 transcript.write_event("iteration_start", {"iteration": iteration})
 
@@ -111,7 +109,7 @@ class AgentRuntime:
                 delta: str, it: int = iteration, queue: asyncio.Queue = text_queue
             ) -> None:
                 await queue.put(
-                    SSEEvent(type="agent_thinking", data={"delta": delta, "iteration": it})
+                    SSEEvent(type=SSEEventType.AGENT_THINKING, data={"delta": delta, "iteration": it})
                 )
 
             turn = await self.backend.generate_with_tools(
@@ -142,12 +140,12 @@ class AgentRuntime:
                 })
 
             if turn.stop_reason != "tool_use":
-                yield SSEEvent(type="final_text_promote", data={"iteration": iteration})
+                yield SSEEvent(type=SSEEventType.FINAL_TEXT_PROMOTE, data={"iteration": iteration})
                 if transcript:
                     transcript.write_event("final_text_promote", {"iteration": iteration})
 
                 yield SSEEvent(
-                    type="done",
+                    type=SSEEventType.DONE,
                     data={
                         "iterations": iteration,
                         "usage": {
@@ -173,7 +171,7 @@ class AgentRuntime:
             results: list[dict] = []
             for tu in turn.tool_uses:
                 yield SSEEvent(
-                    type="tool_call",
+                    type=SSEEventType.TOOL_CALL,
                     data={"id": tu.id, "name": tu.name, "input": tu.input},
                 )
                 if transcript:
@@ -185,7 +183,7 @@ class AgentRuntime:
                     out = await tool.run(ctx=tool_ctx, **tu.input)
 
                     yield SSEEvent(
-                        type="tool_result",
+                        type=SSEEventType.TOOL_RESULT,
                         data={
                             "id": tu.id,
                             "name": tu.name,
@@ -215,7 +213,7 @@ class AgentRuntime:
                     logger.exception("tool %s failed", tu.name)
                     err_msg = f"Error: {type(exc).__name__}: {exc}"
                     yield SSEEvent(
-                        type="tool_result",
+                        type=SSEEventType.TOOL_RESULT,
                         data={
                             "id": tu.id,
                             "name": tu.name,
@@ -240,11 +238,14 @@ class AgentRuntime:
 
         # max_iterations reached
         yield SSEEvent(
-            type="agent_halted",
+            type=SSEEventType.AGENT_HALTED,
             data={"reason": "max_iterations", "iterations": self.config.max_iterations},
         )
         if transcript:
             transcript.write_event("agent_halted", {"reason": "max_iterations"})
+
+        async def _on_final_delta(d: str) -> None:
+            await emit(SSEEvent(type=SSEEventType.AGENT_THINKING, data={"delta": d, "iteration": -1}))
 
         final_turn = await self.backend.generate_with_tools(
             system=self._system_prompt(collection_ids) + MAX_ITER_PROMPT_SUFFIX,
@@ -253,18 +254,16 @@ class AgentRuntime:
             max_tokens=4096,
             temperature=0.7,
             cancellation=cancellation,
-            on_text_delta=lambda d: asyncio.create_task(
-                emit(SSEEvent(type="agent_thinking", data={"delta": d, "iteration": -1}))
-            ),
+            on_text_delta=_on_final_delta,
         )
         messages.append({"role": "assistant", "content": final_turn.raw_content})
 
-        yield SSEEvent(type="final_text_promote", data={"iteration": -1})
+        yield SSEEvent(type=SSEEventType.FINAL_TEXT_PROMOTE, data={"iteration": -1})
         if transcript:
             transcript.write_event("final_text_promote", {"iteration": -1})
 
         yield SSEEvent(
-            type="done",
+            type=SSEEventType.DONE,
             data={
                 "iterations": self.config.max_iterations,
                 "halted": True,

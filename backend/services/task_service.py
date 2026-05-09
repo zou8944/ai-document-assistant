@@ -189,7 +189,7 @@ class TaskService:
         )
 
         try:
-            chain = self.llm_service.llm | StrOutputParser()
+            chain = self.llm_service.crawl_llm | StrOutputParser()
             title = await chain.ainvoke(prompt)
             title = title.strip().strip('"').strip("'").strip()
             if len(title) > 20:

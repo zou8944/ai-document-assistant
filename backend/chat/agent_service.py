@@ -9,7 +9,7 @@ from chat.agent import AgentConfig, AgentDeps, AgentRuntime, build_default_regis
 from chat.agent.cancellation import CancellationToken
 from chat.agent.llm.base import ToolCallingBackend
 from chat.agent.trace import TranscriptWriter
-from chat.models import SSEEvent
+from chat.models import SSEEvent, SSEEventType
 from repository.chat import ChatMessageRepository, ChatRepository
 from repository.collection import CollectionRepository
 from repository.document import DocumentRepository
@@ -26,7 +26,6 @@ class AgentChatService:
     def __init__(
         self,
         backend: ToolCallingBackend,
-        fast_backend: ToolCallingBackend,
         config: AgentConfig,
         chat_repo: ChatRepository,
         chat_message_repo: ChatMessageRepository,
@@ -34,7 +33,6 @@ class AgentChatService:
         collection_repo: CollectionRepository,
     ):
         self.backend = backend
-        self.fast_backend = fast_backend
         self.config = config
         self.chat_repo = chat_repo
         self.chat_message_repo = chat_message_repo
@@ -83,7 +81,6 @@ class AgentChatService:
                 registry = build_default_registry(deps)
                 runtime = AgentRuntime(
                     backend=self.backend,
-                    fast_backend=self.fast_backend,
                     registry=registry,
                     config=self.config,
                 )
@@ -114,17 +111,17 @@ class AgentChatService:
                     emit=_noop_emit,
                     transcript=transcript,
                 ):
-                    if first_event and event.type == "agent_start":
+                    if first_event and event.type == SSEEventType.AGENT_START:
                         event.data["message_id"] = message_id
                         first_event = False
 
-                    if event.type == "agent_thinking":
+                    if event.type == SSEEventType.AGENT_THINKING:
                         thinking_buffer += event.data.get("delta", "")
-                    elif event.type == "sources":
+                    elif event.type == SSEEventType.SOURCES:
                         docs = event.data.get("documents", [])
                         if isinstance(docs, list):
                             sources.extend(docs)
-                    elif event.type == "done":
+                    elif event.type == SSEEventType.DONE:
                         agent_trace["iterations"] = event.data.get("iterations", 0)
                         agent_trace["stop_reason"] = (
                             "halted" if event.data.get("halted") else "end_turn"

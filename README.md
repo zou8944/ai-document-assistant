@@ -47,7 +47,7 @@ ai-document-assistant/
 ```bash
 # 1. 配置 AI 环境变量
 cp .env.deploy.example .env.deploy
-# 编辑 .env.deploy，至少填写 OPENAI_API_KEY
+# 编辑 .env.deploy，至少填写 CRAWL_API_KEY 和 AGENT_API_KEY
 
 # 2. 部署
 make deploy-local
@@ -76,7 +76,7 @@ docker compose up postgres chroma -d
 # 后端
 cd backend
 cp .env.example .env
-# 编辑 .env 填入 OPENAI_API_KEY
+# 编辑 .env 填入 CRAWL_API_KEY、AGENT_API_KEY 和 EMBEDDING_API_KEY
 uv sync
 uv run python api_server.py
 
@@ -100,8 +100,11 @@ make dev
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
-| `OPENAI_API_KEY` | 是 | LLM / Embedding API Key |
-| `OPENAI_BASE_URL` | 是 | API Base URL |
+| `CRAWL_API_KEY` | 是 | 爬取阶段 LLM API Key |
+| `CRAWL_BASE_URL` | 是 | 爬取阶段 API Base URL |
+| `AGENT_API_KEY` | 是 | 聊天 Agent LLM API Key（Anthropic） |
+| `EMBEDDING_API_KEY` | 是 | Embedding API Key |
+| `EMBEDDING_BASE_URL` | 是 | Embedding API Base URL |
 | `LOG_LEVEL` | 否 | 默认 `info` |
 
 ### 本地开发

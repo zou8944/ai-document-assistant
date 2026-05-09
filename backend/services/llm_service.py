@@ -11,10 +11,7 @@ import time
 from langchain_core.output_parsers import StrOutputParser
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-from models.rag import CollectionSummary, DocChunk, HistoryItem
 from rag.document_summarizer import DocumentSummarizer
-from rag.intent_analyzer import IntentAnalyzer
-from rag.prompt_templates import build_rag_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -28,22 +25,26 @@ class LLMService:
     def __init__(self, config):
         self.config = config
 
-        # Initialize OpenAI components
+        # Validate crawl provider (currently only openai is supported)
+        self.config.llm.crawl.validate(supported_providers=["openai"])
+
+        # Initialize embeddings
         embeddings_kwargs = self.config.get_openai_embeddings_kwargs()
         self.embeddings = OpenAIEmbeddings(**embeddings_kwargs)
 
-        chat_kwargs = self.config.get_openai_chat_kwargs()
-        self.llm = ChatOpenAI(**chat_kwargs)
-
-        # Initialize crawl-specific LLM (falls back to chat_model if not configured)
-        crawl_kwargs = self.config.get_openai_crawl_kwargs()
-        self.crawl_llm = ChatOpenAI(**crawl_kwargs)
-        if self.config.llm.crawl_model:
-            logger.info("Using separate crawl model: %s", self.config.llm.crawl_model)
+        # Initialize crawl-specific LLM
+        crawl = self.config.llm.crawl
+        self.crawl_llm = ChatOpenAI(
+            model=crawl.model,
+            temperature=0.1,
+            api_key=crawl.api_key,
+            base_url=crawl.base_url or None,
+            max_tokens=self.config.llm.max_tokens,
+        )
+        logger.info("Using crawl model: %s", crawl.model)
 
         # Initialize specialized components
-        self.intent_analyzer = IntentAnalyzer(llm=self.llm)
-        self.document_summarizer = DocumentSummarizer(self.llm)
+        self.document_summarizer = DocumentSummarizer(self.crawl_llm)
 
         # Initialize output parser for text generation
         self.text_parser = StrOutputParser()
@@ -66,11 +67,6 @@ class LLMService:
         logger.info("[LLM] embed_documents done, %.2fs", time.monotonic() - t0)
         return result
 
-    # ==================== Intent Analysis ====================
-
-    async def analyze_intent(self, user_message: str):
-        return await self.intent_analyzer.analyze(user_message)
-
     # ==================== Document Summarization ====================
 
     async def summarize_document(self, content: str) -> str:
@@ -78,44 +74,6 @@ class LLMService:
 
     async def summarize_collection(self, document_summaries: list[str]) -> str:
         return await self.document_summarizer.summarize_collection_async(document_summaries, llm=self.crawl_llm)
-
-    # ==================== RAG Chat Operations ====================
-
-    def build_rag_prompt(
-        self,
-        collections: list[CollectionSummary],
-        histories: list[HistoryItem],
-        reference_chunks: list[DocChunk],
-        user_query: str
-    ) -> str:
-        return build_rag_prompt(
-            collections=collections,
-            histories=histories,
-            reference_chunks=reference_chunks,
-            user_query=user_query
-        )
-
-    async def generate_chat_response(self, prompt: str) -> str:
-        logger.info("[LLM] generate_chat_response start, model=%s, prompt_len=%d", self.llm.model_name, len(prompt))
-        t0 = time.monotonic()
-        chain = self.llm | self.text_parser
-        result = await asyncio.wait_for(chain.ainvoke(prompt), timeout=LLM_TIMEOUT)
-        logger.info("[LLM] generate_chat_response done, %.2fs, output_len=%d", time.monotonic() - t0, len(result))
-        return result
-
-    async def stream_chat_response(self, prompt: str):
-        logger.info("[LLM] stream_chat_response start, model=%s, prompt_len=%d", self.llm.model_name, len(prompt))
-        t0 = time.monotonic()
-        stream = self.llm.astream(prompt)
-        while True:
-            try:
-                chunk = await asyncio.wait_for(stream.__anext__(), timeout=LLM_TIMEOUT)
-            except StopAsyncIteration:
-                break
-            content = chunk.content if hasattr(chunk, 'content') else str(chunk)
-            if content:
-                yield content
-        logger.info("[LLM] stream_chat_response done, %.2fs", time.monotonic() - t0)
 
     # ==================== README Generation ====================
 
@@ -494,16 +452,6 @@ Format:
 
     # ==================== Direct LLM Access ====================
 
-    async def invoke_llm(self, prompt: str, **kwargs) -> str:
-        logger.info("[LLM] invoke_llm start, model=%s, prompt_len=%d", self.llm.model_name, len(prompt))
-        t0 = time.monotonic()
-        result = await asyncio.wait_for(
-            self.llm.ainvoke(prompt, **kwargs), timeout=LLM_TIMEOUT
-        )
-        output = str(result.content) if hasattr(result, 'content') and result is not None else str(result)
-        logger.info("[LLM] invoke_llm done, %.2fs, output_len=%d", time.monotonic() - t0, len(output))
-        return output
-
     async def _invoke_crawl_llm(self, prompt: str, **kwargs) -> str:
         logger.info("[LLM] _invoke_crawl_llm start, model=%s, prompt_len=%d", self.crawl_llm.model_name, len(prompt))
         t0 = time.monotonic()
@@ -513,10 +461,6 @@ Format:
         output = str(result.content) if hasattr(result, 'content') and result is not None else str(result)
         logger.info("[LLM] _invoke_crawl_llm done, %.2fs, output_len=%d", time.monotonic() - t0, len(output))
         return output
-
-    async def stream_llm(self, prompt: str, **kwargs):
-        async for chunk in self.llm.astream(prompt, **kwargs):
-            yield chunk
 
     def close(self):
         logger.info("LLMService resources closed")

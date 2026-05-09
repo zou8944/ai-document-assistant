@@ -21,8 +21,8 @@ _config: Optional[AppConfig] = None
 
 def get_config() -> AppConfig:
     """Get current configuration. Priority: environment variables > config file > defaults."""
-    # If running in Docker (environment variable set), use env config
-    if os.getenv("DOCKER_ENV") or os.getenv("OPENAI_API_KEY"):
+    # If running in Docker or key env vars are set, use env config
+    if os.getenv("DOCKER_ENV") or os.getenv("CRAWL_API_KEY"):
         config = AppConfig.from_env()
         config.ensure_directories_exist()
         return config

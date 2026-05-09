@@ -5,12 +5,12 @@ Application state management with type safety.
 import logging
 from dataclasses import dataclass
 
+from anthropic import AsyncAnthropic
 from fastapi import FastAPI, Request
 
 from chat.agent import AgentConfig
 from chat.agent.llm.claude import ClaudeToolBackend
 from chat.agent_service import AgentChatService
-from chat.generation.claude_backend import ClaudeLLMService
 from models.config import AppConfig
 from repository.chat import ChatMessageRepository, ChatRepository
 from repository.collection import CollectionRepository
@@ -47,19 +47,16 @@ class AppState:
             # Agent chat service (tool-use based RAG)
             agent_chat_service: AgentChatService | None = None
             try:
-                deep_llm = ClaudeLLMService(
-                    api_key=config.llm.anthropic_api_key,
-                    model=config.llm.anthropic_chat_model,
-                    base_url=config.llm.anthropic_base_url or None,
+                config.llm.agent.validate(supported_providers=["anthropic"])
+
+                agent_client = AsyncAnthropic(
+                    api_key=config.llm.agent.api_key,
+                    base_url=config.llm.agent.base_url or None,
                 )
 
                 agent_backend = ClaudeToolBackend(
-                    client=deep_llm.client,
-                    model=config.llm.deep_model,
-                )
-                agent_fast_backend = ClaudeToolBackend(
-                    client=deep_llm.client,
-                    model=config.llm.fast_model,
+                    client=agent_client,
+                    model=config.llm.agent.model,
                 )
                 agent_config = AgentConfig(
                     max_iterations=15,
@@ -69,7 +66,6 @@ class AppState:
                 )
                 agent_chat_service = AgentChatService(
                     backend=agent_backend,
-                    fast_backend=agent_fast_backend,
                     config=agent_config,
                     chat_repo=chat_repo,
                     chat_message_repo=chat_message_repo,

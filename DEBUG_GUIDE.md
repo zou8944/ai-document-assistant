@@ -35,8 +35,11 @@ docker run -d -p 8000:8000 --name chroma chromadb/chroma:latest
       "cwd": "${workspaceFolder}/backend",
       "env": {
         "PYTHONPATH": "${workspaceFolder}/backend",
-        "OPENAI_API_KEY": "your_api_key_here",
-        "OPENAI_BASE_URL": "https://api.siliconflow.cn/v1"
+        "CRAWL_API_KEY": "your_api_key_here",
+        "CRAWL_BASE_URL": "https://api.siliconflow.cn/v1",
+        "AGENT_API_KEY": "your_anthropic_api_key_here",
+        "EMBEDDING_API_KEY": "your_api_key_here",
+        "EMBEDDING_BASE_URL": "https://api.openai.com/v1"
       },
       "console": "integratedTerminal",
       "justMyCode": false
@@ -50,8 +53,11 @@ docker run -d -p 8000:8000 --name chroma chromadb/chroma:latest
 cd backend
 
 # 设置环境变量
-export OPENAI_API_KEY="your_api_key_here"
-export OPENAI_BASE_URL="https://api.siliconflow.cn/v1"
+export CRAWL_API_KEY="your_api_key_here"
+export CRAWL_BASE_URL="https://api.siliconflow.cn/v1"
+export AGENT_API_KEY="your_anthropic_api_key_here"
+export EMBEDDING_API_KEY="your_api_key_here"
+export EMBEDDING_BASE_URL="https://api.openai.com/v1"
 
 # 启动开发服务器 (带自动重载)
 uv run uvicorn api.main:app --reload --host 127.0.0.1 --port 8888
@@ -261,7 +267,9 @@ print(f"Collection count: {collection.count()}")
 ```python
 # 在后端代码中添加
 import os
-print("OPENAI_API_KEY:", os.getenv("OPENAI_API_KEY", "NOT SET"))
+print("CRAWL_API_KEY:", os.getenv("CRAWL_API_KEY", "NOT SET"))
+print("AGENT_API_KEY:", os.getenv("AGENT_API_KEY", "NOT SET"))
+print("EMBEDDING_API_KEY:", os.getenv("EMBEDDING_API_KEY", "NOT SET"))
 print("CHROMA_HOST:", os.getenv("CHROMA_HOST", "NOT SET"))
 ```
 
@@ -273,11 +281,11 @@ console.log('API URL:', import.meta.env.VITE_API_URL)
 #### Docker 环境变量
 ```bash
 # 查看容器环境变量
-docker-compose exec backend env | grep OPENAI
+docker-compose exec backend env | grep -E "CRAWL_|AGENT_|EMBEDDING_"
 
 # 进入容器检查
 docker-compose exec backend sh
-echo $OPENAI_API_KEY
+echo $CRAWL_API_KEY
 ```
 
 ### 5. 前端状态问题

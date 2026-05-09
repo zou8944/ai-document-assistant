@@ -16,7 +16,7 @@ AI 文档阅读助手：聚合 本地文件 / 文件夹 / 网站 作为知识来
   - 启动入口：`api_server.py`
   - 服务层：`services/`（collection / document / query）
   - 数据模型：`models/`（Pydantic 请求/响应/流式）
-  - Docker 配置：`Dockerfile`, 通过环境变量配置（OPENAI_API_KEY, CHROMA_HOST等）
+  - Docker 配置：`Dockerfile`, 通过环境变量配置（CRAWL_API_KEY, AGENT_API_KEY, EMBEDDING_API_KEY, CHROMA_HOST等）
 - 前端：`frontend/` (React + TS + Tailwind Web 应用)
   - 组件：`src/components/`
   - Docker 配置：`Dockerfile` + `nginx.conf`（Nginx提供静态文件服务和反向代理）
@@ -76,7 +76,7 @@ AI 文档阅读助手：聚合 本地文件 / 文件夹 / 网站 作为知识来
 
 ### 4.2 Docker 部署
 - 项目使用 Docker Compose 编排三个服务：frontend (Nginx)、backend (FastAPI)、chroma (向量数据库)。
-- 后端通过环境变量配置（`OPENAI_API_KEY`, `CHROMA_HOST`, `DATA_DIR` 等）,优先级:环境变量 > 配置文件 > 默认值。
+- 后端通过环境变量配置（`CRAWL_API_KEY`, `AGENT_API_KEY`, `EMBEDDING_API_KEY`, `CHROMA_HOST`, `DATA_DIR` 等）,优先级:环境变量 > 配置文件 > 默认值。
 - 前端通过 Nginx 提供静态文件服务,并反向代理 `/api/` 到后端服务。
 - 本地开发:后端使用 `uv run python api_server.py`,前端使用 `npm run dev`,Chroma 可用容器或本地客户端。
 - 生产部署:使用 `docker-compose up -d` 启动所有服务。

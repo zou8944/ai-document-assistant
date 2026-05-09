@@ -189,8 +189,8 @@ class TestMicroCompact:
 
 class TestAutoCompact:
     async def test_compresses_to_first_summary_last_pair(self):
-        fast_backend = MagicMock(spec=ToolCallingBackend)
-        fast_backend.generate_with_tools = AsyncMock(
+        backend = MagicMock(spec=ToolCallingBackend)
+        backend.generate_with_tools = AsyncMock(
             return_value=AssistantTurn(
                 raw_content=[{"type": "text", "text": "summary text"}],
                 stop_reason="end_turn",
@@ -208,7 +208,7 @@ class TestAutoCompact:
             {"role": "assistant", "content": "third answer"},
         ]
 
-        result = await auto_compact(messages, fast_backend, "original query")
+        result = await auto_compact(messages, backend, "original query")
 
         # first + summary + last_pair = 1 + 1 + 2 = 4
         assert len(result) == 4
@@ -219,13 +219,13 @@ class TestAutoCompact:
         assert result[3] == messages[-1]
 
         # Verify backend was called
-        fast_backend.generate_with_tools.assert_awaited_once()
-        call_kwargs = fast_backend.generate_with_tools.call_args.kwargs
+        backend.generate_with_tools.assert_awaited_once()
+        call_kwargs = backend.generate_with_tools.call_args.kwargs
         assert call_kwargs["tools"] == []
         assert call_kwargs["max_tokens"] == 4096
 
     def test_too_short_returns_unchanged(self):
-        fast_backend = MagicMock(spec=ToolCallingBackend)
+        backend = MagicMock(spec=ToolCallingBackend)
         messages = [
             {"role": "user", "content": "q1"},
             {"role": "assistant", "content": "a1"},
@@ -234,6 +234,6 @@ class TestAutoCompact:
         # We still need to run it in an async context
         import asyncio
 
-        result = asyncio.run(auto_compact(messages, fast_backend, "q"))
+        result = asyncio.run(auto_compact(messages, backend, "q"))
         assert result == messages
-        fast_backend.generate_with_tools.assert_not_called()
+        backend.generate_with_tools.assert_not_called()
