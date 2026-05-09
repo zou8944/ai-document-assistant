@@ -290,6 +290,14 @@ export const useChat = (chatId: string | null): UseChatReturn => {
           const newState = { ...state, steps: updatedSteps }
           streamingAgentStateRef.current = newState
           setStreamingAgentState(newState)
+        } else if (iteration === -1) {
+          // Forced final answer thinking (e.g. max_iterations or loop_detected)
+          const newState: AgentMessageState = {
+            ...state,
+            steps: [...state.steps, { kind: 'thinking', iteration: -1, text: delta }],
+          }
+          streamingAgentStateRef.current = newState
+          setStreamingAgentState(newState)
         }
         break
       }
@@ -320,9 +328,14 @@ export const useChat = (chatId: string | null): UseChatReturn => {
         const state = streamingAgentStateRef.current
         if (!state) break
         const toolId = event.data?.id || ''
-        const stepIndex = state.steps.findLastIndex(
-          (s) => s.kind === 'tool' && s.toolId === toolId
-        )
+        let stepIndex = -1
+        for (let i = state.steps.length - 1; i >= 0; i--) {
+          const s = state.steps[i]
+          if (s.kind === 'tool' && s.toolId === toolId) {
+            stepIndex = i
+            break
+          }
+        }
         if (stepIndex >= 0) {
           const updatedSteps = [...state.steps]
           updatedSteps[stepIndex] = {
@@ -394,6 +407,11 @@ export const useChat = (chatId: string | null): UseChatReturn => {
       case 'agent_halted': {
         const state = streamingAgentStateRef.current
         if (!state) break
+        const reason = event.data?.reason as string | undefined
+        if (reason === 'loop_warning') {
+          // Warning only; agent continues running
+          break
+        }
         const newState = {
           ...state,
           status: 'done' as const,

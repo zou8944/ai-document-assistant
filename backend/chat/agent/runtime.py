@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING
 
 from chat.agent.cancellation import CancellationToken
 from chat.agent.compaction import auto_compact, estimate_tokens, micro_compact
-from chat.agent.prompts import MAX_ITER_PROMPT_SUFFIX, RAG_SYSTEM_PROMPT
+from chat.agent.loop_detector import LoopDetector
+from chat.agent.prompts import LOOP_WARNING_PROMPT, MAX_ITER_PROMPT_SUFFIX, RAG_SYSTEM_PROMPT
 from chat.agent.registry import ToolRegistry
 from chat.agent.trace import TranscriptWriter
 from chat.models import SSEEvent, SSEEventType
@@ -66,6 +67,8 @@ class AgentRuntime:
 
         timings: list[IterationTiming] = []
         original_query = query
+        loop_detector = LoopDetector(self.config) if self.config.loop_detector_enabled else None
+        warning_issued = False
 
         for iteration in range(1, self.config.max_iterations + 1):
             cancellation.raise_if_cancelled()
@@ -227,6 +230,32 @@ class AgentRuntime:
             timings.append(IterationTiming(iteration=iteration, llm_ms=llm_ms, tools_ms=tools_ms))
             messages.append({"role": "user", "content": results})
 
+            # ---- loop detection ----
+            if loop_detector is not None:
+                detection = loop_detector.analyze(messages, iteration)
+                if detection.is_loop:
+                    if not warning_issued:
+                        warning_issued = True
+                        messages.append({"role": "user", "content": LOOP_WARNING_PROMPT})
+                        yield SSEEvent(
+                            type=SSEEventType.AGENT_HALTED,
+                            data={"reason": "loop_warning", "iteration": iteration, "detail": detection.reason},
+                        )
+                        if transcript:
+                            transcript.write_event("loop_warning", {"iteration": iteration, "reason": detection.reason})
+                    else:
+                        yield SSEEvent(
+                            type=SSEEventType.AGENT_HALTED,
+                            data={"reason": "loop_detected", "iteration": iteration, "detail": detection.reason},
+                        )
+                        if transcript:
+                            transcript.write_event("agent_halted", {"reason": "loop_detected"})
+                        async for event in self._force_final_answer(
+                            messages, collection_ids, cancellation, iteration, "loop_detected", transcript
+                        ):
+                            yield event
+                        return
+
         # max_iterations reached
         yield SSEEvent(
             type=SSEEventType.AGENT_HALTED,
@@ -234,9 +263,27 @@ class AgentRuntime:
         )
         if transcript:
             transcript.write_event("agent_halted", {"reason": "max_iterations"})
+        async for event in self._force_final_answer(
+            messages, collection_ids, cancellation, self.config.max_iterations, "max_iterations", transcript
+        ):
+            yield event
+
+    async def _force_final_answer(
+        self,
+        messages: list[dict],
+        collection_ids: list[str],
+        cancellation: CancellationToken,
+        iteration: int,
+        reason: str,
+        transcript: TranscriptWriter | None,
+    ) -> AsyncIterator[SSEEvent]:
+        """Force a final answer without tools."""
+        text_queue: asyncio.Queue[SSEEvent] = asyncio.Queue()
 
         async def _on_final_delta(d: str) -> None:
-            await emit(SSEEvent(type=SSEEventType.AGENT_THINKING, data={"delta": d, "iteration": -1}))
+            await text_queue.put(
+                SSEEvent(type=SSEEventType.AGENT_THINKING, data={"delta": d, "iteration": -1})
+            )
 
         final_turn = await self.backend.generate_with_tools(
             system=self._system_prompt(collection_ids) + MAX_ITER_PROMPT_SUFFIX,
@@ -247,6 +294,11 @@ class AgentRuntime:
             cancellation=cancellation,
             on_text_delta=_on_final_delta,
         )
+
+        # Drain queued text deltas so caller/frontend sees the stream
+        while not text_queue.empty():
+            yield text_queue.get_nowait()
+
         messages.append({"role": "assistant", "content": final_turn.raw_content})
 
         yield SSEEvent(type=SSEEventType.FINAL_TEXT_PROMOTE, data={"iteration": -1})
@@ -256,8 +308,9 @@ class AgentRuntime:
         yield SSEEvent(
             type=SSEEventType.DONE,
             data={
-                "iterations": self.config.max_iterations,
+                "iterations": iteration,
                 "halted": True,
+                "reason": reason,
                 "usage": {
                     "input_tokens": final_turn.usage.input_tokens,
                     "output_tokens": final_turn.usage.output_tokens,
@@ -265,7 +318,7 @@ class AgentRuntime:
             },
         )
         if transcript:
-            transcript.write_event("done", {"iterations": self.config.max_iterations, "halted": True})
+            transcript.write_event("done", {"iterations": iteration, "halted": True, "reason": reason})
 
     def _system_prompt(self, collection_ids: list[str]) -> str:
         return RAG_SYSTEM_PROMPT

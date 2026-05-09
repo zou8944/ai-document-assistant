@@ -34,3 +34,10 @@ COMPACT_SUMMARY_PROMPT = """你是会话压缩器。请把以下 agent 工作日
 输出 Markdown 格式，控制在 1500 字以内。"""
 
 MAX_ITER_PROMPT_SUFFIX = "\n\nMax iterations reached. Please synthesize a best-effort answer from the information collected. Be explicit about what you know and what remains uncertain."
+
+LOOP_WARNING_PROMPT = (
+    "\n\n[SYSTEM WARNING] 检测到重复无效的检索行为。你已连续多次调用工具但未获得有效信息。"
+    "请立即停止继续搜索，基于目前已掌握的信息直接回答用户问题。"
+    "如果现有信息不足，请明确告知用户\"现有文档中没有足够信息\"，不要继续尝试不同的关键词。"
+    "[/SYSTEM WARNING]"
+)

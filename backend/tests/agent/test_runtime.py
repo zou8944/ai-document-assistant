@@ -312,6 +312,236 @@ class TestMaxIterations:
         assert final_call.kwargs["tools"] == []
 
 
+class EmptyResultTool(Tool):
+    name = "empty_tool"
+    description = "Returns empty result for loop testing."
+    input_schema = {"type": "object", "properties": {}}
+
+    async def run(self, ctx: ToolContext, **kwargs) -> ToolResult:
+        return ToolResult(content="No matches. Try synonyms or broader keywords.")
+
+
+class TestLoopDetection:
+    @pytest.fixture
+    def empty_registry(self):
+        reg = ToolRegistry()
+        reg.register(EmptyResultTool())
+        return reg
+
+    async def test_loop_warning_injected(self, empty_registry, agent_deps):
+        # Threshold 1 so a single empty result triggers the warning
+        config = AgentConfig(
+            max_iterations=5,
+            loop_detector_enabled=True,
+            loop_max_consecutive_failures=1,
+            loop_similar_call_window=5,
+            loop_similar_call_threshold=2,
+            loop_stagnation_window=4,
+        )
+        backend = _make_backend_mock(
+            # Iteration 1: tool_use with empty result -> triggers loop_warning
+            AssistantTurn(
+                raw_content=[
+                    {"type": "text", "text": "thinking"},
+                    {"type": "tool_use", "id": "tu-1", "name": "empty_tool", "input": {}},
+                ],
+                stop_reason="tool_use",
+                tool_uses=[ToolUseBlock(id="tu-1", name="empty_tool", input={})],
+                usage=Usage(input_tokens=5, output_tokens=5),
+            ),
+            # Iteration 2: end_turn (heeds warning)
+            AssistantTurn(
+                raw_content=[{"type": "text", "text": "I cannot find enough information."}],
+                stop_reason="end_turn",
+                tool_uses=[],
+                usage=Usage(input_tokens=15, output_tokens=5),
+            ),
+        )
+        runtime = AgentRuntime(backend, empty_registry, config)
+        emit = AsyncMock()
+
+        import chat.agent.runtime as runtime_mod
+
+        original_micro = runtime_mod.micro_compact
+        original_auto = runtime_mod.auto_compact
+        runtime_mod.micro_compact = lambda *a, **k: None
+        runtime_mod.auto_compact = lambda *a, **k: a[0]
+
+        try:
+            events = await _collect_events(
+                runtime,
+                chat_id="chat-1",
+                query="test loop",
+                history=[],
+                collection_ids=["col-1"],
+                cancellation=CancellationToken(),
+                deps=agent_deps,
+                emit=emit,
+                transcript=None,
+            )
+        finally:
+            runtime_mod.micro_compact = original_micro
+            runtime_mod.auto_compact = original_auto
+
+        types = [e.type for e in events]
+        assert SSEEventType.AGENT_HALTED in types
+
+        halted = [e for e in events if e.type == SSEEventType.AGENT_HALTED]
+        assert halted[0].data["reason"] == "loop_warning"
+
+        # After warning, LLM heeds and returns end_turn
+        done_event = events[-1]
+        assert done_event.type == SSEEventType.DONE
+        # Should NOT be halted since LLM ended normally after warning
+        assert done_event.data.get("halted") is None
+
+    async def test_loop_force_termination(self, empty_registry, agent_deps):
+        config = AgentConfig(
+            max_iterations=5,
+            loop_detector_enabled=True,
+            loop_max_consecutive_failures=1,
+            loop_similar_call_window=5,
+            loop_similar_call_threshold=2,
+            loop_stagnation_window=4,
+        )
+        backend = _make_backend_mock(
+            # Iteration 1: tool_use -> triggers loop_warning
+            AssistantTurn(
+                raw_content=[
+                    {"type": "text", "text": "thinking"},
+                    {"type": "tool_use", "id": "tu-1", "name": "empty_tool", "input": {}},
+                ],
+                stop_reason="tool_use",
+                tool_uses=[ToolUseBlock(id="tu-1", name="empty_tool", input={})],
+                usage=Usage(input_tokens=5, output_tokens=5),
+            ),
+            # Iteration 2: still tool_use (ignores warning) -> triggers loop_detected -> force termination
+            AssistantTurn(
+                raw_content=[
+                    {"type": "text", "text": "still searching"},
+                    {"type": "tool_use", "id": "tu-2", "name": "empty_tool", "input": {}},
+                ],
+                stop_reason="tool_use",
+                tool_uses=[ToolUseBlock(id="tu-2", name="empty_tool", input={})],
+                usage=Usage(input_tokens=5, output_tokens=5),
+            ),
+            # Final forced turn (no tools)
+            AssistantTurn(
+                raw_content=[{"type": "text", "text": "halted due to loop"}],
+                stop_reason="end_turn",
+                tool_uses=[],
+                usage=Usage(input_tokens=20, output_tokens=5),
+            ),
+        )
+        runtime = AgentRuntime(backend, empty_registry, config)
+        emit = AsyncMock()
+
+        import chat.agent.runtime as runtime_mod
+
+        original_micro = runtime_mod.micro_compact
+        original_auto = runtime_mod.auto_compact
+        runtime_mod.micro_compact = lambda *a, **k: None
+        runtime_mod.auto_compact = lambda *a, **k: a[0]
+
+        try:
+            events = await _collect_events(
+                runtime,
+                chat_id="chat-1",
+                query="test loop",
+                history=[],
+                collection_ids=["col-1"],
+                cancellation=CancellationToken(),
+                deps=agent_deps,
+                emit=emit,
+                transcript=None,
+            )
+        finally:
+            runtime_mod.micro_compact = original_micro
+            runtime_mod.auto_compact = original_auto
+
+        types = [e.type for e in events]
+        assert SSEEventType.AGENT_HALTED in types
+
+        halted_events = [e for e in events if e.type == SSEEventType.AGENT_HALTED]
+        assert len(halted_events) == 2
+        assert halted_events[0].data["reason"] == "loop_warning"
+        assert halted_events[1].data["reason"] == "loop_detected"
+
+        done_event = events[-1]
+        assert done_event.type == SSEEventType.DONE
+        assert done_event.data.get("halted") is True
+        assert done_event.data.get("reason") == "loop_detected"
+
+        # Verify the final generate call used empty tools list
+        final_call = backend.generate_with_tools.call_args_list[-1]
+        assert final_call.kwargs["tools"] == []
+
+    async def test_loop_detector_disabled(self, empty_registry, agent_deps):
+        config = AgentConfig(
+            max_iterations=2,
+            loop_detector_enabled=False,
+        )
+        backend = _make_backend_mock(
+            AssistantTurn(
+                raw_content=[
+                    {"type": "tool_use", "id": "tu-1", "name": "empty_tool", "input": {}},
+                ],
+                stop_reason="tool_use",
+                tool_uses=[ToolUseBlock(id="tu-1", name="empty_tool", input={})],
+                usage=Usage(input_tokens=5, output_tokens=5),
+            ),
+            AssistantTurn(
+                raw_content=[
+                    {"type": "tool_use", "id": "tu-2", "name": "empty_tool", "input": {}},
+                ],
+                stop_reason="tool_use",
+                tool_uses=[ToolUseBlock(id="tu-2", name="empty_tool", input={})],
+                usage=Usage(input_tokens=5, output_tokens=5),
+            ),
+            # Final forced turn after max_iterations reached
+            AssistantTurn(
+                raw_content=[{"type": "text", "text": "max iter halt"}],
+                stop_reason="end_turn",
+                tool_uses=[],
+                usage=Usage(input_tokens=20, output_tokens=5),
+            ),
+        )
+        runtime = AgentRuntime(backend, empty_registry, config)
+        emit = AsyncMock()
+
+        import chat.agent.runtime as runtime_mod
+
+        original_micro = runtime_mod.micro_compact
+        original_auto = runtime_mod.auto_compact
+        runtime_mod.micro_compact = lambda *a, **k: None
+        runtime_mod.auto_compact = lambda *a, **k: a[0]
+
+        try:
+            events = await _collect_events(
+                runtime,
+                chat_id="chat-1",
+                query="test loop",
+                history=[],
+                collection_ids=["col-1"],
+                cancellation=CancellationToken(),
+                deps=agent_deps,
+                emit=emit,
+                transcript=None,
+            )
+        finally:
+            runtime_mod.micro_compact = original_micro
+            runtime_mod.auto_compact = original_auto
+
+        types = [e.type for e in events]
+        assert SSEEventType.AGENT_HALTED in types
+
+        halted = [e for e in events if e.type == SSEEventType.AGENT_HALTED]
+        assert halted[0].data["reason"] == "max_iterations"
+
+        done_event = events[-1]
+        assert done_event.data.get("halted") is True
+
+
 class TestCancellation:
     async def test_cancelled_on_second_iteration(self, registry, agent_deps, config):
         token = CancellationToken()

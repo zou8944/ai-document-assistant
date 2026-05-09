@@ -155,6 +155,13 @@ class AgentConfig:
     )
     model: str = "standard"  # frontend display label
 
+    # Loop detector configuration
+    loop_detector_enabled: bool = True
+    loop_max_consecutive_failures: int = 3
+    loop_similar_call_window: int = 5
+    loop_similar_call_threshold: int = 2
+    loop_stagnation_window: int = 4
+
     def to_dict(self) -> dict:
         return asdict(self)
 
