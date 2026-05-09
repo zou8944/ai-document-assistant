@@ -2,7 +2,7 @@
  * Single agent step rendering component
  */
 
-import React, { useState } from 'react'
+import React, { useState, useCallback } from 'react'
 import {
   LightBulbIcon,
   WrenchIcon,
@@ -11,9 +11,11 @@ import {
   ChevronRightIcon,
   XCircleIcon,
   CheckCircleIcon,
+  CodeBracketIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { AgentStep } from '../../types/agent'
+import { renderToolTitle, renderToolSummary } from './toolRenderers'
 
 export interface AgentTraceStepProps {
   step: AgentStep
@@ -44,17 +46,7 @@ const StepLabel: React.FC<{ step: AgentStep }> = ({ step }) => {
     case 'thinking':
       return <span className="text-amber-300">Thinking</span>
     case 'tool':
-      return (
-        <span className="text-blue-300">
-          {step.toolName || 'tool'}
-          {step.toolInput && Object.keys(step.toolInput).length > 0 && (
-            <span className="text-gray-400">
-              ({JSON.stringify(step.toolInput).slice(0, 60)}
-              {JSON.stringify(step.toolInput).length > 60 ? '...' : ''})
-            </span>
-          )}
-        </span>
-      )
+      return <span className="text-blue-300">{renderToolTitle(step)}</span>
     case 'compact':
       return (
         <span className="text-purple-300">
@@ -71,11 +63,32 @@ const StepLabel: React.FC<{ step: AgentStep }> = ({ step }) => {
   }
 }
 
+/** Check whether a tool step has meaningful details to expand. */
+function hasToolDetails(step: AgentStep): boolean {
+  if (step.kind !== 'tool') return false
+  const hasPreview = !!step.toolPreview && step.toolPreview.length > 0
+  const hasInput = !!step.toolInput && Object.keys(step.toolInput).length > 0
+  return hasPreview || hasInput
+}
+
 export const AgentTraceStep: React.FC<AgentTraceStepProps> = ({ step, isLast }) => {
   const [expanded, setExpanded] = useState(false)
+  const [rawExpanded, setRawExpanded] = useState(false)
 
   const isTool = step.kind === 'tool'
-  const hasDetails = isTool && (step.toolPreview || step.toolInput)
+  const hasDetails = hasToolDetails(step)
+  const summary = isTool ? renderToolSummary(step) : null
+
+  const toggleExpanded = useCallback(() => {
+    if (hasDetails) {
+      setExpanded((v) => !v)
+    }
+  }, [hasDetails])
+
+  const toggleRawExpanded = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    setRawExpanded((v) => !v)
+  }, [])
 
   return (
     <div className={clsx('relative', !isLast && 'pb-1')}>
@@ -97,7 +110,7 @@ export const AgentTraceStep: React.FC<AgentTraceStepProps> = ({ step, isLast }) 
               'flex items-center space-x-1.5 text-xs',
               hasDetails && 'cursor-pointer hover:opacity-80'
             )}
-            onClick={() => hasDetails && setExpanded((v) => !v)}
+            onClick={toggleExpanded}
           >
             {hasDetails && (
               <span className="flex-shrink-0">
@@ -123,6 +136,13 @@ export const AgentTraceStep: React.FC<AgentTraceStepProps> = ({ step, isLast }) 
             )}
           </div>
 
+          {/* Result summary line */}
+          {summary && step.toolStatus !== 'running' && (
+            <div className="mt-0.5 text-[11px] text-gray-400 leading-relaxed">
+              {summary}
+            </div>
+          )}
+
           {/* Thinking text */}
           {step.kind === 'thinking' && step.text && (
             <p className="mt-0.5 text-[11px] text-gray-400 leading-relaxed line-clamp-2">
@@ -133,24 +153,54 @@ export const AgentTraceStep: React.FC<AgentTraceStepProps> = ({ step, isLast }) 
           {/* Expanded tool details */}
           {isTool && expanded && hasDetails && (
             <div className="mt-1.5 space-y-1.5">
-              {step.toolInput && Object.keys(step.toolInput).length > 0 && (
-                <div className="rounded bg-black/20 p-1.5">
-                  <div className="text-[10px] text-gray-500 mb-0.5">Input</div>
-                  <pre className="text-[10px] text-gray-300 overflow-x-auto whitespace-pre-wrap break-all">
-                    {JSON.stringify(step.toolInput, null, 2)}
-                  </pre>
-                </div>
-              )}
+              {/* Human-friendly result preview */}
               {step.toolPreview && (
                 <div className="rounded bg-black/20 p-1.5">
-                  <div className="text-[10px] text-gray-500 mb-0.5">Result</div>
+                  <div className="text-[10px] text-gray-500 mb-0.5">结果</div>
                   <pre className="text-[10px] text-gray-300 overflow-x-auto whitespace-pre-wrap break-all">
-                    {step.toolPreview.length > 300
-                      ? step.toolPreview.slice(0, 300) + '...'
+                    {step.toolPreview.length > 500
+                      ? step.toolPreview.slice(0, 500) + '...'
                       : step.toolPreview}
                   </pre>
                 </div>
               )}
+
+              {/* Raw data toggle */}
+              <div>
+                <button
+                  onClick={toggleRawExpanded}
+                  className="flex items-center space-x-1 text-[10px] text-gray-500 hover:text-gray-400 transition-colors"
+                >
+                  <CodeBracketIcon className="w-3 h-3" />
+                  <span>原始数据</span>
+                  {rawExpanded ? (
+                    <ChevronDownIcon className="w-3 h-3" />
+                  ) : (
+                    <ChevronRightIcon className="w-3 h-3" />
+                  )}
+                </button>
+
+                {rawExpanded && (
+                  <div className="mt-1 space-y-1.5">
+                    {step.toolInput && Object.keys(step.toolInput).length > 0 && (
+                      <div className="rounded bg-black/20 p-1.5">
+                        <div className="text-[10px] text-gray-500 mb-0.5">输入</div>
+                        <pre className="text-[10px] text-gray-300 overflow-x-auto whitespace-pre-wrap break-all">
+                          {JSON.stringify(step.toolInput, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                    {step.toolPreview && (
+                      <div className="rounded bg-black/20 p-1.5">
+                        <div className="text-[10px] text-gray-500 mb-0.5">输出</div>
+                        <pre className="text-[10px] text-gray-300 overflow-x-auto whitespace-pre-wrap break-all">
+                          {step.toolPreview}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
