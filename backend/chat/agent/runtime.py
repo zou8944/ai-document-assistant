@@ -13,22 +13,13 @@ from chat.agent.prompts import MAX_ITER_PROMPT_SUFFIX, RAG_SYSTEM_PROMPT
 from chat.agent.registry import ToolRegistry
 from chat.agent.trace import TranscriptWriter
 from chat.models import SSEEvent, SSEEventType
+from models.config import AgentConfig
 
 if TYPE_CHECKING:
     from chat.agent.llm.base import ToolCallingBackend
     from chat.agent.tools.base import AgentDeps, ToolContext
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class AgentConfig:
-    max_iterations: int = 15
-    context_window: int = 200_000
-    compact_threshold: float = 0.8
-    keep_recent_tool_results: int = 2
-    transcript_dir: str = "./var/agent_transcripts"
-    model: str = "standard"
 
 
 @dataclass

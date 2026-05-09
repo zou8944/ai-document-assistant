@@ -150,7 +150,9 @@ class AgentConfig:
     context_window: int = 200_000
     compact_threshold: float = 0.8
     keep_recent_tool_results: int = 2
-    transcript_dir: str = "./var/agent_transcripts"
+    transcript_dir: str = field(
+        default_factory=lambda: str(AppConfig.get_transcript_dir())
+    )
     model: str = "standard"  # frontend display label
 
     def to_dict(self) -> dict:
@@ -205,6 +207,14 @@ class AppConfig:
         return cls.get_user_config_dir() / "backend.log"
 
     @classmethod
+    def get_transcript_dir(cls) -> Path:
+        return cls.get_user_config_dir() / "agent_transcripts"
+
+    @classmethod
+    def get_chroma_dir(cls) -> Path:
+        return cls.get_user_config_dir() / "chroma_db"
+
+    @classmethod
     def from_toml_file(cls, file_path: Optional[Path] = None) -> "AppConfig":
         if file_path is None:
             file_path = cls.get_config_file_path()
@@ -252,6 +262,7 @@ class AppConfig:
         directories = [
             self.get_user_config_dir(),
             self.get_crawl_cache_dir(),
+            self.get_transcript_dir(),
         ]
 
         for directory in directories:

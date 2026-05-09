@@ -62,7 +62,7 @@ class AppState:
                     max_iterations=15,
                     context_window=200_000,
                     model="standard",
-                    transcript_dir="./var/agent_transcripts",
+                    transcript_dir=config.agent.transcript_dir,
                 )
                 agent_chat_service = AgentChatService(
                     backend=agent_backend,

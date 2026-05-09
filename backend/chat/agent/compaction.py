@@ -25,7 +25,14 @@ def estimate_tokens(messages: list[dict], backend: "ToolCallingBackend | None" =
         except Exception:
             pass
     # Fallback heuristic: ~4 chars per token for CJK/code mix
-    text = json.dumps(messages, ensure_ascii=False)
+    def _default(obj: object) -> object:
+        if hasattr(obj, "model_dump"):
+            return obj.model_dump()
+        if hasattr(obj, "__dict__"):
+            return obj.__dict__
+        return str(obj)
+
+    text = json.dumps(messages, ensure_ascii=False, default=_default)
     return len(text) // 4
 
 

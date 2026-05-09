@@ -3,7 +3,7 @@
 from chat.agent.cancellation import CancellationToken
 from chat.agent.compaction import auto_compact, estimate_tokens, micro_compact
 from chat.agent.registry import ToolRegistry
-from chat.agent.runtime import AgentConfig, AgentRuntime
+from chat.agent.runtime import AgentRuntime
 from chat.agent.tools.base import AgentDeps, Tool, ToolContext, ToolResult
 from chat.agent.tools.collections import (
     GetCollectionOverviewTool,
@@ -12,6 +12,8 @@ from chat.agent.tools.collections import (
 from chat.agent.tools.documents import GetDocumentSummaryTool, GetDocumentTool
 from chat.agent.tools.search import GrepDocumentsTool, SearchDocumentsTool
 from chat.agent.trace import TranscriptWriter
+
+from models.config import AgentConfig
 
 __all__ = [
     "CancellationToken",

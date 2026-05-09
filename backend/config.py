@@ -13,6 +13,8 @@ from models.config import AppConfig
 DATA_DIR_PATH = AppConfig.get_user_config_dir()
 CONFIG_FILE_PATH = AppConfig.get_config_file_path()
 CRAWL_CACHE_DIR = AppConfig.get_crawl_cache_dir()
+TRANSCRIPT_DIR = AppConfig.get_transcript_dir()
+CHROMA_DIR = AppConfig.get_chroma_dir()
 LOG_FILE_PATH = AppConfig.get_log_file_path()
 
 # Global config instance

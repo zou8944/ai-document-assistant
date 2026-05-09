@@ -13,6 +13,8 @@ from chromadb.config import Settings
 from chromadb.errors import NotFoundError
 from pydantic import BaseModel
 
+from config import CHROMA_DIR
+
 logger = logging.getLogger(__name__)
 
 
@@ -31,7 +33,7 @@ class ChromaManager:
     Optimized for AI document assistant use case.
     """
 
-    def __init__(self, persist_directory: str = "./chroma_db"):
+    def __init__(self, persist_directory: str = str(CHROMA_DIR)):
         """
         Initialize ChromaDB client.
         Uses HTTP client if CHROMA_HOST is set (Docker), otherwise uses persistent local storage.
