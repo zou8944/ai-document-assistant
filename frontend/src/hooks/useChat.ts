@@ -47,6 +47,7 @@ export interface UseChatReturn {
   isLoading: boolean
   isStreaming: boolean
   streamingContent: string
+  streamingAgentState: AgentMessageState | null
   processingStatus: string | null
   sendMessage: (content: string, documentIds?: string[]) => Promise<void>
   stopGeneration: () => void
@@ -58,6 +59,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
   const [isLoading, setIsLoading] = useState(false)
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
+  const [streamingAgentState, setStreamingAgentState] = useState<AgentMessageState | null>(null)
   const [processingStatus, setProcessingStatus] = useState<string | null>(null)
   const apiClient = useAPIClient()
   const streamingSourcesRef = useRef<SourceReference[]>([])
@@ -196,6 +198,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
         }
 
         setStreamingContent('')
+        setStreamingAgentState(null)
         streamingContentRef.current = ''
         streamingSourcesRef.current = []
         streamingMessageIdRef.current = null
@@ -223,6 +226,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
         }
 
         setStreamingContent('')
+        setStreamingAgentState(null)
         streamingContentRef.current = ''
         streamingSourcesRef.current = []
         streamingMessageIdRef.current = null
@@ -235,12 +239,14 @@ export const useChat = (chatId: string | null): UseChatReturn => {
 
       // Agent mode events
       case 'agent_start': {
-        streamingAgentStateRef.current = {
+        const newState: AgentMessageState = {
           steps: [],
           finalText: '',
           iterations: 0,
           status: 'running',
         }
+        streamingAgentStateRef.current = newState
+        setStreamingAgentState(newState)
         if (event.data?.message_id) {
           streamingMessageIdRef.current = event.data.message_id
         }
@@ -251,13 +257,13 @@ export const useChat = (chatId: string | null): UseChatReturn => {
         const state = streamingAgentStateRef.current
         if (!state) break
         const iteration = event.data?.iteration ?? state.iterations + 1
-        state.iterations = iteration
-        state.steps.push({
-          kind: 'thinking',
-          iteration,
-          text: '',
-        })
-        streamingAgentStateRef.current = { ...state }
+        const newState: AgentMessageState = {
+          ...state,
+          iterations: iteration,
+          steps: [...state.steps, { kind: 'thinking', iteration, text: '' }],
+        }
+        streamingAgentStateRef.current = newState
+        setStreamingAgentState(newState)
         break
       }
 
@@ -281,7 +287,9 @@ export const useChat = (chatId: string | null): UseChatReturn => {
             ...updatedSteps[stepIndex],
             text: (updatedSteps[stepIndex].text || '') + delta,
           }
-          streamingAgentStateRef.current = { ...state, steps: updatedSteps }
+          const newState = { ...state, steps: updatedSteps }
+          streamingAgentStateRef.current = newState
+          setStreamingAgentState(newState)
         }
         break
       }
@@ -289,15 +297,22 @@ export const useChat = (chatId: string | null): UseChatReturn => {
       case 'tool_call': {
         const state = streamingAgentStateRef.current
         if (!state) break
-        state.steps.push({
-          kind: 'tool',
-          iteration: state.iterations,
-          toolId: event.data?.id || '',
-          toolName: event.data?.name || '',
-          toolInput: event.data?.input || {},
-          toolStatus: 'running',
-        })
-        streamingAgentStateRef.current = { ...state }
+        const newState: AgentMessageState = {
+          ...state,
+          steps: [
+            ...state.steps,
+            {
+              kind: 'tool',
+              iteration: state.iterations,
+              toolId: event.data?.id || '',
+              toolName: event.data?.name || '',
+              toolInput: event.data?.input || {},
+              toolStatus: 'running',
+            },
+          ],
+        }
+        streamingAgentStateRef.current = newState
+        setStreamingAgentState(newState)
         break
       }
 
@@ -316,7 +331,9 @@ export const useChat = (chatId: string | null): UseChatReturn => {
             toolPreview: event.data?.preview || '',
             toolMs: event.data?.ms,
           }
-          streamingAgentStateRef.current = { ...state, steps: updatedSteps }
+          const newState = { ...state, steps: updatedSteps }
+          streamingAgentStateRef.current = newState
+          setStreamingAgentState(newState)
         }
         break
       }
@@ -324,13 +341,20 @@ export const useChat = (chatId: string | null): UseChatReturn => {
       case 'compact_triggered': {
         const state = streamingAgentStateRef.current
         if (!state) break
-        state.steps.push({
-          kind: 'compact',
-          iteration: state.iterations,
-          beforeTokens: event.data?.before_tokens,
-          afterTokens: event.data?.after_tokens,
-        })
-        streamingAgentStateRef.current = { ...state }
+        const newState: AgentMessageState = {
+          ...state,
+          steps: [
+            ...state.steps,
+            {
+              kind: 'compact',
+              iteration: state.iterations,
+              beforeTokens: event.data?.before_tokens,
+              afterTokens: event.data?.after_tokens,
+            },
+          ],
+        }
+        streamingAgentStateRef.current = newState
+        setStreamingAgentState(newState)
         break
       }
 
@@ -353,11 +377,13 @@ export const useChat = (chatId: string | null): UseChatReturn => {
           const newFinalText = state.finalText
             ? state.finalText + '\n\n' + promotedText
             : promotedText
-          streamingAgentStateRef.current = {
+          const newState: AgentMessageState = {
             ...state,
             steps: updatedSteps,
             finalText: newFinalText,
           }
+          streamingAgentStateRef.current = newState
+          setStreamingAgentState(newState)
           // Also update streaming content so bubble shows final text
           streamingContentRef.current = newFinalText
           setStreamingContent(newFinalText)
@@ -368,11 +394,13 @@ export const useChat = (chatId: string | null): UseChatReturn => {
       case 'agent_halted': {
         const state = streamingAgentStateRef.current
         if (!state) break
-        streamingAgentStateRef.current = {
+        const newState = {
           ...state,
-          status: 'done',
+          status: 'done' as const,
           halted: true,
         }
+        streamingAgentStateRef.current = newState
+        setStreamingAgentState(newState)
         break
       }
 
@@ -402,6 +430,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
     setIsLoading(false)
     setIsStreaming(false)
     setStreamingContent('')
+    setStreamingAgentState(null)
     streamingContentRef.current = ''
     streamingSourcesRef.current = []
     streamingMessageIdRef.current = null
@@ -435,6 +464,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
     setIsLoading(false)
     setIsStreaming(false)
     setStreamingContent('')
+    setStreamingAgentState(null)
     setProcessingStatus(null)
     streamingContentRef.current = ''
     streamingSourcesRef.current = []
@@ -460,6 +490,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
     setIsLoading(true)
     setIsStreaming(true)
     setStreamingContent('')
+    setStreamingAgentState(null)
     streamingContentRef.current = ''
     streamingSourcesRef.current = []
     streamingMessageIdRef.current = null
@@ -490,6 +521,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
     isLoading,
     isStreaming,
     streamingContent,
+    streamingAgentState,
     processingStatus,
     sendMessage,
     stopGeneration,

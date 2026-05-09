@@ -85,6 +85,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
     isLoading,
     isStreaming,
     streamingContent,
+    streamingAgentState,
     processingStatus,
     sendMessage,
     stopGeneration,
@@ -283,6 +284,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                     <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                     <span>{processingStatus}</span>
                   </div>
+                )}
+                {streamingAgentState && (
+                  <AgentTrace state={streamingAgentState} />
                 )}
                 <div className="px-4 py-3 rounded-2xl bg-white/80 backdrop-blur-sm border border-gray-200/50 text-gray-900 text-sm">
                   {streamingContent ? (

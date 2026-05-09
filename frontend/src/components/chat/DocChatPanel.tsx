@@ -18,6 +18,7 @@ import clsx from 'clsx'
 import { useChat, StageTiming } from '../../hooks/useChat'
 import MarkdownContent from './MarkdownContent'
 import SourceReferences from './SourceReferences'
+import AgentTrace from './AgentTrace'
 
 const TimingDisplay: React.FC<{ timings: StageTiming }> = ({ timings }) => {
   const items = [
@@ -57,6 +58,7 @@ export const DocChatPanel: React.FC<DocChatPanelProps> = ({ chatId, documentId }
     isLoading,
     isStreaming,
     streamingContent,
+    streamingAgentState,
     processingStatus,
     sendMessage,
     stopGeneration,
@@ -164,6 +166,9 @@ export const DocChatPanel: React.FC<DocChatPanelProps> = ({ chatId, documentId }
                     <div className="w-2.5 h-2.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                     <span>{processingStatus}</span>
                   </div>
+                )}
+                {streamingAgentState && (
+                  <AgentTrace state={streamingAgentState} />
                 )}
                 <div className="px-3 py-2 rounded-xl bg-white/80 backdrop-blur-sm border border-gray-200/50 text-gray-900 text-xs">
                   {streamingContent ? (
