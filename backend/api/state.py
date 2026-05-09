@@ -59,7 +59,7 @@ class AppState:
                     model=config.llm.agent.model,
                 )
                 agent_config = AgentConfig(
-                    max_iterations=15,
+                    max_iterations=500,
                     context_window=200_000,
                     model="standard",
                     transcript_dir=config.agent.transcript_dir,

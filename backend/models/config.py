@@ -146,7 +146,7 @@ class SystemConfig:
 class AgentConfig:
     """Agent loop configuration."""
 
-    max_iterations: int = 15
+    max_iterations: int = 500
     context_window: int = 200_000
     compact_threshold: float = 0.8
     keep_recent_tool_results: int = 2
