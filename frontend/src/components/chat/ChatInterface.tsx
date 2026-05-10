@@ -230,7 +230,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                   </div>
 
                   <div className={clsx(
-                    'mt-1 text-xs text-gray-500',
+                    'mt-1 text-xs text-gray-400',
                     msg.type === 'user' ? 'text-right' : 'text-left'
                   )}>
                     {formatTime(msg.timestamp)}
@@ -249,7 +249,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                 </div>
                 <div className="flex-1 min-w-0">
                   {processingStatus && (
-                    <div className="mb-1.5 flex items-center space-x-1.5 text-xs text-gray-500">
+                    <div className="mb-1.5 flex items-center space-x-1.5 text-xs text-gray-400">
                       <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                       <span>{processingStatus}</span>
                     </div>

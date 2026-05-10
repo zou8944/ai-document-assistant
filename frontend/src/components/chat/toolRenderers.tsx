@@ -84,7 +84,7 @@ const grepDocumentsRenderer: ToolRenderer = {
     return (
       <>
         在文档中查找「{truncate(pattern, 40)}」
-        {useRegex && <span className="text-gray-500">（正则）</span>}
+        {useRegex && <span className="text-gray-400">（正则）</span>}
       </>
     )
   },
@@ -108,7 +108,7 @@ const getDocumentRenderer: ToolRenderer = {
     return (
       <>
         阅读文档 <span className="font-mono text-[11px]">{truncate(docId, 20)}</span>
-        {page > 1 && <span className="text-gray-500"> · 第 {page} 页</span>}
+        {page > 1 && <span className="text-gray-400"> · 第 {page} 页</span>}
       </>
     )
   },
@@ -226,7 +226,7 @@ export function renderToolTitle(step: AgentStep): React.ReactNode {
     <>
       {step.toolName || 'tool'}
       {inputStr && (
-        <span className="text-gray-400">
+        <span className="text-gray-300">
           ({inputStr}
           {truncated && '...'})
         </span>

@@ -170,12 +170,14 @@ class AgentChatService:
                             step = ui_state["steps"][i]
                             if step["kind"] == "thinking" and step["iteration"] == iteration and not step.get("hidden"):
                                 promoted_text = step.get("text", "")
-                                ui_state["steps"].pop(i)
+                                # Keep thinking step in trace; only use promoted text as final answer
                                 ui_state["finalText"] = (
                                     ui_state["finalText"] + "\n\n" + promoted_text
                                     if ui_state["finalText"]
                                     else promoted_text
                                 )
+                                # Overwrite buffer so only final iteration's thinking becomes message content
+                                thinking_buffer = promoted_text
                                 break
                     elif event.type == SSEEventType.AGENT_HALTED:
                         reason = event.data.get("reason")

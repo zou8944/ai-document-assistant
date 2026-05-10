@@ -382,18 +382,16 @@ export const useChat = (chatId: string | null): UseChatReturn => {
         })()
         if (stepIndex >= 0) {
           const promotedText = state.steps[stepIndex].text || ''
-          const updatedSteps = state.steps.filter((_, i) => i !== stepIndex)
           const newFinalText = state.finalText
             ? state.finalText + '\n\n' + promotedText
             : promotedText
           const newState: AgentMessageState = {
             ...state,
-            steps: updatedSteps,
             finalText: newFinalText,
           }
           streamingAgentStateRef.current = newState
           setStreamingAgentState(newState)
-          // Also update streaming content so bubble shows final text
+          // Update streaming content so bubble shows final text
           streamingContentRef.current = newFinalText
           setStreamingContent(newFinalText)
         }

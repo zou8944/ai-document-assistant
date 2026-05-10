@@ -114,7 +114,7 @@ export const DocChatPanel: React.FC<DocChatPanelProps> = ({ chatId, documentId }
                   <SourceReferences sources={msg.sources || []} />
                 </div>
                 <div className={clsx(
-                  'mt-0.5 text-[10px] text-gray-500',
+                  'mt-0.5 text-[10px] text-gray-400',
                   msg.type === 'user' ? 'text-right' : 'text-left'
                 )}>
                   {formatTime(msg.timestamp)}
@@ -133,7 +133,7 @@ export const DocChatPanel: React.FC<DocChatPanelProps> = ({ chatId, documentId }
               </div>
               <div className="flex-1 min-w-0">
                 {processingStatus && (
-                  <div className="mb-1 flex items-center space-x-1 text-[10px] text-gray-500">
+                  <div className="mb-1 flex items-center space-x-1 text-[10px] text-gray-400">
                     <div className="w-2.5 h-2.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                     <span>{processingStatus}</span>
                   </div>
