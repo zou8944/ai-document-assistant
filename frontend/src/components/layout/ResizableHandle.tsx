@@ -60,9 +60,9 @@ export const ResizableHandle: React.FC<ResizableHandleProps> = ({
   return (
     <div
       className={clsx(
-        'group relative z-20 w-1 bg-gray-200/50 hover:bg-blue-400 transition-all duration-200 cursor-col-resize',
+        'group relative z-20 w-1 bg-gray-200/40 hover:bg-[#007AFF]/40 transition-all duration-200 cursor-col-resize',
         'flex items-center justify-center',
-        isResizing && 'bg-blue-500',
+        isResizing && 'bg-[#007AFF]',
         className
       )}
       onMouseDown={handleMouseDown}
@@ -74,7 +74,7 @@ export const ResizableHandle: React.FC<ResizableHandleProps> = ({
           isResizing && 'opacity-100'
         )}
       >
-        <div className="w-0.5 h-8 bg-gray-400 rounded-full" />
+        <div className="w-0.5 h-8 bg-[#8E8E93] rounded-full" />
       </div>
       
       {/* Invisible wider hit area */}

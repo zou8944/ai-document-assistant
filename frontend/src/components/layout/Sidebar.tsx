@@ -119,16 +119,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
   }
 
   return (
-    <div className={clsx('flex flex-col h-full bg-white/80 backdrop-blur-md', className)}>
+    <div className={clsx('flex flex-col h-full bg-white/60 backdrop-blur-xl border-r border-white/20', className)}>
       {/* Knowledge Base Section - Fixed at top */}
-      <div className="flex-shrink-0 p-4 border-b border-gray-200/50">
+      <div className="flex-shrink-0 p-4 border-b border-gray-200/40">
         <button
           onClick={() => handleSectionClick('knowledge')}
           className={clsx(
             'w-full flex items-center space-x-3 p-3 rounded-xl transition-all duration-200',
             activeSidebarSection === 'knowledge'
-              ? 'bg-blue-500 text-white shadow-lg'
-              : 'text-gray-700 hover:bg-gray-100/50'
+              ? 'bg-[#007AFF] text-white shadow-md shadow-[#007AFF]/20'
+              : 'text-[#1c1c1e] hover:bg-white/50'
           )}
         >
           <BookOpenIcon className="w-5 h-5" />
@@ -138,17 +138,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
 
       {/* Chat Section - Scrollable middle area */}
       <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex-shrink-0 p-4 pb-2 border-b border-gray-200/50">
+        <div className="flex-shrink-0 p-4 pb-2 border-b border-gray-200/40">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">
+            <h3 className="text-sm font-medium text-[#8E8E93] uppercase tracking-wide">
               聊天
             </h3>
             <button
               onClick={handleAddChat}
-              className="p-1 rounded-md hover:bg-gray-100/50 transition-colors"
+              className="p-1 rounded-md hover:bg-white/50 transition-colors"
               title="新建聊天"
             >
-              <PlusIcon className="w-4 h-4 text-gray-500" />
+              <PlusIcon className="w-4 h-4 text-[#8E8E93]" />
             </button>
           </div>
         </div>
@@ -173,24 +173,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
           ))}
           
           {chatSessions.length === 0 && (
-            <div className="text-center text-gray-500 text-sm py-8">
+            <div className="text-center text-[#8E8E93] text-sm py-8">
               <ChatBubbleLeftRightIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
               <p>暂无聊天记录</p>
-              <p className="text-xs mt-1">点击上方 + 按钮创建新对话</p>
+              <p className="text-xs mt-1 opacity-75">点击上方 + 按钮创建新对话</p>
             </div>
           )}
         </div>
       </div>
 
       {/* Settings Section - Fixed at bottom */}
-      <div className="flex-shrink-0 p-4 border-t border-gray-200/50">
+      <div className="flex-shrink-0 p-4 border-t border-gray-200/40">
         <button
           onClick={() => handleSectionClick('settings')}
           className={clsx(
             'w-full flex items-center space-x-3 p-3 rounded-xl transition-all duration-200',
             activeSidebarSection === 'settings'
-              ? 'bg-blue-500 text-white shadow-lg'
-              : 'text-gray-700 hover:bg-gray-100/50'
+              ? 'bg-[#007AFF] text-white shadow-md shadow-[#007AFF]/20'
+              : 'text-[#1c1c1e] hover:bg-white/50'
           )}
         >
           <Cog6ToothIcon className="w-5 h-5" />

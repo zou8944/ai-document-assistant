@@ -28,14 +28,14 @@ const CodeBlock: React.FC<{
   }, [children])
 
   return (
-    <div className="my-3 rounded-lg overflow-hidden border border-gray-200 bg-[#F9F9F9]">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-[#F5F5F5] border-b border-gray-200">
-        <span className="text-[11px] font-medium text-muted uppercase tracking-wider font-mono">
+    <div className="my-3 rounded-xl overflow-hidden border border-white/40 bg-white/50 backdrop-blur-sm">
+      <div className="flex items-center justify-between px-4 py-2 bg-white/30 border-b border-white/30">
+        <span className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wider font-mono">
           {language || 'code'}
         </span>
         <button
           onClick={handleCopy}
-          className="flex items-center space-x-1 text-[11px] text-muted hover:text-ink transition-colors"
+          className="flex items-center space-x-1 text-[11px] text-[#8E8E93] hover:text-[#007AFF] transition-colors"
         >
           {copied ? (
             <>
@@ -50,8 +50,8 @@ const CodeBlock: React.FC<{
           )}
         </button>
       </div>
-      <pre className="bg-[#F9F9F9] p-3 overflow-x-auto text-[13px] leading-relaxed">
-        <code className="font-mono text-ink">{children}</code>
+      <pre className="p-4 overflow-x-auto text-[13px] leading-relaxed">
+        <code className="font-mono text-[#1c1c1e]">{children}</code>
       </pre>
     </div>
   )
@@ -102,12 +102,12 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, isUse
           </ol>
         ),
         li: ({ children }) => (
-          <li className="leading-[1.7] pl-1 marker:text-muted">
+          <li className="leading-[1.7] pl-1 marker:text-[#8E8E93]">
             {children}
           </li>
         ),
         blockquote: ({ children }) => (
-          <blockquote className="border-l-2 border-accent pl-4 py-0.5 my-3 text-muted italic text-[15px] leading-[1.7]">
+          <blockquote className="border-l-2 border-[#007AFF] pl-4 py-0.5 my-3 text-[#8E8E93] italic text-[15px] leading-[1.7]">
             {children}
           </blockquote>
         ),
@@ -116,7 +116,7 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, isUse
           if (inline) {
             return (
               <code
-                className="bg-paper-dark text-ink px-1 py-0.5 rounded text-[13px] font-mono"
+                className="bg-white/50 text-[#1c1c1e] px-1.5 py-0.5 rounded-md text-[13px] font-mono border border-white/30"
                 {...props}
               >
                 {children}
@@ -137,32 +137,32 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, isUse
             </table>
           </div>
         ),
-        thead: ({ children }) => <thead className="bg-paper-dark">{children}</thead>,
+        thead: ({ children }) => <thead className="bg-white/30">{children}</thead>,
         tbody: ({ children }) => <tbody>{children}</tbody>,
-        tr: ({ children }) => <tr className="border-b border-warm-border last:border-b-0">{children}</tr>,
+        tr: ({ children }) => <tr className="border-b border-[#E5E5EA] last:border-b-0">{children}</tr>,
         th: ({ children }) => (
-          <th className="px-3 py-2 text-left font-semibold text-ink text-sm border-b border-warm-border">
+          <th className="px-3 py-2 text-left font-semibold text-[#1c1c1e] text-sm border-b border-[#E5E5EA]">
             {children}
           </th>
         ),
         td: ({ children }) => (
-          <td className="px-3 py-2 text-ink text-sm">
+          <td className="px-3 py-2 text-[#1c1c1e] text-sm">
             {children}
           </td>
         ),
-        strong: ({ children }) => <strong className="font-semibold text-ink">{children}</strong>,
-        em: ({ children }) => <em className="italic text-muted">{children}</em>,
+        strong: ({ children }) => <strong className="font-semibold text-[#1c1c1e]">{children}</strong>,
+        em: ({ children }) => <em className="italic text-[#8E8E93]">{children}</em>,
         a: ({ href, children }) => (
           <a
             href={href}
-            className="text-accent hover:text-accent-hover hover:underline transition-colors"
+            className="text-[#007AFF] hover:text-[#0066D6] hover:underline transition-colors"
             target="_blank"
             rel="noopener noreferrer"
           >
             {children}
           </a>
         ),
-        hr: () => <hr className="my-4 border-warm-border" />,
+        hr: () => <hr className="my-4 border-[#E5E5EA]" />,
       }}
     >
       {content}

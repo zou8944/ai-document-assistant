@@ -136,7 +136,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
 
   if (!currentChat) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-500">
+      <div className="flex items-center justify-center h-full text-[#8E8E93]">
         <div className="text-center">
           <CpuChipIcon className="w-16 h-16 mx-auto mb-4 opacity-50" />
           <p>请选择一个聊天会话</p>
@@ -151,12 +151,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
   return (
     <div className={clsx('h-full flex flex-col', className)}>
       {/* Header */}
-      <div className="flex-shrink-0 px-6 py-3 border-b border-warm-border">
+      <div className="flex-shrink-0 px-6 py-3 border-b border-gray-200/40 bg-white/30 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-2 text-sm text-gray-500">
+          <div className="flex items-center space-x-2 text-sm text-[#8E8E93]">
             <span>知识库:</span>
             {kbNames.length > 0 ? (
-              <span className="text-gray-900 font-medium">
+              <span className="text-[#1c1c1e] font-medium">
                 {kbNames.join(' + ')}
               </span>
             ) : (
@@ -167,7 +167,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
           {!isBoundChat && (
             <button
               onClick={() => setShowKnowledgeBaseSelector(true)}
-              className="flex items-center space-x-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+              className="flex items-center space-x-1 text-sm text-[#8E8E93] hover:text-[#007AFF] transition-colors"
             >
               <PlusIcon className="w-4 h-4" />
               <span>管理知识库</span>
@@ -185,10 +185,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                 /* User message - right aligned card */
                 <div className="flex justify-end">
                   <div className="max-w-3xl">
-                    <div className="bg-[#F7F7F8] rounded-2xl px-5 py-3">
+                    <div className="bg-white/60 backdrop-blur-sm rounded-2xl px-5 py-3 border border-white/40">
                       <MarkdownContent content={msg.content} isUser />
                     </div>
-                    <div className="mt-1.5 text-[11px] text-muted text-right">
+                    <div className="mt-1.5 text-[11px] text-[#8E8E93] text-right">
                       {formatTime(msg.timestamp)}
                     </div>
                   </div>
@@ -197,7 +197,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                 /* AI message - left aligned, no background */
                 <div className="flex space-x-4">
                   <div className="flex-shrink-0">
-                    <div className="w-7 h-7 rounded-full bg-accent/10 text-accent flex items-center justify-center">
+                    <div className="w-7 h-7 rounded-full bg-[#007AFF]/10 text-[#007AFF] flex items-center justify-center">
                       <CpuChipIcon className="w-3.5 h-3.5" />
                     </div>
                   </div>
@@ -205,11 +205,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                     {msg.agentState && (
                       <AgentTrace state={msg.agentState} />
                     )}
-                    <div className="text-base leading-[1.7] text-ink">
+                    <div className="text-base leading-[1.7] text-[#1c1c1e]">
                       <MarkdownContent content={msg.content} />
                     </div>
                     <SourceReferences sources={msg.sources || []} />
-                    <div className="mt-2 text-[11px] text-muted">
+                    <div className="mt-2 text-[11px] text-[#8E8E93]">
                       {formatTime(msg.timestamp)}
                     </div>
                   </div>
@@ -223,31 +223,31 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
             <div className="px-6 py-3.5">
               <div className="flex space-x-4">
                 <div className="flex-shrink-0">
-                  <div className="w-7 h-7 rounded-full bg-accent/10 text-accent flex items-center justify-center">
+                  <div className="w-7 h-7 rounded-full bg-[#007AFF]/10 text-[#007AFF] flex items-center justify-center">
                     <CpuChipIcon className="w-3.5 h-3.5" />
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
                   {processingStatus && (
-                    <div className="mb-2 flex items-center space-x-2 text-xs text-muted">
-                      <div className="w-3 h-3 border-2 border-muted border-t-transparent rounded-full animate-spin" />
+                    <div className="mb-2 flex items-center space-x-2 text-xs text-[#8E8E93]">
+                      <div className="w-3 h-3 border-2 border-[#007AFF] border-t-transparent rounded-full animate-spin" />
                       <span>{processingStatus}</span>
                     </div>
                   )}
                   {streamingAgentState && (
                     <AgentTrace state={streamingAgentState} />
                   )}
-                  <div className="text-base leading-[1.7] text-ink">
+                  <div className="text-base leading-[1.7] text-[#1c1c1e]">
                     {streamingContent ? (
                       <>
                         <MarkdownContent content={streamingContent} />
-                        <div className="inline-block w-2 h-4 bg-muted ml-0.5 animate-pulse align-middle" />
+                        <div className="inline-block w-2 h-4 bg-[#007AFF] ml-0.5 animate-pulse align-middle" />
                       </>
                     ) : (
                       <div className="flex space-x-1.5 py-2">
-                        <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" />
-                        <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                        <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                        <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" />
+                        <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                        <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                       </div>
                     )}
                   </div>
@@ -261,15 +261,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
             <div className="px-6 py-3.5">
               <div className="flex space-x-4">
                 <div className="flex-shrink-0">
-                  <div className="w-7 h-7 rounded-full bg-accent/10 text-accent flex items-center justify-center">
+                  <div className="w-7 h-7 rounded-full bg-[#007AFF]/10 text-[#007AFF] flex items-center justify-center">
                     <CpuChipIcon className="w-3.5 h-3.5" />
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex space-x-1.5 py-2">
-                    <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                    <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                    <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" />
+                    <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                    <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                   </div>
                 </div>
               </div>
@@ -281,7 +281,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
       </div>
 
       {/* Input Area */}
-      <div className="flex-shrink-0 border-t border-warm-border">
+      <div className="flex-shrink-0 border-t border-gray-200/40 bg-white/30 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-6 py-4">
           {/* Document picker */}
           <DocumentPicker
@@ -290,7 +290,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
           />
 
           {/* Input box */}
-          <div className="flex space-x-3 bg-white/80 backdrop-blur-sm rounded-2xl border border-warm-border px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+          <div className="flex space-x-3 bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 px-4 py-3 shadow-[0_2px_10px_rgba(0,0,0,0.06)]">
             <div className="flex-1 relative">
               <RichTextInput
                 value={message}
@@ -309,7 +309,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
             {isLoading || isStreaming ? (
               <button
                 onClick={stopGeneration}
-                className="flex-shrink-0 bg-ink hover:bg-[#2D2A26] text-white p-3 rounded-xl transition-colors"
+                className="flex-shrink-0 bg-[#1c1c1e] text-white p-3 rounded-xl transition-colors"
                 title="停止生成"
               >
                 <StopIcon className="w-5 h-5" />
@@ -318,7 +318,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
               <button
                 onClick={handleSendMessage}
                 disabled={!getRealUserInput(message).trim()}
-                className="flex-shrink-0 bg-accent hover:bg-accent-hover disabled:bg-warm-border text-white p-3 rounded-xl transition-colors disabled:cursor-not-allowed"
+                className="flex-shrink-0 bg-[#007AFF] hover:bg-[#0066D6] disabled:bg-[#E5E5EA] text-white p-3 rounded-xl transition-colors disabled:cursor-not-allowed"
               >
                 <PaperAirplaneIcon className="w-5 h-5" />
               </button>

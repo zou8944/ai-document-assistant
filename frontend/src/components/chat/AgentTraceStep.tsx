@@ -25,17 +25,17 @@ export interface AgentTraceStepProps {
 const StepIcon: React.FC<{ step: AgentStep }> = ({ step }) => {
   switch (step.kind) {
     case 'thinking':
-      return <LightBulbIcon className="w-3.5 h-3.5 text-muted" />
+      return <LightBulbIcon className="w-3.5 h-3.5 text-[#8E8E93]" />
     case 'tool':
       if (step.toolStatus === 'error') {
         return <XCircleIcon className="w-3.5 h-3.5 text-red-400" />
       }
       if (step.toolStatus === 'done') {
-        return <CheckCircleIcon className="w-3.5 h-3.5 text-muted" />
+        return <CheckCircleIcon className="w-3.5 h-3.5 text-[#34C759]" />
       }
-      return <WrenchIcon className="w-3.5 h-3.5 text-muted" />
+      return <WrenchIcon className="w-3.5 h-3.5 text-[#8E8E93]" />
     case 'compact':
-      return <ArrowsPointingInIcon className="w-3.5 h-3.5 text-muted" />
+      return <ArrowsPointingInIcon className="w-3.5 h-3.5 text-[#8E8E93]" />
     default:
       return null
   }
@@ -44,15 +44,15 @@ const StepIcon: React.FC<{ step: AgentStep }> = ({ step }) => {
 const StepLabel: React.FC<{ step: AgentStep }> = ({ step }) => {
   switch (step.kind) {
     case 'thinking':
-      return <span className="text-[11px] text-muted font-medium">思考</span>
+      return <span className="text-[11px] text-[#8E8E93] font-medium">思考</span>
     case 'tool':
-      return <span className="text-[11px] text-ink font-medium">{renderToolTitle(step)}</span>
+      return <span className="text-[11px] text-[#1c1c1e] font-medium">{renderToolTitle(step)}</span>
     case 'compact':
       return (
-        <span className="text-[11px] text-muted font-medium">
+        <span className="text-[11px] text-[#8E8E93] font-medium">
           压缩上下文
           {step.beforeTokens !== undefined && (
-            <span className="text-warm-line font-normal">
+            <span className="text-[#D1D1D6] font-normal">
               {' '}(~{step.beforeTokens} → ~{step.afterTokens} tokens)
             </span>
           )}
@@ -93,10 +93,10 @@ export const AgentTraceStep: React.FC<AgentTraceStepProps> = ({ step }) => {
   return (
     <div
       className={clsx(
-        'rounded-md px-2 py-1 transition-colors',
-        step.kind === 'thinking' && 'hover:bg-paper-dark/20',
-        step.kind === 'tool' && 'border border-warm-border hover:bg-paper-dark/15',
-        step.kind === 'compact' && 'hover:bg-paper-dark/10',
+        'rounded-lg px-2 py-1 transition-colors',
+        step.kind === 'thinking' && 'hover:bg-white/30',
+        step.kind === 'tool' && 'hover:bg-white/30',
+        step.kind === 'compact' && 'hover:bg-white/20',
         (hasDetails || step.kind === 'thinking') && 'cursor-pointer'
       )}
       onClick={toggleExpanded}
@@ -112,10 +112,10 @@ export const AgentTraceStep: React.FC<AgentTraceStepProps> = ({ step }) => {
             <StepLabel step={step} />
           </span>
           {step.toolStatus === 'running' && (
-            <span className="flex-shrink-0 w-2 h-2 border border-muted border-t-transparent rounded-full animate-spin" />
+            <span className="flex-shrink-0 w-2 h-2 border border-[#007AFF] border-t-transparent rounded-full animate-spin" />
           )}
           {step.toolMs !== undefined && step.toolStatus !== 'running' && (
-            <span className="flex-shrink-0 text-[10px] text-muted">
+            <span className="flex-shrink-0 text-[10px] text-[#8E8E93]">
               {step.toolMs >= 1000
                 ? `${(step.toolMs / 1000).toFixed(1)}s`
                 : `${step.toolMs}ms`}
@@ -127,9 +127,9 @@ export const AgentTraceStep: React.FC<AgentTraceStepProps> = ({ step }) => {
           <span className="flex-shrink-0 ml-2"
           >
             {expanded ? (
-              <ChevronDownIcon className="w-3 h-3 text-muted" />
+              <ChevronDownIcon className="w-3 h-3 text-[#8E8E93]" />
             ) : (
-              <ChevronRightIcon className="w-3 h-3 text-muted" />
+              <ChevronRightIcon className="w-3 h-3 text-[#8E8E93]" />
             )}
           </span>
         )}
@@ -137,7 +137,7 @@ export const AgentTraceStep: React.FC<AgentTraceStepProps> = ({ step }) => {
 
       {/* Result summary line */}
       {summary && step.toolStatus !== 'running' && (
-        <div className="mt-0.5 text-[11px] text-muted leading-relaxed pl-5.5"
+        <div className="mt-0.5 text-[11px] text-[#636366] leading-relaxed pl-5.5"
         >
           {summary}
         </div>
@@ -145,7 +145,7 @@ export const AgentTraceStep: React.FC<AgentTraceStepProps> = ({ step }) => {
 
       {/* Thinking text (collapsed preview) */}
       {step.kind === 'thinking' && step.text && !expanded && (
-        <p className="mt-0.5 text-[11px] text-muted leading-relaxed line-clamp-3 pl-5.5"
+        <p className="mt-0.5 text-[11px] text-[#636366] leading-relaxed line-clamp-3 pl-5.5"
         >
           {step.text}
         </p>
@@ -159,7 +159,7 @@ export const AgentTraceStep: React.FC<AgentTraceStepProps> = ({ step }) => {
           {step.kind === 'thinking' && step.text && (
             <div className="max-h-64 overflow-y-auto"
             >
-              <p className="text-[13px] text-muted leading-relaxed whitespace-pre-wrap"
+              <p className="text-[13px] text-[#636366] leading-relaxed whitespace-pre-wrap"
               >
                 {step.text}
               </p>
@@ -168,9 +168,9 @@ export const AgentTraceStep: React.FC<AgentTraceStepProps> = ({ step }) => {
 
           {/* Tool result preview */}
           {isTool && step.toolPreview && (
-            <div className="rounded-md bg-white border border-warm-border p-2"
+            <div className="rounded-lg bg-white/50 backdrop-blur-sm border border-white/40 p-3"
             >
-              <pre className="text-[11px] text-ink overflow-x-auto whitespace-pre-wrap break-all leading-relaxed font-mono"
+              <pre className="text-[11px] text-[#1c1c1e] overflow-x-auto whitespace-pre-wrap break-all leading-relaxed font-mono"
               >
                 {step.toolPreview.length > 500
                   ? step.toolPreview.slice(0, 500) + '...'
@@ -184,7 +184,7 @@ export const AgentTraceStep: React.FC<AgentTraceStepProps> = ({ step }) => {
             <div>
               <button
                 onClick={toggleRawExpanded}
-                className="flex items-center space-x-1 text-[10px] text-muted hover:text-ink transition-colors rounded px-1.5 py-0.5 hover:bg-paper-dark/30"
+                className="flex items-center space-x-1 text-[10px] text-[#8E8E93] hover:text-[#007AFF] transition-colors rounded px-1.5 py-0.5 hover:bg-white/30"
               >
                 <CodeBracketIcon className="w-3 h-3" />
                 <span>原始数据</span>
@@ -199,22 +199,22 @@ export const AgentTraceStep: React.FC<AgentTraceStepProps> = ({ step }) => {
                 <div className="mt-1.5 space-y-1.5"
                 >
                   {step.toolInput && Object.keys(step.toolInput).length > 0 && (
-                    <div className="rounded-md bg-white border border-warm-border p-2"
+                    <div className="rounded-lg bg-white/50 backdrop-blur-sm border border-white/40 p-3"
                     >
-                      <div className="text-[10px] text-muted mb-1 font-semibold tracking-wide"
+                      <div className="text-[10px] text-[#8E8E93] mb-1 font-semibold tracking-wide"
                       >输入</div>
-                      <pre className="text-[10px] text-ink overflow-x-auto whitespace-pre-wrap break-all leading-relaxed font-mono"
+                      <pre className="text-[10px] text-[#1c1c1e] overflow-x-auto whitespace-pre-wrap break-all leading-relaxed font-mono"
                       >
                         {JSON.stringify(step.toolInput, null, 2)}
                       </pre>
                     </div>
                   )}
                   {step.toolPreview && (
-                    <div className="rounded-md bg-white border border-warm-border p-2"
+                    <div className="rounded-lg bg-white/50 backdrop-blur-sm border border-white/40 p-3"
                     >
-                      <div className="text-[10px] text-muted mb-1 font-semibold tracking-wide"
+                      <div className="text-[10px] text-[#8E8E93] mb-1 font-semibold tracking-wide"
                       >输出</div>
-                      <pre className="text-[10px] text-ink overflow-x-auto whitespace-pre-wrap break-all leading-relaxed font-mono"
+                      <pre className="text-[10px] text-[#1c1c1e] overflow-x-auto whitespace-pre-wrap break-all leading-relaxed font-mono"
                       >
                         {step.toolPreview}
                       </pre>

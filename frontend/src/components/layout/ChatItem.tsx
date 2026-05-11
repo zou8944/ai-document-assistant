@@ -125,10 +125,10 @@ export const ChatItem: React.FC<ChatItemProps> = ({
           'w-full flex items-center space-x-3 p-3 rounded-lg text-left transition-all duration-200 cursor-pointer select-none',
           'hover:scale-[1.02] active:scale-[0.98]',
           isActive
-            ? 'bg-blue-500 text-white shadow-lg'
-            : 'text-gray-700 hover:bg-gray-100/50',
+            ? 'bg-[#007AFF] text-white shadow-md shadow-[#007AFF]/20'
+            : 'text-[#1c1c1e] hover:bg-white/50',
           isDragging && 'opacity-50',
-          dragOverIndex === index && 'border-t-2 border-blue-500'
+          dragOverIndex === index && 'border-t-2 border-[#007AFF]'
         )}
       >
         <ChatBubbleLeftRightIcon className="w-4 h-4 flex-shrink-0" />
@@ -149,7 +149,7 @@ export const ChatItem: React.FC<ChatItemProps> = ({
           )}
           <div className={clsx(
             'text-xs truncate',
-            isActive ? 'text-white/80' : 'text-gray-500'
+            isActive ? 'text-white/80' : 'text-[#8E8E93]'
           )}>
             {chat.messageCount > 0 
               ? `${chat.messageCount} 条消息`
@@ -162,7 +162,7 @@ export const ChatItem: React.FC<ChatItemProps> = ({
       {/* Context Menu */}
       {showContextMenu && (
         <div
-          className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[120px]"
+          className="fixed z-50 bg-white/90 backdrop-blur-xl border border-gray-200/40 rounded-lg shadow-lg py-1 min-w-[120px]"
           style={{
             left: contextMenuPos.x,
             top: contextMenuPos.y,

@@ -46,7 +46,7 @@
   
   /* Text selection */
   ::selection {
-    background-color: rgba(196, 112, 58, 0.25);
+    background-color: rgba(0, 122, 255, 0.2);
   }
 }
 

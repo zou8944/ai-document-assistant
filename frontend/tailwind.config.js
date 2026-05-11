@@ -16,12 +16,12 @@ export default {
       colors: {
         paper: '#F7F5F0',
         'paper-dark': '#EDEAE3',
-        ink: '#2D2A26',
-        muted: '#78716C',
-        accent: '#C4703A',
-        'accent-hover': '#A85D2F',
-        'warm-border': '#E7E5E0',
-        'warm-line': '#D6D3CD',
+        ink: '#1c1c1e',
+        muted: '#8E8E93',
+        accent: '#007AFF',
+        'accent-hover': '#0066D6',
+        'warm-border': '#E5E5EA',
+        'warm-line': '#D1D1D6',
         // macOS system colors (kept for backward compatibility)
         'macos-blue': '#007AFF',
         'macos-gray': {

@@ -71,8 +71,8 @@ export const AgentTrace: React.FC<AgentTraceProps> = ({ state }) => {
   const statusColorClass = useMemo(() => {
     if (isError) return 'text-red-500'
     if (isCancelled) return 'text-amber-500'
-    if (isDone) return 'text-muted'
-    return 'text-muted'
+    if (isDone) return 'text-[#8E8E93]'
+    return 'text-[#8E8E93]'
   }, [isError, isCancelled, isDone])
 
   if (visibleSteps.length === 0 && !isRunning && !isDone && !isError && !isCancelled) {
@@ -101,7 +101,7 @@ export const AgentTrace: React.FC<AgentTraceProps> = ({ state }) => {
         <div className="flex items-center space-x-1.5 mt-2 px-1"
         >
           <StatusIcon className={clsx('w-3.5 h-3.5', statusColorClass)} />
-          <span className="text-[11px] text-muted"
+          <span className="text-[11px] text-[#8E8E93]"
           >
             {headerText}
             {hasHalted && ' · Halted'}
