@@ -13,6 +13,7 @@ import clsx from 'clsx'
 import { useAppStore } from '../../store/appStore'
 import { SidebarSection } from '../../types/app'
 import ChatItem from './ChatItem'
+import { useAPIClient, extractData, CreateChatRequest } from '../../services/apiClient'
 
 interface SidebarProps {
   className?: string
@@ -47,18 +48,33 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
     }
   }
 
-  const handleAddChat = () => {
-    const newChat = {
-      id: `chat_${Date.now()}`,
-      name: `新对话 ${chatSessions.length + 1}`,
-      knowledgeBaseIds: [],
-      createdAt: new Date().toISOString(),
-      lastMessageAt: new Date().toISOString(),
-      messageCount: 0
+  const apiClient = useAPIClient()
+
+  const handleAddChat = async () => {
+    try {
+      const request: CreateChatRequest = {
+        name: `新对话 ${chatSessions.length + 1}`,
+        collection_ids: [],
+      }
+      const response = await apiClient.createChat(request)
+      const chat = extractData(response)
+
+      const newChat = {
+        id: chat.chat_id,
+        name: chat.name,
+        knowledgeBaseIds: chat.collection_ids || [],
+        createdAt: chat.created_at,
+        lastMessageAt: chat.last_message_at || chat.created_at,
+        messageCount: chat.message_count || 0,
+        boundCollectionId: chat.bound_collection_id,
+      }
+      addChatSession(newChat)
+      setActiveChat(newChat.id)
+      setActiveSidebarSection('chat')
+    } catch (error) {
+      console.error('创建聊天失败:', error)
+      alert('创建聊天失败: ' + (error as Error).message)
     }
-    addChatSession(newChat)
-    setActiveChat(newChat.id)
-    setActiveSidebarSection('chat')
   }
 
   const handleChatClick = (chatId: string) => {
