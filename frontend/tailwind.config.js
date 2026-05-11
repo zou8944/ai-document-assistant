@@ -9,10 +9,20 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        'sf-pro': ['-apple-system', 'BlinkMacSystemFont', 'SF Pro Display', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+        sans: ['DM Sans', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+        serif: ['Cormorant Garamond', 'Georgia', 'Times New Roman', 'serif'],
+        mono: ['JetBrains Mono', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
       },
       colors: {
-        // macOS system colors
+        paper: '#F7F5F0',
+        'paper-dark': '#EDEAE3',
+        ink: '#2D2A26',
+        muted: '#78716C',
+        accent: '#C4703A',
+        'accent-hover': '#A85D2F',
+        'warm-border': '#E7E5E0',
+        'warm-line': '#D6D3CD',
+        // macOS system colors (kept for backward compatibility)
         'macos-blue': '#007AFF',
         'macos-gray': {
           50: '#F9F9F9',

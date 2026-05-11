@@ -1,5 +1,5 @@
 /**
- * Chat interface with breadcrumb and knowledge base management
+ * Chat interface - Hermes UI inspired design
  */
 
 import React, { useState, useRef, useEffect } from 'react'
@@ -7,7 +7,6 @@ import {
   PlusIcon,
   PaperAirplaneIcon,
   StopIcon,
-  UserIcon,
   CpuChipIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
@@ -151,123 +150,104 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
 
   return (
     <div className={clsx('h-full flex flex-col', className)}>
-      {/* Breadcrumb Header */}
-      <div className="flex-shrink-0 p-4 bg-gradient-to-r from-white/90 to-white/70 backdrop-blur-sm border-b border-gray-200/50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2 text-sm">
-            <span className="text-gray-500">当前知识库: </span>
+      {/* Header */}
+      <div className="flex-shrink-0 px-6 py-3 border-b border-warm-border">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="flex items-center space-x-2 text-sm text-gray-500">
+            <span>知识库:</span>
             {kbNames.length > 0 ? (
               <span className="text-gray-900 font-medium">
                 {kbNames.join(' + ')}
               </span>
             ) : (
-              <span className="text-gray-500">暂无知识库</span>
+              <span>暂无</span>
             )}
           </div>
 
           {!isBoundChat && (
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => setShowKnowledgeBaseSelector(true)}
-                className="flex items-center space-x-1 text-sm text-blue-500 hover:text-blue-600 transition-colors"
-              >
-                <PlusIcon className="w-4 h-4" />
-                <span>管理知识库</span>
-              </button>
-            </div>
+            <button
+              onClick={() => setShowKnowledgeBaseSelector(true)}
+              className="flex items-center space-x-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              <PlusIcon className="w-4 h-4" />
+              <span>管理知识库</span>
+            </button>
           )}
         </div>
       </div>
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto">
-        <div className="w-[60%] mx-auto py-6 space-y-4">
+        <div className="max-w-6xl mx-auto">
           {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={clsx(
-                'flex',
-                msg.type === 'user' ? 'justify-end' : 'justify-start'
-              )}
-            >
-              <div
-                className={clsx(
-                  'flex max-w-[90%] space-x-3',
-                  msg.type === 'user' ? 'flex-row-reverse space-x-reverse' : 'flex-row'
-                )}
-              >
-                {/* Avatar */}
-                <div className={clsx(
-                  'flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center',
-                  msg.type === 'user'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-200 text-gray-600'
-                )}>
-                  {msg.type === 'user' ? (
-                    <UserIcon className="w-4 h-4" />
-                  ) : (
-                    <CpuChipIcon className="w-4 h-4" />
-                  )}
+            <div key={msg.id} className="px-6 py-3.5 animate-message-in">
+              {msg.type === 'user' ? (
+                /* User message - right aligned card */
+                <div className="flex justify-end">
+                  <div className="max-w-3xl">
+                    <div className="bg-[#F7F7F8] rounded-2xl px-5 py-3">
+                      <MarkdownContent content={msg.content} isUser />
+                    </div>
+                    <div className="mt-1.5 text-[11px] text-muted text-right">
+                      {formatTime(msg.timestamp)}
+                    </div>
+                  </div>
                 </div>
-
-                {/* Message Content */}
-                <div className="flex-1 min-w-0">
-                  {msg.type === 'assistant' && msg.agentState && (
-                    <AgentTrace state={msg.agentState} />
-                  )}
-                  <div
-                    className={clsx(
-                      'px-4 py-3 rounded-2xl text-sm',
-                      msg.type === 'user'
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-white/80 backdrop-blur-sm border border-gray-200/50 text-gray-900'
+              ) : (
+                /* AI message - left aligned, no background */
+                <div className="flex space-x-4">
+                  <div className="flex-shrink-0">
+                    <div className="w-7 h-7 rounded-full bg-accent/10 text-accent flex items-center justify-center">
+                      <CpuChipIcon className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    {msg.agentState && (
+                      <AgentTrace state={msg.agentState} />
                     )}
-                  >
-                    <MarkdownContent content={msg.content} isUser={msg.type === 'user'} />
-
-                    {/* Sources */}
+                    <div className="text-base leading-[1.7] text-ink">
+                      <MarkdownContent content={msg.content} />
+                    </div>
                     <SourceReferences sources={msg.sources || []} />
-                  </div>
-
-                  <div className={clsx(
-                    'mt-1 text-xs text-gray-400',
-                    msg.type === 'user' ? 'text-right' : 'text-left'
-                  )}>
-                    {formatTime(msg.timestamp)}
+                    <div className="mt-2 text-[11px] text-muted">
+                      {formatTime(msg.timestamp)}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           ))}
 
           {/* Streaming content */}
           {isStreaming && (
-            <div className="flex justify-start">
-              <div className="flex max-w-[90%] space-x-3">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center">
-                  <CpuChipIcon className="w-4 h-4" />
+            <div className="px-6 py-3.5">
+              <div className="flex space-x-4">
+                <div className="flex-shrink-0">
+                  <div className="w-7 h-7 rounded-full bg-accent/10 text-accent flex items-center justify-center">
+                    <CpuChipIcon className="w-3.5 h-3.5" />
+                  </div>
                 </div>
                 <div className="flex-1 min-w-0">
                   {processingStatus && (
-                    <div className="mb-1.5 flex items-center space-x-1.5 text-xs text-gray-400">
-                      <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    <div className="mb-2 flex items-center space-x-2 text-xs text-muted">
+                      <div className="w-3 h-3 border-2 border-muted border-t-transparent rounded-full animate-spin" />
                       <span>{processingStatus}</span>
                     </div>
                   )}
                   {streamingAgentState && (
                     <AgentTrace state={streamingAgentState} />
                   )}
-                  <div className="px-4 py-3 rounded-2xl bg-white/80 backdrop-blur-sm border border-gray-200/50 text-gray-900 text-sm">
+                  <div className="text-base leading-[1.7] text-ink">
                     {streamingContent ? (
                       <>
                         <MarkdownContent content={streamingContent} />
-                        <div className="mt-2 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                        <div className="inline-block w-2 h-4 bg-muted ml-0.5 animate-pulse align-middle" />
                       </>
                     ) : (
-                      <div className="flex space-x-1">
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                      <div className="flex space-x-1.5 py-2">
+                        <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" />
+                        <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                        <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                       </div>
                     )}
                   </div>
@@ -276,20 +256,20 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
             </div>
           )}
 
-          {/* Loading indicator - only show when not streaming */}
+          {/* Loading indicator */}
           {isLoading && !isStreaming && (
-            <div className="flex justify-start">
-              <div className="flex max-w-[90%] space-x-3">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center">
-                  <CpuChipIcon className="w-4 h-4" />
+            <div className="px-6 py-3.5">
+              <div className="flex space-x-4">
+                <div className="flex-shrink-0">
+                  <div className="w-7 h-7 rounded-full bg-accent/10 text-accent flex items-center justify-center">
+                    <CpuChipIcon className="w-3.5 h-3.5" />
+                  </div>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="px-4 py-3 rounded-2xl bg-white/80 backdrop-blur-sm border border-gray-200/50">
-                    <div className="flex space-x-1">
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-                    </div>
+                  <div className="flex space-x-1.5 py-2">
+                    <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" />
+                    <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                    <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                   </div>
                 </div>
               </div>
@@ -301,16 +281,16 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
       </div>
 
       {/* Input Area */}
-      <div className="flex-shrink-0 border-t border-gray-200/50 bg-white/50 backdrop-blur-sm">
-        <div className="w-[60%] mx-auto p-4 space-y-2">
+      <div className="flex-shrink-0 border-t border-warm-border">
+        <div className="max-w-6xl mx-auto px-6 py-4">
           {/* Document picker */}
           <DocumentPicker
             selectedDocumentIds={selectedDocumentIds}
             onDocumentSelect={handleUpdateSelectedDocuments}
           />
 
-          {/* Input box and send button */}
-          <div className="flex space-x-3">
+          {/* Input box */}
+          <div className="flex space-x-3 bg-white/80 backdrop-blur-sm rounded-2xl border border-warm-border px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
             <div className="flex-1 relative">
               <RichTextInput
                 value={message}
@@ -323,13 +303,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                 }}
                 placeholder="输入您的问题，使用 @ 来引用特定文档..."
                 disabled={isLoading || isStreaming}
-                className="w-full resize-none rounded-lg border border-gray-300 bg-white/80 backdrop-blur-sm px-4 py-3 pr-12 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full resize-none rounded-xl border-0 bg-transparent px-0 py-0 pr-4 focus:ring-0 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
             {isLoading || isStreaming ? (
               <button
                 onClick={stopGeneration}
-                className="flex-shrink-0 bg-red-500 hover:bg-red-600 text-white p-3 rounded-lg transition-colors"
+                className="flex-shrink-0 bg-ink hover:bg-[#2D2A26] text-white p-3 rounded-xl transition-colors"
                 title="停止生成"
               >
                 <StopIcon className="w-5 h-5" />
@@ -338,7 +318,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
               <button
                 onClick={handleSendMessage}
                 disabled={!getRealUserInput(message).trim()}
-                className="flex-shrink-0 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white p-3 rounded-lg transition-colors disabled:cursor-not-allowed"
+                className="flex-shrink-0 bg-accent hover:bg-accent-hover disabled:bg-warm-border text-white p-3 rounded-xl transition-colors disabled:cursor-not-allowed"
               >
                 <PaperAirplaneIcon className="w-5 h-5" />
               </button>
@@ -354,7 +334,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
         onSelect={handleUpdateKnowledgeBases}
         selectedIds={currentChat.knowledgeBaseIds}
       />
-
     </div>
   )
 }

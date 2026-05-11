@@ -9,7 +9,8 @@
 
 @layer base {
   * {
-    @apply antialiased;
+    -webkit-font-smoothing: auto;
+    -moz-osx-font-smoothing: auto;
   }
   
   html {
@@ -17,8 +18,8 @@
   }
   
   body {
-    @apply h-full m-0 font-sf-pro;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    @apply h-full m-0 font-sans;
+    background: #FFFFFF;
     overflow: hidden;
   }
   
@@ -45,7 +46,7 @@
   
   /* Text selection */
   ::selection {
-    @apply bg-macos-blue/30;
+    background-color: rgba(196, 112, 58, 0.25);
   }
 }
 
@@ -472,5 +473,20 @@
   
   .animate-slide-up {
     animation: slide-up 0.2s ease-out;
+  }
+
+  .animate-message-in {
+    animation: messageIn 0.25s ease-out both;
+  }
+}
+
+@keyframes messageIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

@@ -1,5 +1,5 @@
 /**
- * Collapsible source references component
+ * Source references - minimal style
  */
 
 import React, { useState } from 'react'
@@ -16,10 +16,10 @@ export const SourceReferences: React.FC<SourceReferencesProps> = ({ sources }) =
   if (!sources || sources.length === 0) return null
 
   return (
-    <div className="mt-3 pt-3 border-t border-gray-300/50">
+    <div className="mt-4 pt-3 border-t border-warm-border">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between w-full text-left text-xs opacity-75 mb-2 hover:opacity-100 transition-opacity"
+        className="flex items-center space-x-1 text-[11px] text-muted hover:text-ink transition-colors"
       >
         <span>参考来源 ({sources.length})</span>
         {isExpanded ? (
@@ -30,28 +30,28 @@ export const SourceReferences: React.FC<SourceReferencesProps> = ({ sources }) =
       </button>
 
       <div className={`overflow-hidden transition-all duration-300 ${
-        isExpanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'
+        isExpanded ? 'max-h-[600px] opacity-100 mt-2' : 'max-h-0 opacity-0'
       }`}>
-        <div className="space-y-2 mt-2 max-h-[600px] overflow-y-auto">
+        <div className="space-y-2 max-h-[600px] overflow-y-auto">
           {sources.map((source) => (
-            <div key={`${source.document_id}-${source.chunk_index}`} className="text-xs bg-gray-50/50 rounded p-2 border border-gray-200/30">
+            <div key={`${source.document_id}-${source.chunk_index}`} className="text-xs rounded-md p-2.5 bg-white border border-warm-border">
               <div className="flex items-center justify-between mb-1">
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-gray-700 truncate">{source.document_name}</div>
+                  <div className="font-medium text-ink truncate">{source.document_name}</div>
                   {source.document_uri && (
-                    <div className="text-xs text-blue-600 truncate mt-0.5">
+                    <div className="text-[11px] text-accent truncate mt-0.5">
                       {source.document_uri}
                     </div>
                   )}
                 </div>
                 {source.relevance_score && (
-                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full ml-2 flex-shrink-0">
+                  <span className="text-[10px] bg-[#FAFAF8] text-muted px-2 py-0.5 rounded-full ml-2 flex-shrink-0 border border-warm-border">
                     {(source.relevance_score * 100).toFixed(0)}%
                   </span>
                 )}
               </div>
               {source.content_preview && (
-                <div className="text-xs text-gray-600 leading-relaxed line-clamp-3">
+                <div className="text-[11px] text-muted leading-relaxed line-clamp-3">
                   {source.content_preview.substring(0, 200)}...
                 </div>
               )}
