@@ -207,6 +207,7 @@ export const toolRenderers: Record<string, ToolRenderer> = {
   list_collections: listCollectionsRenderer,
   get_collection_overview: getCollectionOverviewRenderer,
   citations: citationsRenderer,
+  cite_sources: citationsRenderer,
 }
 
 /**
