@@ -25,6 +25,8 @@ export const AgentTrace: React.FC<AgentTraceProps> = ({ state }) => {
     return null
   }
 
+  const totalTime = state.timings?.total_ms
+
   return (
     <div className="mb-2 space-y-1.5">
       {visibleSteps.map((step, index) => (
@@ -35,6 +37,14 @@ export const AgentTrace: React.FC<AgentTraceProps> = ({ state }) => {
           isRunning={isRunning}
         />
       ))}
+      {totalTime !== undefined && !isRunning && (
+        <div className="text-[11px] text-[#AEAEB2] tabular-nums">
+          总耗时 {totalTime >= 1000 ? `${(totalTime / 1000).toFixed(1)}s` : `${totalTime}ms`}
+          {state.timings && state.timings.iteration_count > 1 && (
+            <span> · {state.timings.iteration_count} 轮</span>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -298,6 +298,25 @@ export const useChat = (chatId: string | null): UseChatReturn => {
         break
       }
 
+      case 'thinking_done': {
+        const state = streamingAgentStateRef.current
+        if (!state) break
+        const iteration = event.data?.iteration ?? state.iterations
+        const ms = event.data?.ms
+        const updatedSteps = [...state.steps]
+        for (let i = updatedSteps.length - 1; i >= 0; i--) {
+          const s = updatedSteps[i]
+          if (s.kind === 'thinking' && s.iteration === iteration && !s.hidden) {
+            updatedSteps[i] = { ...s, thinkingMs: ms }
+            break
+          }
+        }
+        const newState = { ...state, steps: updatedSteps }
+        streamingAgentStateRef.current = newState
+        setStreamingAgentState(newState)
+        break
+      }
+
       case 'tool_call': {
         const state = streamingAgentStateRef.current
         if (!state) break

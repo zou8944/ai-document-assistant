@@ -139,6 +139,13 @@ class AgentChatService:
                                 break
                         else:
                             ui_state["steps"].append({"kind": "thinking", "iteration": iteration, "text": delta})
+                    elif event.type == SSEEventType.THINKING_DONE:
+                        iteration = event.data.get("iteration", ui_state["iterations"])
+                        for i in range(len(ui_state["steps"]) - 1, -1, -1):
+                            step = ui_state["steps"][i]
+                            if step["kind"] == "thinking" and step["iteration"] == iteration and not step.get("hidden"):
+                                step["thinkingMs"] = event.data.get("ms")
+                                break
                     elif event.type == SSEEventType.TOOL_CALL:
                         ui_state["steps"].append({
                             "kind": "tool",

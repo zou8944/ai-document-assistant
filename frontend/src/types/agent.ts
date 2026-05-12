@@ -10,6 +10,7 @@ export interface AgentStep {
   // thinking
   text?: string
   hidden?: boolean
+  thinkingMs?: number
   // tool
   toolId?: string
   toolName?: string

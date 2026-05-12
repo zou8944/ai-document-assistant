@@ -119,6 +119,12 @@ class AgentRuntime:
             )
             llm_ms = int((time.monotonic() - t0) * 1000)
 
+            # Emit thinking done with timing
+            yield SSEEvent(
+                type=SSEEventType.THINKING_DONE,
+                data={"iteration": iteration, "ms": llm_ms},
+            )
+
             # Drain queued text deltas (yield them so caller/frontend sees stream)
             while not text_queue.empty():
                 yield text_queue.get_nowait()
@@ -330,6 +336,7 @@ class AgentRuntime:
                 SSEEvent(type=SSEEventType.AGENT_THINKING, data={"delta": d, "iteration": -1})
             )
 
+        t0 = time.monotonic()
         final_turn = await self.backend.generate_with_tools(
             system=self._system_prompt(collection_ids) + MAX_ITER_PROMPT_SUFFIX,
             messages=messages,
@@ -338,6 +345,12 @@ class AgentRuntime:
             temperature=0.7,
             cancellation=cancellation,
             on_text_delta=_on_final_delta,
+        )
+        llm_ms = int((time.monotonic() - t0) * 1000)
+
+        yield SSEEvent(
+            type=SSEEventType.THINKING_DONE,
+            data={"iteration": -1, "ms": llm_ms},
         )
 
         # Drain queued text deltas so caller/frontend sees the stream

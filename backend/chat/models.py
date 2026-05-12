@@ -97,6 +97,7 @@ class SSEEventType(Enum):
     AGENT_START = "agent_start"
     ITERATION_START = "iteration_start"
     AGENT_THINKING = "agent_thinking"
+    THINKING_DONE = "thinking_done"
     TOOL_CALL = "tool_call"
     TOOL_PROGRESS = "tool_progress"
     TOOL_RESULT = "tool_result"

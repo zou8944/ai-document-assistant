@@ -127,8 +127,17 @@ const ThinkingBlock: React.FC<{ step: AgentStep; isRunning: boolean }> = ({ step
             <span className="w-1.5 h-1.5 rounded-full bg-[#8E8E93] animate-pulse" />
           )}
         </div>
-        <div className={clsx('transition-transform duration-200', expanded && 'rotate-180')}>
-          <ChevronDownIcon className="w-4 h-4 text-[#AEAEB2]" />
+        <div className="flex items-center space-x-1.5">
+          {step.thinkingMs !== undefined && !isRunning && (
+            <span className="text-[11px] text-[#AEAEB2] tabular-nums">
+              {step.thinkingMs >= 1000
+                ? `${(step.thinkingMs / 1000).toFixed(1)}s`
+                : `${step.thinkingMs}ms`}
+            </span>
+          )}
+          <div className={clsx('transition-transform duration-200', expanded && 'rotate-180')}>
+            <ChevronDownIcon className="w-4 h-4 text-[#AEAEB2]" />
+          </div>
         </div>
       </div>
 
