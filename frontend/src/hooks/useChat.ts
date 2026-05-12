@@ -268,6 +268,17 @@ export const useChat = (chatId: string | null): UseChatReturn => {
         if (!state) break
         const iteration = event.data?.iteration ?? state.iterations
         const delta = event.data?.delta || ''
+
+        // start_answer was called: stream directly to bubble
+        if (state.answering) {
+          streamingContentRef.current += delta
+          setStreamingContent((prev) => prev + delta)
+          const newState = { ...state, finalText: streamingContentRef.current }
+          streamingAgentStateRef.current = newState
+          break
+        }
+
+        // Normal thinking: update trace step
         const stepIndex = (() => {
           for (let i = state.steps.length - 1; i >= 0; i--) {
             const s = state.steps[i]
@@ -390,6 +401,8 @@ export const useChat = (chatId: string | null): UseChatReturn => {
         const state = streamingAgentStateRef.current
         if (!state) break
         const iteration = event.data?.iteration ?? state.iterations
+
+        // Find the thinking step for this iteration
         const stepIndex = (() => {
           for (let i = state.steps.length - 1; i >= 0; i--) {
             const s = state.steps[i]
@@ -399,7 +412,20 @@ export const useChat = (chatId: string | null): UseChatReturn => {
           }
           return -1
         })()
-        if (stepIndex >= 0) {
+
+        if (state.answering) {
+          // start_answer was called: text already in bubble, just hide trace step
+          const newState: AgentMessageState = {
+            ...state,
+            finalText: streamingContentRef.current,
+            steps: stepIndex >= 0
+              ? state.steps.map((s, i) => i === stepIndex ? { ...s, hidden: true } : s)
+              : state.steps,
+          }
+          streamingAgentStateRef.current = newState
+          setStreamingAgentState(newState)
+        } else if (stepIndex >= 0) {
+          // Fallback: no marker detected, promote thinking text to bubble
           const promotedText = state.steps[stepIndex].text || ''
           const newFinalText = state.finalText
             ? state.finalText + '\n\n' + promotedText
@@ -407,13 +433,24 @@ export const useChat = (chatId: string | null): UseChatReturn => {
           const newState: AgentMessageState = {
             ...state,
             finalText: newFinalText,
+            steps: state.steps.map((s, i) =>
+              i === stepIndex ? { ...s, hidden: true } : s
+            ),
           }
           streamingAgentStateRef.current = newState
           setStreamingAgentState(newState)
-          // Update streaming content so bubble shows final text
           streamingContentRef.current = newFinalText
           setStreamingContent(newFinalText)
         }
+        break
+      }
+
+      case 'start_answer': {
+        const state = streamingAgentStateRef.current
+        if (!state) break
+        const newState = { ...state, answering: true }
+        streamingAgentStateRef.current = newState
+        setStreamingAgentState(newState)
         break
       }
 

@@ -104,6 +104,7 @@ class SSEEventType(Enum):
     COMPACT_TRIGGERED = "compact_triggered"
     FINAL_TEXT_PROMOTE = "final_text_promote"
     AGENT_HALTED = "agent_halted"
+    START_ANSWER = "start_answer"
 
 
 @dataclass

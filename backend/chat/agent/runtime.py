@@ -108,26 +108,38 @@ class AgentRuntime:
                     SSEEvent(type=SSEEventType.AGENT_THINKING, data={"delta": delta, "iteration": it})
                 )
 
-            turn = await self.backend.generate_with_tools(
-                system=self._system_prompt(collection_ids),
-                messages=messages,
-                tools=self.registry.schemas(),
-                max_tokens=8192,
-                temperature=0.7,
-                cancellation=cancellation,
-                on_text_delta=_on_text_delta,
+            llm_task = asyncio.create_task(
+                self.backend.generate_with_tools(
+                    system=self._system_prompt(collection_ids),
+                    messages=messages,
+                    tools=self.registry.schemas(),
+                    max_tokens=8192,
+                    temperature=0.7,
+                    cancellation=cancellation,
+                    on_text_delta=_on_text_delta,
+                )
             )
+
+            # Real-time drain: yield thinking deltas as they arrive
+            while not llm_task.done():
+                try:
+                    evt = await asyncio.wait_for(text_queue.get(), timeout=0.05)
+                    yield evt
+                except asyncio.TimeoutError:
+                    continue
+
+            turn = llm_task.result()
             llm_ms = int((time.monotonic() - t0) * 1000)
+
+            # Drain remaining queued text deltas
+            while not text_queue.empty():
+                yield text_queue.get_nowait()
 
             # Emit thinking done with timing
             yield SSEEvent(
                 type=SSEEventType.THINKING_DONE,
                 data={"iteration": iteration, "ms": llm_ms},
             )
-
-            # Drain queued text deltas (yield them so caller/frontend sees stream)
-            while not text_queue.empty():
-                yield text_queue.get_nowait()
 
             # Critical: append assistant raw_content verbatim (includes tool_use blocks)
             messages.append({"role": "assistant", "content": turn.raw_content})
@@ -242,6 +254,13 @@ class AgentRuntime:
                             data={"documents": out.structured["sources"]},
                         )
 
+                    # start_answer -> signal that next iteration's text is the final answer
+                    if tu.name == "start_answer" and not out.is_error:
+                        yield SSEEvent(
+                            type=SSEEventType.START_ANSWER,
+                            data={},
+                        )
+
                     results.append(
                         {
                             "type": "tool_result",
@@ -337,25 +356,37 @@ class AgentRuntime:
             )
 
         t0 = time.monotonic()
-        final_turn = await self.backend.generate_with_tools(
-            system=self._system_prompt(collection_ids) + MAX_ITER_PROMPT_SUFFIX,
-            messages=messages,
-            tools=[],
-            max_tokens=4096,
-            temperature=0.7,
-            cancellation=cancellation,
-            on_text_delta=_on_final_delta,
+        llm_task = asyncio.create_task(
+            self.backend.generate_with_tools(
+                system=self._system_prompt(collection_ids) + MAX_ITER_PROMPT_SUFFIX,
+                messages=messages,
+                tools=[],
+                max_tokens=4096,
+                temperature=0.7,
+                cancellation=cancellation,
+                on_text_delta=_on_final_delta,
+            )
         )
+
+        # Real-time drain: yield thinking deltas as they arrive
+        while not llm_task.done():
+            try:
+                evt = await asyncio.wait_for(text_queue.get(), timeout=0.05)
+                yield evt
+            except asyncio.TimeoutError:
+                continue
+
+        final_turn = llm_task.result()
         llm_ms = int((time.monotonic() - t0) * 1000)
+
+        # Drain remaining queued text deltas
+        while not text_queue.empty():
+            yield text_queue.get_nowait()
 
         yield SSEEvent(
             type=SSEEventType.THINKING_DONE,
             data={"iteration": -1, "ms": llm_ms},
         )
-
-        # Drain queued text deltas so caller/frontend sees the stream
-        while not text_queue.empty():
-            yield text_queue.get_nowait()
 
         messages.append({"role": "assistant", "content": final_turn.raw_content})
 

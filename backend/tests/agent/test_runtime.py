@@ -109,6 +109,7 @@ class TestSingleTurnEndTurn:
             SSEEventType.ITERATION_START,
             SSEEventType.AGENT_THINKING,
             SSEEventType.AGENT_THINKING,
+            SSEEventType.THINKING_DONE,
             SSEEventType.FINAL_TEXT_PROMOTE,
             SSEEventType.DONE,
         ]
@@ -117,8 +118,10 @@ class TestSingleTurnEndTurn:
         assert events[1].data == {"iteration": 1}
         assert events[2].data == {"delta": "hello ", "iteration": 1}
         assert events[3].data == {"delta": "world", "iteration": 1}
-        assert events[4].data == {"iteration": 1}
-        assert events[5].data["iterations"] == 1
+        assert events[4].data["iteration"] == 1
+        assert events[4].data["ms"] >= 0
+        assert events[5].data == {"iteration": 1}
+        assert events[6].data["iterations"] == 1
 
         # emit should not be called for text deltas (runtime drains queue instead)
         emit_calls = [c for c in emit.call_args_list if c.args[0].type == SSEEventType.AGENT_THINKING]

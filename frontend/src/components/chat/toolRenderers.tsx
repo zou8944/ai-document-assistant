@@ -196,6 +196,14 @@ const citationsRenderer: ToolRenderer = {
 }
 
 /* ------------------------------------------------------------------ */
+/* start_answer                                                       */
+/* ------------------------------------------------------------------ */
+
+const startAnswerRenderer: ToolRenderer = {
+  title: () => <>准备输出答案</>,
+}
+
+/* ------------------------------------------------------------------ */
 /* Registry                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -208,6 +216,7 @@ export const toolRenderers: Record<string, ToolRenderer> = {
   get_collection_overview: getCollectionOverviewRenderer,
   citations: citationsRenderer,
   cite_sources: citationsRenderer,
+  start_answer: startAnswerRenderer,
 }
 
 /**

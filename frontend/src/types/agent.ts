@@ -36,5 +36,6 @@ export interface AgentMessageState {
   iterations: number
   status: "running" | "done" | "error" | "cancelled"
   halted?: boolean
+  answering?: boolean
   timings?: AgentTimings
 }

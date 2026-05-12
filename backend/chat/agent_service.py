@@ -106,6 +106,7 @@ class AgentChatService:
                     "iterations": 0,
                     "status": "running",
                     "halted": False,
+                    "answering": False,
                 }
                 start_time = time.monotonic()
 
@@ -132,13 +133,16 @@ class AgentChatService:
                     elif event.type == SSEEventType.AGENT_THINKING:
                         delta = event.data.get("delta", "")
                         iteration = event.data.get("iteration", ui_state["iterations"])
-                        for i in range(len(ui_state["steps"]) - 1, -1, -1):
-                            step = ui_state["steps"][i]
-                            if step["kind"] == "thinking" and step["iteration"] == iteration and not step.get("hidden"):
-                                step["text"] = step.get("text", "") + delta
-                                break
-                        else:
-                            ui_state["steps"].append({"kind": "thinking", "iteration": iteration, "text": delta})
+                        if not ui_state["answering"] and iteration != -1:
+                            # Normal iteration: update trace step
+                            for i in range(len(ui_state["steps"]) - 1, -1, -1):
+                                step = ui_state["steps"][i]
+                                if step["kind"] == "thinking" and step["iteration"] == iteration and not step.get("hidden"):
+                                    step["text"] = step.get("text", "") + delta
+                                    break
+                            else:
+                                ui_state["steps"].append({"kind": "thinking", "iteration": iteration, "text": delta})
+                        # answering=True or iteration==-1: skip trace step, thinking_buffer accumulated below
                     elif event.type == SSEEventType.THINKING_DONE:
                         iteration = event.data.get("iteration", ui_state["iterations"])
                         for i in range(len(ui_state["steps"]) - 1, -1, -1):
@@ -171,20 +175,27 @@ class AgentChatService:
                             "beforeTokens": event.data.get("before_tokens"),
                             "afterTokens": event.data.get("after_tokens"),
                         })
+                    elif event.type == SSEEventType.START_ANSWER:
+                        ui_state["answering"] = True
                     elif event.type == SSEEventType.FINAL_TEXT_PROMOTE:
                         iteration = event.data.get("iteration", ui_state["iterations"])
                         for i in range(len(ui_state["steps"]) - 1, -1, -1):
                             step = ui_state["steps"][i]
                             if step["kind"] == "thinking" and step["iteration"] == iteration and not step.get("hidden"):
                                 promoted_text = step.get("text", "")
-                                # Keep thinking step in trace; only use promoted text as final answer
-                                ui_state["finalText"] = (
-                                    ui_state["finalText"] + "\n\n" + promoted_text
-                                    if ui_state["finalText"]
-                                    else promoted_text
-                                )
-                                # Overwrite buffer so only final iteration's thinking becomes message content
-                                thinking_buffer = promoted_text
+                                step["hidden"] = True
+                                if promoted_text:
+                                    # Normal flow: thinking text promoted from trace step
+                                    ui_state["finalText"] = (
+                                        ui_state["finalText"] + "\n\n" + promoted_text
+                                        if ui_state["finalText"]
+                                        else promoted_text
+                                    )
+                                    thinking_buffer = promoted_text
+                                else:
+                                    # Last iteration: thinking was streamed as iteration=-1
+                                    # to bubble, thinking_buffer already has the answer
+                                    ui_state["finalText"] = thinking_buffer
                                 break
                     elif event.type == SSEEventType.AGENT_HALTED:
                         reason = event.data.get("reason")
