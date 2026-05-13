@@ -6,7 +6,13 @@ import React, { useState, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
+import SyntaxHighlighterLib from 'react-syntax-highlighter/dist/esm/prism'
+import type { SyntaxHighlighterProps } from 'react-syntax-highlighter'
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { ClipboardIcon, CheckIcon } from '@heroicons/react/24/outline'
+
+// react-syntax-highlighter types are not compatible with React 19 JSX types
+const SyntaxHighlighter = SyntaxHighlighterLib as unknown as React.FC<SyntaxHighlighterProps>
 
 interface MarkdownContentProps {
   content: string
@@ -18,24 +24,24 @@ const CodeBlock: React.FC<{
   children: React.ReactNode
 }> = ({ language, children }) => {
   const [copied, setCopied] = useState(false)
+  const code = String(children).replace(/\n$/, '')
 
   const handleCopy = useCallback(() => {
-    const text = String(children).replace(/\n$/, '')
-    navigator.clipboard.writeText(text).then(() => {
+    navigator.clipboard.writeText(code).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })
-  }, [children])
+  }, [code])
 
   return (
-    <div className="my-3 rounded-xl overflow-hidden border border-white/40 bg-white/50 backdrop-blur-sm">
-      <div className="flex items-center justify-between px-4 py-2 bg-white/30 border-b border-white/30">
-        <span className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wider font-mono">
+    <div className="my-3 rounded-xl overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2 bg-[#1E1E1E] border-b border-[#404040]">
+        <span className="text-[11px] font-medium text-[#ABB2BF] uppercase tracking-wider font-mono">
           {language || 'code'}
         </span>
         <button
           onClick={handleCopy}
-          className="flex items-center space-x-1 text-[11px] text-[#8E8E93] hover:text-[#007AFF] transition-colors"
+          className="flex items-center space-x-1 text-[11px] text-[#ABB2BF] hover:text-white transition-colors"
         >
           {copied ? (
             <>
@@ -50,9 +56,25 @@ const CodeBlock: React.FC<{
           )}
         </button>
       </div>
-      <pre className="p-4 overflow-x-auto text-[13px] leading-relaxed">
-        <code className="font-mono text-[#1c1c1e]">{children}</code>
-      </pre>
+      <SyntaxHighlighter
+        language={language || undefined}
+        style={vscDarkPlus}
+        customStyle={{
+          margin: 0,
+          borderRadius: 0,
+          padding: '1rem',
+          fontSize: '13px',
+          lineHeight: '1.6',
+          background: '#1E1E1E',
+        }}
+        codeTagProps={{
+          style: {
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+          },
+        }}
+      >
+        {code}
+      </SyntaxHighlighter>
     </div>
   )
 }
@@ -116,7 +138,7 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, isUse
           if (inline) {
             return (
               <code
-                className="bg-white/50 text-[#1c1c1e] px-1.5 py-0.5 rounded-md text-[13px] font-mono border border-white/30"
+                className="bg-[#E9E9EB] text-[#1c1c1e] px-1.5 py-0.5 rounded-md text-[13px] font-mono border border-[#D1D1D6]"
                 {...props}
               >
                 {children}
@@ -137,7 +159,7 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, isUse
             </table>
           </div>
         ),
-        thead: ({ children }) => <thead className="bg-white/30">{children}</thead>,
+        thead: ({ children }) => <thead className="bg-[#E9E9EB]">{children}</thead>,
         tbody: ({ children }) => <tbody>{children}</tbody>,
         tr: ({ children }) => <tr className="border-b border-[#E5E5EA] last:border-b-0">{children}</tr>,
         th: ({ children }) => (
