@@ -10,11 +10,15 @@ interface AgentTraceProps {
   state: AgentMessageState
 }
 
+/** Tools that are internal plumbing — not useful to show in the trace UI. */
+const INTERNAL_TOOL_NAMES = new Set(['cite_sources', 'citations', 'start_answer'])
+
 export const AgentTrace: React.FC<AgentTraceProps> = ({ state }) => {
   const visibleSteps = useMemo(() => {
     return state.steps.filter((s) => {
       if (s.hidden) return false
       if (s.kind === 'thinking' && (!s.text || s.text.trim() === '')) return false
+      if (s.kind === 'tool' && INTERNAL_TOOL_NAMES.has(s.toolName ?? '')) return false
       return true
     })
   }, [state.steps])
