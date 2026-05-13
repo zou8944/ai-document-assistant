@@ -43,7 +43,12 @@ export interface UseChatReturn {
   sendMessage: (content: string, documentIds?: string[]) => Promise<void>
   stopGeneration: () => void
   loadMessages: () => Promise<void>
+  loadOlderMessages: () => Promise<void>
+  hasMoreOlder: boolean
+  isLoadingOlder: boolean
 }
+
+const PAGE_SIZE = 20
 
 export const useChat = (chatId: string | null): UseChatReturn => {
   const [messages, setMessages] = useState<Message[]>([])
@@ -52,38 +57,87 @@ export const useChat = (chatId: string | null): UseChatReturn => {
   const [streamingContent, setStreamingContent] = useState('')
   const [streamingAgentState, setStreamingAgentState] = useState<AgentMessageState | null>(null)
   const [processingStatus, setProcessingStatus] = useState<string | null>(null)
+  const [hasMoreOlder, setHasMoreOlder] = useState(false)
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false)
+  const totalRef = useRef(0)
+  const loadedRef = useRef(0)
   const apiClient = useAPIClient()
   const streamingSourcesRef = useRef<SourceReference[]>([])
   const streamingMessageIdRef = useRef<string | null>(null)
   const streamingContentRef = useRef('')
   const streamingAgentStateRef = useRef<AgentMessageState | null>(null)
 
-  // Load chat messages from API
+  // Load chat messages from API — load the latest PAGE_SIZE messages
   const loadMessages = useCallback(async () => {
     if (!chatId) {
       setMessages([])
+      totalRef.current = 0
+      loadedRef.current = 0
+      setHasMoreOlder(false)
       return
     }
 
     try {
-      const response = await apiClient.getChatMessages(chatId)
-      const data = extractData(response)
-      const uiMessages = data.messages.map(mapAPIMessageToUIMessage)
-      setMessages(uiMessages)
+      // First, get total count
+      const countResp = await apiClient.getChatMessages(chatId, 0, 1)
+      const countData = extractData(countResp)
+      const total = countData.total
+      totalRef.current = total
 
-      // If no messages, add a welcome message
-      if (uiMessages.length === 0) {
+      if (total === 0) {
         setMessages([{
           id: 'welcome',
           type: 'assistant',
           content: '您好！我可以帮您解答关于已加载知识库的问题。请问有什么需要了解的吗？',
           timestamp: new Date().toISOString()
         }])
+        loadedRef.current = 0
+        setHasMoreOlder(false)
+        return
       }
+
+      // Load the last PAGE_SIZE messages
+      const offset = Math.max(0, total - PAGE_SIZE)
+      const response = await apiClient.getChatMessages(chatId, offset, PAGE_SIZE)
+      const data = extractData(response)
+      const uiMessages = data.messages.map(mapAPIMessageToUIMessage)
+      setMessages(uiMessages)
+      loadedRef.current = uiMessages.length
+      setHasMoreOlder(offset > 0)
     } catch (error) {
       console.error('加载聊天消息失败:', error)
     }
   }, [chatId, apiClient])
+
+  // Load older messages (prepend) — called when user scrolls to top
+  const loadOlderMessages = useCallback(async () => {
+    if (!chatId || isLoadingOlder || !hasMoreOlder) return
+
+    setIsLoadingOlder(true)
+    try {
+      const alreadyLoaded = loadedRef.current
+      const total = totalRef.current
+      const remaining = total - alreadyLoaded
+      const offset = Math.max(0, remaining - PAGE_SIZE)
+      const limit = remaining - offset
+
+      const response = await apiClient.getChatMessages(chatId, offset, limit)
+      const data = extractData(response)
+      const olderMessages = data.messages.map(mapAPIMessageToUIMessage)
+
+      if (olderMessages.length > 0) {
+        setMessages(prev => [...olderMessages, ...prev])
+        loadedRef.current += olderMessages.length
+        setHasMoreOlder(offset > 0)
+      } else {
+        setHasMoreOlder(false)
+      }
+    } catch (error) {
+      console.error('加载更早消息失败:', error)
+    } finally {
+      setIsLoadingOlder(false)
+    }
+  }, [chatId, apiClient, isLoadingOlder, hasMoreOlder])
 
   // Auto-load messages when chatId changes
   useEffect(() => {
@@ -593,7 +647,10 @@ export const useChat = (chatId: string | null): UseChatReturn => {
     processingStatus,
     sendMessage,
     stopGeneration,
-    loadMessages
+    loadMessages,
+    loadOlderMessages,
+    hasMoreOlder,
+    isLoadingOlder,
   }
 }
 

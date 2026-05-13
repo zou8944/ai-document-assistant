@@ -2,7 +2,7 @@
  * Chat interface - Hermes UI inspired design
  */
 
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import {
   PlusIcon,
   PaperAirplaneIcon,
@@ -40,6 +40,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
   const [showKnowledgeBaseSelector, setShowKnowledgeBaseSelector] = useState(false)
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const wasNearBottomRef = useRef(true)
+  const prevScrollHeightRef = useRef(0)
+  const scrolledForChatRef = useRef<string | null>(null)
   const apiClient = useAPIClient()
 
   const {
@@ -59,14 +63,54 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
     processingStatus,
     sendMessage,
     stopGeneration,
+    loadOlderMessages,
+    hasMoreOlder,
+    isLoadingOlder,
   } = useChat(currentChat?.id || null)
 
-  // Scroll to bottom when new messages arrive
+  // Smart auto-scroll: instant jump on chat switch, smooth only for new messages
   useEffect(() => {
-    if (messagesEndRef.current) {
+    const chatId = currentChat?.id || null
+    // First time seeing this chat with messages: instant jump to bottom
+    if (chatId !== scrolledForChatRef.current && messages.length > 0) {
+      scrolledForChatRef.current = chatId
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ behavior: 'auto' })
+      }
+      wasNearBottomRef.current = true
+      return
+    }
+    // Already scrolled for this chat: only smooth-scroll if user is near bottom
+    if (wasNearBottomRef.current && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [messages, streamingContent, isLoading])
+  }, [messages, streamingContent, isLoading, currentChat?.id])
+
+  // Maintain scroll position when older messages are prepended
+  useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    const newScrollHeight = container.scrollHeight
+    if (prevScrollHeightRef.current > 0 && newScrollHeight > prevScrollHeightRef.current) {
+      container.scrollTop += newScrollHeight - prevScrollHeightRef.current
+    }
+    prevScrollHeightRef.current = 0
+  }, [messages])
+
+  const handleScroll = useCallback(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    // Track if user is near bottom (within 100px)
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight
+    wasNearBottomRef.current = distanceFromBottom < 100
+
+    // Load older messages when scrolled near top
+    if (container.scrollTop < 80 && hasMoreOlder && !isLoadingOlder) {
+      prevScrollHeightRef.current = container.scrollHeight
+      loadOlderMessages()
+    }
+  }, [hasMoreOlder, isLoadingOlder, loadOlderMessages])
 
   const handleSendMessage = async () => {
     if (!message.trim() || isLoading || !currentChat) return
@@ -177,8 +221,18 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
         <div className="max-w-6xl mx-auto">
+          {/* Loading older messages indicator */}
+          {isLoadingOlder && (
+            <div className="px-6 py-3 flex justify-center">
+              <div className="flex space-x-1.5">
+                <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" />
+                <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+              </div>
+            </div>
+          )}
           {messages.map((msg) => (
             <div key={msg.id} className="px-6 py-3.5 animate-message-in">
               {msg.type === 'user' ? (
