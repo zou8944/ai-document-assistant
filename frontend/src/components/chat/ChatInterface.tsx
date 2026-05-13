@@ -185,7 +185,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                 /* User message - right aligned card */
                 <div className="flex justify-end">
                   <div className="max-w-3xl">
-                    <div className="bg-white/60 backdrop-blur-sm rounded-2xl px-5 py-3 border border-white/40">
+                    <div className="bg-[#007AFF] text-white rounded-2xl px-5 py-3">
                       <MarkdownContent content={msg.content} isUser />
                     </div>
                     <div className="mt-1.5 text-[11px] text-[#8E8E93] text-right">
@@ -205,7 +205,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                     {msg.agentState && (
                       <AgentTrace state={msg.agentState} />
                     )}
-                    <div className="bg-[#F2F2F7]/70 backdrop-blur-sm rounded-2xl px-5 py-3 border border-[#E5E5EA]/30">
+                    <div className="bg-white/80 backdrop-blur-sm rounded-2xl px-5 py-3 border border-[#D1D1D6]/40">
                       <div className="text-base leading-[1.7] text-[#1c1c1e]">
                         <MarkdownContent content={msg.content} />
                       </div>
@@ -239,7 +239,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                   {streamingAgentState && (
                     <AgentTrace state={streamingAgentState} />
                   )}
-                  <div className="bg-[#F2F2F7]/70 backdrop-blur-sm rounded-2xl px-5 py-3 border border-[#E5E5EA]/30">
+                  <div className="bg-white/80 backdrop-blur-sm rounded-2xl px-5 py-3 border border-[#D1D1D6]/40">
                     <div className="text-base leading-[1.7] text-[#1c1c1e]">
                       {streamingContent ? (
                         <>
