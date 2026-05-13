@@ -194,7 +194,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                   </div>
                 </div>
               ) : (
-                /* AI message - left aligned, no background */
+                /* AI message - left aligned with bubble */
                 <div className="flex space-x-4">
                   <div className="flex-shrink-0">
                     <div className="w-7 h-7 rounded-full bg-[#007AFF]/10 text-[#007AFF] flex items-center justify-center">
@@ -205,11 +205,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                     {msg.agentState && (
                       <AgentTrace state={msg.agentState} />
                     )}
-                    <div className="text-base leading-[1.7] text-[#1c1c1e]">
-                      <MarkdownContent content={msg.content} />
+                    <div className="bg-[#F2F2F7]/70 backdrop-blur-sm rounded-2xl px-5 py-3 border border-[#E5E5EA]/30">
+                      <div className="text-base leading-[1.7] text-[#1c1c1e]">
+                        <MarkdownContent content={msg.content} />
+                      </div>
+                      <SourceReferences sources={msg.sources || []} />
                     </div>
-                    <SourceReferences sources={msg.sources || []} />
-                    <div className="mt-2 text-[11px] text-[#8E8E93]">
+                    <div className="mt-1.5 text-[11px] text-[#8E8E93]">
                       {formatTime(msg.timestamp)}
                     </div>
                   </div>
@@ -237,19 +239,21 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                   {streamingAgentState && (
                     <AgentTrace state={streamingAgentState} />
                   )}
-                  <div className="text-base leading-[1.7] text-[#1c1c1e]">
-                    {streamingContent ? (
-                      <>
-                        <MarkdownContent content={streamingContent} />
-                        <div className="inline-block w-2 h-4 bg-[#007AFF] ml-0.5 animate-pulse align-middle" />
-                      </>
-                    ) : (
-                      <div className="flex space-x-1.5 py-2">
-                        <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" />
-                        <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                        <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-                      </div>
-                    )}
+                  <div className="bg-[#F2F2F7]/70 backdrop-blur-sm rounded-2xl px-5 py-3 border border-[#E5E5EA]/30">
+                    <div className="text-base leading-[1.7] text-[#1c1c1e]">
+                      {streamingContent ? (
+                        <>
+                          <MarkdownContent content={streamingContent} />
+                          <div className="inline-block w-2 h-4 bg-[#007AFF] ml-0.5 animate-pulse align-middle" />
+                        </>
+                      ) : (
+                        <div className="flex space-x-1.5 py-2">
+                          <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" />
+                          <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                          <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
