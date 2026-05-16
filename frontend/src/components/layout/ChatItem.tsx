@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react'
-import { ChatBubbleLeftRightIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { ChatBubbleLeftRightIcon, EllipsisVerticalIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { ChatSession } from '../../types/app'
 
@@ -36,10 +36,9 @@ export const ChatItem: React.FC<ChatItemProps> = ({
 }) => {
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState(chat.name)
-  const [showContextMenu, setShowContextMenu] = useState(false)
-  const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 })
+  const [showMenu, setShowMenu] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  const itemRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -50,21 +49,14 @@ export const ChatItem: React.FC<ChatItemProps> = ({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (showContextMenu && itemRef.current && !itemRef.current.contains(event.target as Node)) {
-        setShowContextMenu(false)
+      if (showMenu && menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false)
       }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showContextMenu])
-
-  const handleDoubleClick = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsEditing(true)
-    setEditName(chat.name)
-  }
+  }, [showMenu])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -83,16 +75,22 @@ export const ChatItem: React.FC<ChatItemProps> = ({
     setIsEditing(false)
   }
 
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault()
+  const handleMenuToggle = (e: React.MouseEvent) => {
     e.stopPropagation()
-    setContextMenuPos({ x: e.clientX, y: e.clientY })
-    setShowContextMenu(true)
+    setShowMenu((prev) => !prev)
   }
 
-  const handleDeleteClick = () => {
+  const handleRenameClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setShowMenu(false)
+    setIsEditing(true)
+    setEditName(chat.name)
+  }
+
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setShowMenu(false)
     onDelete(chat.id)
-    setShowContextMenu(false)
   }
 
   const handleDragStart = (e: React.DragEvent) => {
@@ -112,17 +110,15 @@ export const ChatItem: React.FC<ChatItemProps> = ({
   }
 
   return (
-    <div ref={itemRef} className="relative">
+    <div className="relative">
       <div
         draggable={!isEditing}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        onDoubleClick={handleDoubleClick}
-        onContextMenu={handleContextMenu}
         onClick={() => !isEditing && onSelect(chat.id)}
         className={clsx(
-          'w-full flex items-center space-x-3 p-3 rounded-lg text-left transition-all duration-200 cursor-pointer select-none',
+          'group w-full flex items-center space-x-3 p-3 rounded-lg text-left transition-all duration-200 cursor-pointer select-none',
           'hover:scale-[1.02] active:scale-[0.98]',
           isActive
             ? 'bg-[#007AFF] text-white shadow-md shadow-[#007AFF]/20'
@@ -151,32 +147,49 @@ export const ChatItem: React.FC<ChatItemProps> = ({
             'text-xs truncate',
             isActive ? 'text-white/80' : 'text-[#8E8E93]'
           )}>
-            {chat.messageCount > 0 
+            {chat.messageCount > 0
               ? `${chat.messageCount} 条消息`
               : '暂无消息'
             }
           </div>
         </div>
-      </div>
 
-      {/* Context Menu */}
-      {showContextMenu && (
-        <div
-          className="fixed z-50 bg-white/90 backdrop-blur-xl border border-gray-200/40 rounded-lg shadow-lg py-1 min-w-[120px]"
-          style={{
-            left: contextMenuPos.x,
-            top: contextMenuPos.y,
-          }}
-        >
-          <button
-            onClick={handleDeleteClick}
-            className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
-          >
-            <XMarkIcon className="w-4 h-4" />
-            <span>删除聊天</span>
-          </button>
-        </div>
-      )}
+        {/* More button - visible on hover */}
+        {!isEditing && (
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={handleMenuToggle}
+              className={clsx(
+                'p-1 rounded-md transition-all duration-200 opacity-0 group-hover:opacity-100',
+                isActive ? 'hover:bg-white/20' : 'hover:bg-gray-200/50',
+                showMenu && 'opacity-100'
+              )}
+            >
+              <EllipsisVerticalIcon className="w-4 h-4" />
+            </button>
+
+            {/* Dropdown menu */}
+            {showMenu && (
+              <div className="absolute right-0 top-full mt-1 z-50 bg-white/95 backdrop-blur-xl border border-gray-200/40 rounded-lg shadow-lg py-1 min-w-[140px]">
+                <button
+                  onClick={handleRenameClick}
+                  className="w-full px-3 py-2 text-left text-sm text-[#1c1c1e] hover:bg-gray-100 flex items-center space-x-2"
+                >
+                  <PencilIcon className="w-4 h-4" />
+                  <span>修改对话名称</span>
+                </button>
+                <button
+                  onClick={handleDeleteClick}
+                  className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
+                >
+                  <TrashIcon className="w-4 h-4" />
+                  <span>删除对话</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
