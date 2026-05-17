@@ -129,6 +129,7 @@ class ChatDTO(DTOConvertible[Chat, "ChatDTO"]):
     collection_ids: str | None = None  # JSON string
     bound_collection_id: str | None = None
     message_count: int | None = None
+    sort_order: int | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
     last_message_at: datetime | None = None

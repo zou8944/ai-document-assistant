@@ -53,6 +53,15 @@ class Chat(Base):
         doc="Number of messages"
     )
 
+    # Display order in chat list (smaller comes first)
+    sort_order: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        doc="Display order in chat list (smaller comes first)"
+    )
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -87,6 +96,7 @@ class Chat(Base):
         Index("idx_chats_updated_at", "updated_at"),
         Index("idx_chats_last_message_at", "last_message_at"),
         Index("idx_chats_bound_collection_id", "bound_collection_id"),
+        Index("idx_chats_sort_order", "sort_order"),
     )
 
     def __repr__(self) -> str:

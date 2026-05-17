@@ -20,7 +20,7 @@ class ChatRepository(BaseRepository[Chat, ChatDTO]):
         with session_context() as session:
             query = (
                 select(Chat)
-                .order_by(Chat.last_message_at.desc().nulls_last(), Chat.updated_at.desc())
+                .order_by(Chat.sort_order.asc())
                 .offset(offset)
             )
 
@@ -29,6 +29,36 @@ class ChatRepository(BaseRepository[Chat, ChatDTO]):
 
             entities = list(session.scalars(query))
             return [self.dto_class.from_orm(item) for item in entities]
+
+    def next_sort_order(self) -> int:
+        """Return the next sort_order value (max + 1, or 0 for empty table)."""
+        with session_context() as session:
+            max_order = session.scalar(select(func.max(Chat.sort_order)))
+            if max_order is None:
+                return 0
+            return max_order + 1
+
+    def reorder(self, ordered_ids: list[str]) -> int:
+        """Rewrite sort_order for the given chat ids based on their position.
+
+        Raises ValueError if any id is missing in the database.
+        """
+        with session_context() as session:
+            chats = list(
+                session.scalars(select(Chat).where(Chat.id.in_(ordered_ids)))
+            )
+            chats_map = {c.id: c for c in chats}
+            missing = set(ordered_ids) - chats_map.keys()
+            if missing:
+                raise ValueError(f"Chats not found: {sorted(missing)}")
+            for pos, chat_id in enumerate(ordered_ids):
+                chats_map[chat_id].sort_order = pos
+            return len(ordered_ids)
+
+    def count_all(self) -> int:
+        """Return total number of chats."""
+        with session_context() as session:
+            return session.scalar(select(func.count(Chat.id))) or 0
 
     def update_message_count(self, chat_id: str) -> bool:
         with session_context() as session:

@@ -16,7 +16,12 @@ from exception import (
     HTTPInternalServerErrorException,
     HTTPNotFoundException,
 )
-from models.requests import ChatMessageRequest, CreateChatRequest, UpdateChatRequest
+from models.requests import (
+    ChatMessageRequest,
+    CreateChatRequest,
+    ReorderChatsRequest,
+    UpdateChatRequest,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -137,6 +142,26 @@ async def delete_chat(chat_id: str, request: Request):
         "chat_id": chat_id,
         "deleted": True
     }
+
+
+@router.post("/chats/reorder")
+async def reorder_chats(request_data: ReorderChatsRequest, request: Request):
+    """
+    Reorder chats by rewriting sort_order based on the provided full id list.
+
+    Strict mode: the list must contain exactly all existing chat ids,
+    in the desired new display order.
+    """
+    chat_service = get_app_state(request).chat_service
+
+    try:
+        count = await chat_service.reorder_chats(request_data.chat_ids)
+    except ValueError as e:
+        raise HTTPBadRequestException(str(e)) from e
+
+    logger.info(f"Reordered {count} chats")
+
+    return {"reordered": count}
 
 
 @router.get("/chats/{chat_id}/messages")

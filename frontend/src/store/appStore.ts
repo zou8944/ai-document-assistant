@@ -32,6 +32,7 @@ interface AppStore extends AppState {
   updateChatSession: (id: string, updates: Partial<ChatSession>) => void
   deleteChatSession: (id: string) => void
   reorderChatSessions: (fromIndex: number, toIndex: number) => void
+  setChatSessions: (chats: ChatSession[]) => void
   updateSettings: (settings: Partial<AppSettings>) => void
 
   // Computed getters
@@ -162,6 +163,9 @@ export const useAppStore = create<AppStore>()(
             return { chatSessions: newChatSessions }
           }),
 
+        setChatSessions: (chats) =>
+          set({ chatSessions: chats }),
+
         updateSettings: (newSettings) =>
           set((state) => ({
             settings: {
@@ -199,7 +203,6 @@ export const useAppStore = create<AppStore>()(
         name: 'ai-document-assistant-store',
         partialize: (state) => ({
           knowledgeBases: state.knowledgeBases,
-          chatSessions: state.chatSessions,
           settings: state.settings,
           sidebarWidth: state.sidebarWidth,
           docChatSidebarOpen: state.docChatSidebarOpen,

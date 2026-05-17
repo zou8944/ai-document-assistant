@@ -700,6 +700,17 @@ export class DocumentAssistantAPI {
   }
 
   /**
+   * Reorder chats (full-list mode). Submit the complete list of chat ids
+   * in their new display order; backend rewrites sort_order accordingly.
+   */
+  async reorderChats(chatIds: string[]): Promise<APIResponse<{ reordered: number }>> {
+    return this.request<APIResponse<{ reordered: number }>>(`/api/v1/chats/reorder`, {
+      method: 'POST',
+      body: JSON.stringify({ chat_ids: chatIds }),
+    })
+  }
+
+  /**
    * Get chat messages
    */
   async getChatMessages(

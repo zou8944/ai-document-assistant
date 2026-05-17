@@ -34,6 +34,7 @@ class ChatService:
             collection_ids=json.loads(chat.collection_ids) if chat.collection_ids else [],
             bound_collection_id=chat.bound_collection_id,
             message_count=chat.message_count or 0,
+            sort_order=chat.sort_order or 0,
             created_at=chat.created_at.isoformat() if chat.created_at else "",
             updated_at=chat.updated_at.isoformat() if chat.updated_at else "",
             last_message_at=chat.last_message_at.isoformat() if chat.last_message_at else None
@@ -67,6 +68,7 @@ class ChatService:
             name=name,
             collection_ids=json.dumps(collection_ids),
             message_count=0,
+            sort_order=self.chat_repo.next_sort_order(),
             bound_collection_id=bound_collection_id
         ))
         logger.info(f"Created chat {created_chat.id} with name '{name}'")
@@ -109,6 +111,23 @@ class ChatService:
         """Delete chat and all its messages"""
         self.chat_message_repo.delete_by_chat(chat_id)
         return self.chat_repo.delete(chat_id)
+
+    async def reorder_chats(self, ordered_ids: list[str]) -> int:
+        """Reorder chats by rewriting sort_order based on the given full id list.
+
+        Strict mode: the list must contain exactly all existing chat ids,
+        with no duplicates. Otherwise ValueError is raised.
+        """
+        if len(set(ordered_ids)) != len(ordered_ids):
+            raise ValueError("chat_ids contains duplicates")
+
+        total = self.chat_repo.count_all()
+        if len(ordered_ids) != total:
+            raise ValueError(
+                f"chat_ids count {len(ordered_ids)} does not match total chats {total}"
+            )
+
+        return self.chat_repo.reorder(ordered_ids)
 
     async def get_chat_messages(
         self,

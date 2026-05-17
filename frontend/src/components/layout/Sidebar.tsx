@@ -30,7 +30,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
     addChatSession,
     updateChatSession,
     deleteChatSession,
-    reorderChatSessions
+    reorderChatSessions,
+    setChatSessions
   } = useAppStore()
 
   const [dragIndex, setDragIndex] = useState<number | null>(null)
@@ -89,13 +90,26 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
     }
   }
 
-  const handleChatRename = (chatId: string, newName: string) => {
-    updateChatSession(chatId, { name: newName })
+  const handleChatRename = async (chatId: string, newName: string) => {
+    try {
+      await apiClient.updateChat(chatId, { name: newName })
+      updateChatSession(chatId, { name: newName })
+    } catch (error) {
+      console.error('重命名失败:', error)
+      alert('重命名失败: ' + (error as Error).message)
+    }
   }
 
-  const handleChatDelete = (chatId: string) => {
-    if (window.confirm('确定要删除这个聊天吗？这个操作无法撤销。')) {
+  const handleChatDelete = async (chatId: string) => {
+    if (!window.confirm('确定要删除这个聊天吗？这个操作无法撤销。')) {
+      return
+    }
+    try {
+      await apiClient.deleteChat(chatId)
       deleteChatSession(chatId)
+    } catch (error) {
+      console.error('删除聊天失败:', error)
+      alert('删除聊天失败: ' + (error as Error).message)
     }
   }
 
@@ -110,9 +124,35 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
     }
   }
 
-  const handleDrop = () => {
-    if (dragIndex !== null && dragOverIndex !== null && dragIndex !== dragOverIndex) {
-      reorderChatSessions(dragIndex, dragOverIndex)
+  const handleDrop = async () => {
+    if (dragIndex === null || dragOverIndex === null || dragIndex === dragOverIndex) {
+      return
+    }
+    // 1) 乐观更新本地顺序
+    reorderChatSessions(dragIndex, dragOverIndex)
+    // 2) 拿到新顺序提交后端
+    const ids = useAppStore.getState().chatSessions.map((c) => c.id)
+    try {
+      await apiClient.reorderChats(ids)
+    } catch (error) {
+      console.error('排序保存失败:', error)
+      // 失败：从后端重新拉一次，保证本地与服务端一致
+      try {
+        const res = await apiClient.listChats(0, 1000)
+        const data = extractData(res)
+        setChatSessions(data.chats.map((chat) => ({
+          id: chat.chat_id,
+          name: chat.name,
+          knowledgeBaseIds: chat.collection_ids || [],
+          createdAt: chat.created_at,
+          lastMessageAt: chat.last_message_at || chat.created_at,
+          messageCount: chat.message_count || 0,
+          boundCollectionId: chat.bound_collection_id,
+        })))
+      } catch (reloadError) {
+        console.error('重新拉取列表也失败:', reloadError)
+      }
+      alert('排序保存失败: ' + (error as Error).message)
     }
     // 状态清理交给 handleDragEnd，保证拖到任意位置（含原位 / 列表外 / Esc 取消）都能复位
   }

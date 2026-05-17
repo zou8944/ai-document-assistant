@@ -80,6 +80,11 @@ class UpdateChatRequest(BaseModel):
     # Note: bound_collection_id is not included because binding is immutable after creation
 
 
+class ReorderChatsRequest(BaseModel):
+    """Request model for reordering chats (full-list mode)."""
+    chat_ids: list[str] = Field(..., description="Chat IDs in their new display order")
+
+
 class ChatMessageRequest(BaseModel):
     """Request model for sending a chat message"""
     message: str = Field(..., description="User message", min_length=1)

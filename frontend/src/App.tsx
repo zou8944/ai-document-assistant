@@ -2,18 +2,47 @@
  * Main App component with startup screen and main layout
  */
 
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import MainLayout from './components/layout/MainLayout'
 import StartupScreen from './components/StartupScreen'
 import useStartup from './hooks/useStartup'
+import { useAPIClient, extractData } from './services/apiClient'
+import { useAppStore } from './store/appStore'
 
 export const App: React.FC = () => {
   const { isLoading, isReady, error, message } = useStartup()
+  const apiClient = useAPIClient()
+  const setChatSessions = useAppStore((s) => s.setChatSessions)
+  const bootstrapped = useRef(false)
+
+  // Once backend is ready, load chat list from server (single source of truth)
+  useEffect(() => {
+    if (!isReady || bootstrapped.current) return
+    bootstrapped.current = true
+
+    apiClient.listChats(0, 1000)
+      .then((res) => {
+        const data = extractData(res)
+        const sessions = data.chats.map((chat) => ({
+          id: chat.chat_id,
+          name: chat.name,
+          knowledgeBaseIds: chat.collection_ids || [],
+          createdAt: chat.created_at,
+          lastMessageAt: chat.last_message_at || chat.created_at,
+          messageCount: chat.message_count || 0,
+          boundCollectionId: chat.bound_collection_id,
+        }))
+        setChatSessions(sessions)
+      })
+      .catch((err) => {
+        console.error('Failed to load chat list:', err)
+      })
+  }, [isReady, apiClient, setChatSessions])
 
   // Show startup screen while loading or if there's an error
   if (isLoading || !isReady) {
     return (
-      <StartupScreen 
+      <StartupScreen
         message={error ? `${message} - ${error}` : message}
       />
     )
