@@ -230,6 +230,19 @@
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
   }
+
+  /* Brand surface: blue background + white text, with reversed text selection */
+  .brand-surface {
+    @apply bg-[#007AFF] text-white;
+  }
+  .brand-surface ::selection,
+  .brand-surface::selection {
+    background-color: #ffffff;
+    color: #007AFF;
+  }
+  .brand-surface input {
+    caret-color: #ffffff;
+  }
 }
 
 @layer utilities {

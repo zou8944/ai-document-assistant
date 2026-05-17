@@ -17,6 +17,7 @@ interface ChatItemProps {
   onDragStart: (index: number) => void
   onDragOver: (index: number) => void
   onDrop: () => void
+  onDragEnd: () => void
   isDragging: boolean
   dragOverIndex: number | null
 }
@@ -31,6 +32,7 @@ export const ChatItem: React.FC<ChatItemProps> = ({
   onDragStart,
   onDragOver,
   onDrop,
+  onDragEnd,
   isDragging,
   dragOverIndex
 }) => {
@@ -116,12 +118,13 @@ export const ChatItem: React.FC<ChatItemProps> = ({
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
+        onDragEnd={onDragEnd}
         onClick={() => !isEditing && onSelect(chat.id)}
         className={clsx(
           'group w-full flex items-center space-x-3 p-3 rounded-lg text-left transition-all duration-200 cursor-pointer select-none',
           'hover:scale-[1.02] active:scale-[0.98]',
           isActive
-            ? 'bg-[#007AFF] text-white shadow-md shadow-[#007AFF]/20'
+            ? 'brand-surface shadow-md shadow-[#007AFF]/20'
             : 'text-[#1c1c1e] hover:bg-white/50',
           isDragging && 'opacity-50',
           dragOverIndex === index && 'border-t-2 border-[#007AFF]'
@@ -137,7 +140,12 @@ export const ChatItem: React.FC<ChatItemProps> = ({
               onChange={(e) => setEditName(e.target.value)}
               onBlur={handleSaveName}
               onKeyDown={handleKeyDown}
-              className="w-full bg-transparent border-none outline-none font-medium text-current placeholder-current/50"
+              className={clsx(
+                'w-full rounded px-1.5 py-0.5 outline-none font-medium text-current placeholder-current/60',
+                isActive
+                  ? 'bg-white/20 ring-1 ring-white/50 focus:ring-white'
+                  : 'bg-black/5 ring-1 ring-black/15 focus:ring-[#007AFF]'
+              )}
               placeholder="输入聊天名称..."
             />
           ) : (

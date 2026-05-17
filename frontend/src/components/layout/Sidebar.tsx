@@ -114,6 +114,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
     if (dragIndex !== null && dragOverIndex !== null && dragIndex !== dragOverIndex) {
       reorderChatSessions(dragIndex, dragOverIndex)
     }
+    // 状态清理交给 handleDragEnd，保证拖到任意位置（含原位 / 列表外 / Esc 取消）都能复位
+  }
+
+  const handleDragEnd = () => {
     setDragIndex(null)
     setDragOverIndex(null)
   }
@@ -127,7 +131,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
           className={clsx(
             'w-full flex items-center space-x-3 p-3 rounded-xl transition-all duration-200',
             activeSidebarSection === 'knowledge'
-              ? 'bg-[#007AFF] text-white shadow-md shadow-[#007AFF]/20'
+              ? 'brand-surface shadow-md shadow-[#007AFF]/20'
               : 'text-[#1c1c1e] hover:bg-white/50'
           )}
         >
@@ -167,6 +171,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
               onDragStart={handleDragStart}
               onDragOver={handleDragOver}
               onDrop={handleDrop}
+              onDragEnd={handleDragEnd}
               isDragging={dragIndex === index}
               dragOverIndex={dragOverIndex}
             />
@@ -189,7 +194,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
           className={clsx(
             'w-full flex items-center space-x-3 p-3 rounded-xl transition-all duration-200',
             activeSidebarSection === 'settings'
-              ? 'bg-[#007AFF] text-white shadow-md shadow-[#007AFF]/20'
+              ? 'brand-surface shadow-md shadow-[#007AFF]/20'
               : 'text-[#1c1c1e] hover:bg-white/50'
           )}
         >

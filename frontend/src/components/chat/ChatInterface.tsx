@@ -239,7 +239,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                 /* User message - right aligned card */
                 <div className="flex justify-end">
                   <div className="max-w-3xl">
-                    <div className="bg-[#007AFF] text-white rounded-2xl px-5 py-3">
+                    <div className="brand-surface rounded-2xl px-5 py-3">
                       <MarkdownContent content={msg.content} isUser />
                     </div>
                     <div className="mt-1.5 text-[11px] text-[#8E8E93] text-right">
