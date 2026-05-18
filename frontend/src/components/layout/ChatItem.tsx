@@ -112,7 +112,7 @@ export const ChatItem: React.FC<ChatItemProps> = ({
   }
 
   return (
-    <div className="relative">
+    <div className={clsx('relative', showMenu && 'z-50')}>
       <div
         draggable={!isEditing}
         onDragStart={handleDragStart}
@@ -122,7 +122,7 @@ export const ChatItem: React.FC<ChatItemProps> = ({
         onClick={() => !isEditing && onSelect(chat.id)}
         className={clsx(
           'group w-full flex items-center space-x-3 p-3 rounded-lg text-left transition-all duration-200 cursor-pointer select-none',
-          'hover:scale-[1.02] active:scale-[0.98]',
+          !showMenu && 'hover:scale-[1.02] active:scale-[0.98]',
           isActive
             ? 'brand-surface shadow-md shadow-[#007AFF]/20'
             : 'text-[#1c1c1e] hover:bg-white/50',
@@ -178,7 +178,7 @@ export const ChatItem: React.FC<ChatItemProps> = ({
 
             {/* Dropdown menu */}
             {showMenu && (
-              <div className="absolute right-0 top-full mt-1 z-50 bg-white/95 backdrop-blur-xl border border-gray-200/40 rounded-lg shadow-lg py-1 min-w-[140px]">
+              <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[140px]">
                 <button
                   onClick={handleRenameClick}
                   className="w-full px-3 py-2 text-left text-sm text-[#1c1c1e] hover:bg-gray-100 flex items-center space-x-2"
