@@ -339,7 +339,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
       </div>
 
       {/* Input Area */}
-      <div className="flex-shrink-0 border-t border-gray-200/40 bg-white/30 backdrop-blur-sm">
+      <div className="relative flex-shrink-0 bg-white/30 backdrop-blur-sm">
+        {/* 顶部色差过渡层：消息区背景与输入区背景的渐变衔接 */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-6 left-0 right-0 h-6 bg-gradient-to-b from-transparent to-white/30"
+        />
         <div className="max-w-6xl mx-auto px-6 py-4">
           {/* Document picker */}
           <DocumentPicker

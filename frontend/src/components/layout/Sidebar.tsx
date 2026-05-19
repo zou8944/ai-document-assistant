@@ -2,7 +2,7 @@
  * Main sidebar component with three sections: Knowledge, Chat, Settings
  */
 
-import React, { useState } from 'react'
+import React, { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { 
   BookOpenIcon,
   ChatBubbleLeftRightIcon,
@@ -36,6 +36,47 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
 
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+  const [exitingIds, setExitingIds] = useState<Set<string>>(() => new Set())
+
+  // 选中指示器：跟随 activeChat 平滑滑动
+  const listRef = useRef<HTMLDivElement>(null)
+  const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  const hasPositionedRef = useRef(false)
+  const [indicatorRect, setIndicatorRect] = useState<{ top: number; height: number } | null>(null)
+  const [indicatorAnimated, setIndicatorAnimated] = useState(false)
+
+  const registerItemRef = useCallback((id: string, el: HTMLDivElement | null) => {
+    if (el) {
+      itemRefs.current.set(id, el)
+    } else {
+      itemRefs.current.delete(id)
+    }
+  }, [])
+
+  useLayoutEffect(() => {
+    // 没有激活项时收起指示器，并重置首次定位标志
+    if (!activeChat) {
+      setIndicatorRect(null)
+      setIndicatorAnimated(false)
+      hasPositionedRef.current = false
+      return
+    }
+    const itemEl = itemRefs.current.get(activeChat)
+    const listEl = listRef.current
+    if (!itemEl || !listEl) return
+    const top = itemEl.offsetTop
+    const height = itemEl.offsetHeight
+    setIndicatorRect((prev) => {
+      if (prev && prev.top === top && prev.height === height) return prev
+      return { top, height }
+    })
+    // 首次定位不要 transition，之后才平滑过渡
+    if (!hasPositionedRef.current) {
+      hasPositionedRef.current = true
+      // 下一帧再启用动画，避免初始定位时的瞬移有过渡
+      requestAnimationFrame(() => setIndicatorAnimated(true))
+    }
+  }, [activeChat, chatSessions, exitingIds])
 
   const handleSectionClick = (section: SidebarSection) => {
     setActiveSidebarSection(section)
@@ -106,7 +147,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
     }
     try {
       await apiClient.deleteChat(chatId)
-      deleteChatSession(chatId)
+      // 标记为退场状态，触发收起动画
+      setExitingIds((prev) => {
+        const next = new Set(prev)
+        next.add(chatId)
+        return next
+      })
+      // 等待退场动画结束后再从 store 真正删除，下方项目滑上来填补
+      window.setTimeout(() => {
+        deleteChatSession(chatId)
+        setExitingIds((prev) => {
+          if (!prev.has(chatId)) return prev
+          const next = new Set(prev)
+          next.delete(chatId)
+          return next
+        })
+      }, 300)
     } catch (error) {
       console.error('删除聊天失败:', error)
       alert('删除聊天失败: ' + (error as Error).message)
@@ -198,13 +254,33 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
         </div>
 
         {/* Scrollable chat list */}
-        <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1">
+        <div
+          ref={listRef}
+          className="relative flex-1 overflow-y-auto px-4 py-2"
+        >
+          {/* 选中指示器：跟随 activeChat 滑动 */}
+          {indicatorRect && (
+            <div
+              aria-hidden
+              className={clsx(
+                'pointer-events-none absolute left-4 right-4 brand-surface rounded-lg shadow-md shadow-[#007AFF]/20',
+                indicatorAnimated && 'transition-[transform,height] duration-300 ease-out'
+              )}
+              style={{
+                transform: `translateY(${indicatorRect.top}px)`,
+                height: `${indicatorRect.height}px`,
+                top: 0,
+              }}
+            />
+          )}
           {chatSessions.map((chat, index) => (
             <ChatItem
               key={chat.id}
               chat={chat}
               index={index}
               isActive={activeChat === chat.id}
+              isExiting={exitingIds.has(chat.id)}
+              registerRef={registerItemRef}
               onSelect={handleChatClick}
               onRename={handleChatRename}
               onDelete={handleChatDelete}
