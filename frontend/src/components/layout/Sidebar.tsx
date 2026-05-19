@@ -44,6 +44,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
   const hasPositionedRef = useRef(false)
   const [indicatorRect, setIndicatorRect] = useState<{ top: number; height: number } | null>(null)
   const [indicatorAnimated, setIndicatorAnimated] = useState(false)
+  // 指示器透明度：删除激活项时先淡出再触发列表滑动
+  const [indicatorOpacity, setIndicatorOpacity] = useState(1)
 
   const registerItemRef = useCallback((id: string, el: HTMLDivElement | null) => {
     if (el) {
@@ -145,8 +147,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
     if (!window.confirm('确定要删除这个聊天吗？这个操作无法撤销。')) {
       return
     }
+    const isActiveBeingDeleted = activeChat === chatId
     try {
       await apiClient.deleteChat(chatId)
+      // 删除激活项时，先让蓝色指示器淡出，再触发列表滑动
+      if (isActiveBeingDeleted) {
+        setIndicatorOpacity(0)
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 180))
+      }
       // 标记为退场状态，触发收起动画
       setExitingIds((prev) => {
         const next = new Set(prev)
@@ -162,8 +170,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
           next.delete(chatId)
           return next
         })
+        // 指示器透明度复位，供下次激活使用（此时 indicatorRect 已被卸载）
+        if (isActiveBeingDeleted) {
+          setIndicatorOpacity(1)
+        }
       }, 300)
     } catch (error) {
+      // 出错时恢复指示器
+      if (isActiveBeingDeleted) {
+        setIndicatorOpacity(1)
+      }
       console.error('删除聊天失败:', error)
       alert('删除聊天失败: ' + (error as Error).message)
     }
@@ -264,12 +280,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
               aria-hidden
               className={clsx(
                 'pointer-events-none absolute left-4 right-4 brand-surface rounded-lg shadow-md shadow-[#007AFF]/20',
-                indicatorAnimated && 'transition-[transform,height] duration-300 ease-out'
+                indicatorAnimated && 'transition-[transform,height,opacity] duration-300 ease-out'
               )}
               style={{
                 transform: `translateY(${indicatorRect.top}px)`,
                 height: `${indicatorRect.height}px`,
                 top: 0,
+                opacity: indicatorOpacity,
+                transitionDuration: indicatorOpacity === 0 ? '180ms' : undefined,
               }}
             />
           )}
