@@ -3,6 +3,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { ChatBubbleLeftRightIcon, EllipsisVerticalIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { ChatSession } from '../../types/app'
@@ -43,8 +44,10 @@ export const ChatItem: React.FC<ChatItemProps> = ({
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState(chat.name)
   const [showMenu, setShowMenu] = useState(false)
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -54,14 +57,23 @@ export const ChatItem: React.FC<ChatItemProps> = ({
   }, [isEditing])
 
   useEffect(() => {
+    if (!showMenu) return
     const handleClickOutside = (event: MouseEvent) => {
-      if (showMenu && menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      const target = event.target as Node
+      const insideButton = buttonRef.current?.contains(target)
+      const insideDropdown = dropdownRef.current?.contains(target)
+      if (!insideButton && !insideDropdown) {
         setShowMenu(false)
       }
     }
-
+    // 滚动时关闭菜单，避免 fixed 定位的菜单与按钮脱离
+    const handleScroll = () => setShowMenu(false)
     document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    document.addEventListener('scroll', handleScroll, true)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('scroll', handleScroll, true)
+    }
   }, [showMenu])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -83,6 +95,13 @@ export const ChatItem: React.FC<ChatItemProps> = ({
 
   const handleMenuToggle = (e: React.MouseEvent) => {
     e.stopPropagation()
+    if (!showMenu && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      setMenuPos({
+        top: rect.bottom + 4,
+        right: window.innerWidth - rect.right,
+      })
+    }
     setShowMenu((prev) => !prev)
   }
 
@@ -125,7 +144,7 @@ export const ChatItem: React.FC<ChatItemProps> = ({
       <div className="overflow-hidden">
         <div
           ref={(el) => registerRef(chat.id, el)}
-          className={clsx('relative', showMenu && 'z-50')}
+          className="relative"
         >
           <div
             draggable={!isEditing}
@@ -178,8 +197,9 @@ export const ChatItem: React.FC<ChatItemProps> = ({
 
             {/* More button - visible on hover */}
             {!isEditing && (
-              <div className="relative" ref={menuRef}>
+              <>
                 <button
+                  ref={buttonRef}
                   onClick={handleMenuToggle}
                   className={clsx(
                     'p-1 rounded-md transition-all duration-200 opacity-0 group-hover:opacity-100',
@@ -190,9 +210,13 @@ export const ChatItem: React.FC<ChatItemProps> = ({
                   <EllipsisVerticalIcon className="w-4 h-4" />
                 </button>
 
-                {/* Dropdown menu */}
-                {showMenu && (
-                  <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[140px]">
+                {/* Dropdown menu rendered via portal to escape overflow:hidden of the grid wrapper */}
+                {showMenu && menuPos && createPortal(
+                  <div
+                    ref={dropdownRef}
+                    className="fixed z-[1000] bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[140px]"
+                    style={{ top: menuPos.top, right: menuPos.right }}
+                  >
                     <button
                       onClick={handleRenameClick}
                       className="w-full px-3 py-2 text-left text-sm text-[#1c1c1e] hover:bg-gray-100 flex items-center space-x-2"
@@ -207,9 +231,10 @@ export const ChatItem: React.FC<ChatItemProps> = ({
                       <TrashIcon className="w-4 h-4" />
                       <span>删除对话</span>
                     </button>
-                  </div>
+                  </div>,
+                  document.body
                 )}
-              </div>
+              </>
             )}
           </div>
         </div>
