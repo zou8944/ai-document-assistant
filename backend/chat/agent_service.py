@@ -50,12 +50,13 @@ class AgentChatService:
         _cancel_registry[(chat_id, message_id)] = token
 
         # Persist user message with engine marker so _load_history includes it
-        self.chat_message_repo.add_message(
+        user_message = self.chat_message_repo.add_message(
             chat_id=chat_id,
             role="user",
             content=query,
             metadata=json.dumps({"engine": "agent"}),
         )
+        user_message_id = user_message.id
 
         # Placeholder message
         placeholder = self.chat_message_repo.add_message(
@@ -244,6 +245,12 @@ class AgentChatService:
                     sources=json.dumps(sources),
                     message_metadata=json.dumps(agent_trace),
                 )
+        except Exception:
+            # Clean up: remove both user message and placeholder on failure
+            self.chat_message_repo.delete(placeholder_id)
+            self.chat_message_repo.delete(user_message_id)
+            self.chat_repo.update_message_count(chat_id)
+            raise
         finally:
             _cancel_registry.pop((chat_id, message_id), None)
 
