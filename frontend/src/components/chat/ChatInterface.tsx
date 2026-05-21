@@ -234,7 +234,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
             </div>
           )}
           {messages.map((msg) => (
-            <div key={msg.id} className="px-6 py-3.5 animate-message-in">
+            <div key={msg.id} className={clsx(
+              'px-6 py-3.5',
+              msg.type === 'user' ? 'animate-message-user' : 'animate-message-ai'
+            )}>
               {msg.type === 'user' ? (
                 /* User message - right aligned card */
                 <div className="flex justify-end">
@@ -372,7 +375,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
             {isLoading || isStreaming ? (
               <button
                 onClick={stopGeneration}
-                className="flex-shrink-0 bg-[#1c1c1e] text-white p-3 rounded-xl transition-colors"
+                className="flex-shrink-0 bg-[#1c1c1e] text-white p-3 rounded-xl transition-colors active:scale-95 transition-transform duration-75"
                 title="停止生成"
               >
                 <StopIcon className="w-5 h-5" />
@@ -381,7 +384,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
               <button
                 onClick={handleSendMessage}
                 disabled={!getRealUserInput(message).trim()}
-                className="flex-shrink-0 bg-[#007AFF] hover:bg-[#0066D6] disabled:bg-[#E5E5EA] text-white p-3 rounded-xl transition-colors disabled:cursor-not-allowed"
+                className="flex-shrink-0 bg-[#007AFF] hover:bg-[#0066D6] disabled:bg-[#E5E5EA] text-white p-3 rounded-xl transition-colors disabled:cursor-not-allowed active:scale-95 transition-transform duration-75"
               >
                 <PaperAirplaneIcon className="w-5 h-5" />
               </button>

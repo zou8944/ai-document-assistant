@@ -34,12 +34,13 @@ export const AgentTrace: React.FC<AgentTraceProps> = ({ state }) => {
   return (
     <div className="mb-2 space-y-1.5">
       {visibleSteps.map((step, index) => (
-        <AgentTraceStep
-          key={`${step.kind}-${step.iteration}-${index}`}
-          step={step}
-          isLast={index === visibleSteps.length - 1}
-          isRunning={isRunning}
-        />
+        <div key={`${step.kind}-${step.iteration}-${index}`} className="animate-step-in">
+          <AgentTraceStep
+            step={step}
+            isLast={index === visibleSteps.length - 1}
+            isRunning={isRunning}
+          />
+        </div>
       ))}
       {totalTime !== undefined && !isRunning && (
         <div className="text-[11px] text-[#AEAEB2] tabular-nums">

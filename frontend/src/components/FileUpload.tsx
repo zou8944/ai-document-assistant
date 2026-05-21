@@ -174,7 +174,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
               <div
                 key={index}
                 className={clsx(
-                  'flex items-center justify-between p-2 rounded-lg',
+                  'flex items-center justify-between p-2 rounded-lg animate-file-in',
                   'bg-white/30 backdrop-blur-sm border border-white/20'
                 )}
               >
