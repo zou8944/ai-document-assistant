@@ -507,6 +507,26 @@
   .animate-file-in {
     animation: fileIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
+
+  .animate-card-in {
+    animation: cardIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-modal-backdrop {
+    animation: modalBackdropIn 0.2s ease-out both;
+  }
+
+  .animate-modal-panel {
+    animation: modalPanelIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-tag-in {
+    animation: tagIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-source-in {
+    animation: sourceIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
 }
 
 @keyframes messageIn {
@@ -557,6 +577,59 @@
   from {
     opacity: 0;
     transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cardIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes modalBackdropIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalPanelIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes tagIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes sourceIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
   }
   to {
     opacity: 1;

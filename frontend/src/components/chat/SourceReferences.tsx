@@ -33,8 +33,12 @@ export const SourceReferences: React.FC<SourceReferencesProps> = ({ sources }) =
         isExpanded ? 'max-h-[600px] opacity-100 mt-2' : 'max-h-0 opacity-0'
       }`}>
         <div className="space-y-2 max-h-[600px] overflow-y-auto">
-          {sources.map((source) => (
-            <div key={`${source.document_id}-${source.chunk_index}`} className="text-xs rounded-md p-2.5 bg-white border border-warm-border">
+          {sources.map((source, index) => (
+            <div
+              key={`${source.document_id}-${source.chunk_index}`}
+              className="text-xs rounded-md p-2.5 bg-white border border-warm-border hover:shadow-sm hover:border-gray-300 transition-all duration-150"
+              style={{ transitionDelay: `${index * 30}ms` }}
+            >
               <div className="flex items-center justify-between mb-1">
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-ink truncate">{source.document_name}</div>

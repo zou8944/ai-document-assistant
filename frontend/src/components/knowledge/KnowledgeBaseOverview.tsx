@@ -237,10 +237,11 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredCollections.map((collection) => (
+            {filteredCollections.map((collection, index) => (
               <div
                 key={collection.id}
-                className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200/50 hover:border-gray-300/50 hover:shadow-lg transition-all duration-200 overflow-hidden"
+                className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200/50 overflow-hidden hover:-translate-y-px hover:shadow-lg hover:border-gray-300/50 transition-all duration-200 animate-card-in"
+                style={{ animationDelay: `${index * 50}ms` }}
               >
                 {/* Card Header */}
                 <div className="p-4 pb-3">

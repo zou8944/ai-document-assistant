@@ -108,7 +108,7 @@ export const DocumentPicker: React.FC<DocumentPickerProps> = ({
               {displayedDocuments.map((doc) => (
                 <div
                   key={doc.id}
-                  className="inline-flex items-center space-x-1 bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs max-w-full"
+                  className="inline-flex items-center space-x-1 bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs max-w-full animate-tag-in"
                 >
                   <DocumentIcon className="w-3 h-3 flex-shrink-0" />
                   <span className="truncate" title={doc.name}>{doc.name}</span>

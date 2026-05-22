@@ -89,7 +89,7 @@ export const AddKnowledgeBaseModal: React.FC<AddKnowledgeBaseModalProps> = ({
       <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
         {/* Backdrop */}
         <div
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity backdrop-blur-sm"
+          className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity backdrop-blur-sm animate-modal-backdrop"
           onClick={handleClose}
         />
 
@@ -99,7 +99,7 @@ export const AddKnowledgeBaseModal: React.FC<AddKnowledgeBaseModalProps> = ({
         </span>
 
         {/* Modal panel */}
-        <div className="relative inline-block transform rounded-lg bg-white px-4 pt-5 pb-4 text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6 sm:align-middle">
+        <div className="relative inline-block transform rounded-lg bg-white px-4 pt-5 pb-4 text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6 sm:align-middle animate-modal-panel">
           <div className="absolute top-0 right-0 pt-4 pr-4">
             <button
               type="button"
