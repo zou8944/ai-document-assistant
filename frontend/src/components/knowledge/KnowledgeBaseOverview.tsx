@@ -209,8 +209,30 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
         {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="text-gray-500">加载中...</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200/50 overflow-hidden">
+                <div className="p-4 pb-3 space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-5 h-5 rounded shimmer" />
+                    <div className="h-4 rounded shimmer w-3/5" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-3 rounded shimmer w-full" />
+                    <div className="h-3 rounded shimmer w-4/5" />
+                  </div>
+                  <div className="space-y-2 pt-1">
+                    <div className="h-3 rounded shimmer w-2/3" />
+                    <div className="h-3 rounded shimmer w-1/2" />
+                    <div className="h-3 rounded shimmer w-1/3" />
+                  </div>
+                </div>
+                <div className="border-t border-gray-200/50 px-4 py-3 bg-gray-50/50 flex space-x-2">
+                  <div className="flex-1 h-8 rounded shimmer" />
+                  <div className="flex-1 h-8 rounded shimmer" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : filteredCollections.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-gray-500">

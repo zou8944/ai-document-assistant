@@ -356,7 +356,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
           />
 
           {/* Input box */}
-          <div className="flex space-x-3 bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 px-4 py-3 shadow-[0_2px_10px_rgba(0,0,0,0.06)]">
+          <div className="flex space-x-3 bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 px-4 py-3 shadow-[0_2px_10px_rgba(0,0,0,0.06)] transition-all duration-200 focus-within:border-blue-300/60 focus-within:shadow-[0_2px_20px_rgba(0,122,255,0.12)] focus-within:bg-white/85">
             <div className="flex-1 relative">
               <RichTextInput
                 value={message}
