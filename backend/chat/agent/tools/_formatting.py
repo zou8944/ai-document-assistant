@@ -18,12 +18,12 @@ def parse_json_keywords(kw: str | None) -> list[str] | None:
 
 def format_doc_summary(doc_id: str, title: str, category: str | None,
                        summary: str | None, keywords: list[str] | None) -> str:
-    """Format a single document summary line."""
+    """Format a single document summary with clear separation for relevance checking."""
     safe_title = title.replace('"', "'")
     kw = f" | keywords={', '.join(keywords)}" if keywords else ""
     cat = f" | category={category}" if category else ""
-    sm = (summary or "")[:200]
-    return f'[id={doc_id}] "{safe_title}"{cat} | {sm}{kw}'
+    sm = (summary or "")[:400]
+    return f'[id={doc_id}] "{safe_title}"{cat}\n  summary: {sm}{kw}'
 
 
 def format_grep_match(doc_id: str, doc_name: str, line_num: int,
