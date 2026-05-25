@@ -17,6 +17,9 @@ interface AppStore extends AppState {
   // Language display preference: 'source' = original language, 'zh' = Chinese
   displayLanguage: 'source' | 'zh'
 
+  // Agent trace panel global expand/collapse preference
+  agentTraceExpanded: boolean
+
   // Actions
   setActiveSidebarSection: (section: SidebarSection) => void
   setActiveKnowledgeBase: (id: string | null) => void
@@ -25,6 +28,7 @@ interface AppStore extends AppState {
   setDocChatSidebarOpen: (open: boolean) => void
   setDocChatSidebarWidth: (width: number) => void
   setDisplayLanguage: (lang: 'source' | 'zh') => void
+  setAgentTraceExpanded: (expanded: boolean) => void
   addKnowledgeBase: (kb: KnowledgeBase) => void
   updateKnowledgeBase: (id: string, updates: Partial<KnowledgeBase>) => void
   deleteKnowledgeBase: (id: string) => void
@@ -76,6 +80,7 @@ export const useAppStore = create<AppStore>()(
         activeKnowledgeBase: null,
         activeChat: null,
         settings: initialSettings,
+        agentTraceExpanded: true,
 
         // Actions
         setActiveSidebarSection: (section) =>
@@ -114,6 +119,9 @@ export const useAppStore = create<AppStore>()(
 
         setDisplayLanguage: (lang) =>
           set({ displayLanguage: lang }),
+
+        setAgentTraceExpanded: (expanded) =>
+          set({ agentTraceExpanded: expanded }),
 
         addKnowledgeBase: (kb) =>
           set((state) => ({
@@ -208,6 +216,7 @@ export const useAppStore = create<AppStore>()(
           docChatSidebarOpen: state.docChatSidebarOpen,
           docChatSidebarWidth: state.docChatSidebarWidth,
           displayLanguage: state.displayLanguage,
+          agentTraceExpanded: state.agentTraceExpanded,
         })
       }
     )

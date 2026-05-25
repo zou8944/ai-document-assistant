@@ -32,7 +32,7 @@ function hasToolDetails(step: AgentStep): boolean {
 /* Collapsible — smooth CSS transition wrapper                       */
 /* ================================================================ */
 
-const Collapsible: React.FC<{ expanded: boolean; children: React.ReactNode }> = ({
+export const Collapsible: React.FC<{ expanded: boolean; children: React.ReactNode }> = ({
   expanded,
   children,
 }) => {
