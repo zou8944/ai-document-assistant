@@ -84,7 +84,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
     if (wasNearBottomRef.current && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [messages, streamingContent, isLoading, currentChat?.id])
+  }, [messages, streamingContent, streamingAgentState, isLoading, currentChat?.id])
 
   // Maintain scroll position when older messages are prepended
   useEffect(() => {
