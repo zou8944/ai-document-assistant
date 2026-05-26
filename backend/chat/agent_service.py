@@ -74,6 +74,11 @@ class AgentChatService:
         try:
             with transcript:
                 history = self._load_history(chat_id)
+                # Remove the current user message from history — runtime.append()
+                # adds it separately. Without this, the LLM sees a duplicate
+                # user message and loses conversation context.
+                if history and history[-1].get("role") == "user" and history[-1].get("content") == query:
+                    history = history[:-1]
                 collection_ids = self._get_collection_ids(chat_id)
 
                 deps = AgentDeps(
@@ -277,6 +282,9 @@ class AgentChatService:
             if meta.get("engine") != "agent":
                 continue
             content = msg.content or ""
+            # Skip empty assistant placeholders (pending responses not yet filled)
+            if msg.role == "assistant" and not content.strip():
+                continue
             messages.append({"role": msg.role, "content": content})
 
         return messages
