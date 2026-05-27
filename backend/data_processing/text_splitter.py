@@ -214,4 +214,4 @@ class DocumentProcessor:
 
 # Convenience function for creating processor instance
 def create_document_processor() -> DocumentProcessor:
-    return DocumentProcessor(chunk_size=4000, chunk_overlap=400)
+    return DocumentProcessor(chunk_size=600, chunk_overlap=100)
