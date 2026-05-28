@@ -12,6 +12,8 @@ export interface Collection {
   source_language?: string
   document_count: number
   vector_count: number
+  index_version?: string
+  needs_reindex: boolean
   created_at: string
   updated_at: string
 }
@@ -323,6 +325,15 @@ export class DocumentAssistantAPI {
    */
   async clearCollection(collectionId: string): Promise<APIResponse<{}>> {
     return this.request<APIResponse<{}>>(`/api/v1/collections/${encodeURIComponent(collectionId)}/clear`, {
+      method: 'POST',
+    })
+  }
+
+  /**
+   * Trigger re-indexing of all documents in a collection with current chunking parameters
+   */
+  async reindexCollection(collectionId: string): Promise<APIResponse<{ task_id: string; status: string }>> {
+    return this.request<APIResponse<{ task_id: string; status: string }>>(`/api/v1/collections/${encodeURIComponent(collectionId)}/reindex`, {
       method: 'POST',
     })
   }

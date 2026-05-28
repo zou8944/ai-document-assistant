@@ -63,6 +63,8 @@ class CollectionResponse(BaseModel):
     source_language: Optional[str] = Field(None, description="Detected source language (zh, en)")
     document_count: int = Field(..., description="Number of documents")
     vector_count: int = Field(..., description="Number of vectors")
+    index_version: Optional[str] = Field(None, description="Current index parameter fingerprint")
+    needs_reindex: bool = Field(False, description="Whether collection needs re-indexing due to parameter changes")
     created_at: str = Field(..., description="Creation timestamp")
     updated_at: str = Field(..., description="Last update timestamp")
 

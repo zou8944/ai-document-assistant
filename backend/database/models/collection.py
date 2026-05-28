@@ -83,6 +83,13 @@ class Collection(Base):
         doc="Number of vectors"
     )
 
+    # Indexing metadata
+    index_version: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        doc="Index parameter fingerprint (e.g. 'chunk600_overlap100'), null means no documents indexed yet"
+    )
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

@@ -31,7 +31,7 @@ class Task(Base):
     type: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
-        doc="Task type (ingest_files, ingest_urls)"
+        doc="Task type (ingest_files, ingest_urls, reindex_collection)"
     )
     status: Mapped[str] = mapped_column(
         String(20),
@@ -110,7 +110,7 @@ class Task(Base):
     # Constraints
     __table_args__ = (
         CheckConstraint(
-            "type IN ('ingest_files', 'ingest_urls')",
+            "type IN ('ingest_files', 'ingest_urls', 'reindex_collection')",
             name="chk_task_type"
         ),
         CheckConstraint(

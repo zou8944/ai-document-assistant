@@ -70,6 +70,7 @@ class CollectionDTO(DTOConvertible[Collection, "CollectionDTO"]):
     source_language: str | None = None
     document_count: int | None = None
     vector_count: int | None = None
+    index_version: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

@@ -10,7 +10,8 @@ import {
   ChatBubbleLeftRightIcon,
   CogIcon,
   CalendarIcon,
-  DocumentIcon
+  DocumentIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { useAppStore } from '../../store/appStore'
@@ -21,13 +22,14 @@ interface KnowledgeBaseOverviewProps {
   className?: string
 }
 
-export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({ 
-  className 
+export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
+  className
 }) => {
   const [searchQuery, setSearchQuery] = useState('')
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [collections, setCollections] = useState<Collection[]>([])
   const [loading, setLoading] = useState(true)
+  const [reindexingId, setReindexingId] = useState<string | null>(null)
   const apiClient = useAPIClient()
 
   const {
@@ -122,6 +124,20 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
       }
       
       setActiveKnowledgeBase(collectionId)
+    }
+  }
+
+  const handleReindex = async (collectionId: string) => {
+    if (reindexingId) return
+    setReindexingId(collectionId)
+    try {
+      await apiClient.reindexCollection(collectionId)
+      await loadCollections()
+    } catch (error) {
+      console.error('触发重新索引失败:', error)
+      alert('触发重新索引失败: ' + (error as Error).message)
+    } finally {
+      setReindexingId(null)
     }
   }
 
@@ -230,6 +246,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                 <div className="border-t border-gray-200/50 px-4 py-3 bg-gray-50/50 flex space-x-2">
                   <div className="flex-1 h-8 rounded shimmer" />
                   <div className="flex-1 h-8 rounded shimmer" />
+                  <div className="flex-1 h-8 rounded shimmer" />
                 </div>
               </div>
             ))}
@@ -305,13 +322,28 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                     <CogIcon className="w-3 h-3" />
                     <span>管理</span>
                   </button>
-                  
+
                   <button
                     onClick={() => handleChatClick(collection.id)}
                     className="flex-1 flex items-center justify-center space-x-1 py-2 px-3 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors text-sm"
                   >
                     <ChatBubbleLeftRightIcon className="w-3 h-3" />
                     <span>聊天</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleReindex(collection.id)}
+                    disabled={!collection.needs_reindex || reindexingId === collection.id}
+                    className={clsx(
+                      'flex items-center justify-center space-x-1 py-2 px-3 border rounded-md transition-colors text-sm',
+                      collection.needs_reindex && reindexingId !== collection.id
+                        ? 'bg-white hover:bg-amber-50 border-amber-300 text-amber-700'
+                        : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                    )}
+                    title={collection.needs_reindex ? '向量化参数已变更，点击重新索引' : '当前索引参数已是最新'}
+                  >
+                    <ArrowPathIcon className={clsx('w-3 h-3', reindexingId === collection.id && 'animate-spin')} />
+                    <span>{reindexingId === collection.id ? '索引中' : '重新索引'}</span>
                   </button>
                 </div>
               </div>

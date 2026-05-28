@@ -18,6 +18,13 @@ from services.llm_service import LLMService
 logger = logging.getLogger(__name__)
 
 
+def compute_index_version() -> str:
+    """Compute the current index parameter fingerprint."""
+    from data_processing.text_splitter import create_document_processor
+    processor = create_document_processor()
+    return f"chunk{processor.text_splitter._chunk_size}_overlap{processor.text_splitter._chunk_overlap}"
+
+
 class CollectionService:
     """Service for managing document collections"""
 
@@ -40,13 +47,22 @@ class CollectionService:
 
     def _to_response(self, collection: CollectionDTO) -> CollectionResponse:
         """Convert Collection model to response model"""
+        current_version = compute_index_version()
+        doc_count = collection.document_count or 0
+        needs_reindex = (
+            collection.index_version is not None
+            and collection.index_version != current_version
+            and doc_count > 0
+        )
         return CollectionResponse(
             id=collection.id or "",
             name=collection.name or "",
             description=collection.description or "",
             source_language=collection.source_language,
-            document_count=collection.document_count or 0,
+            document_count=doc_count,
             vector_count=collection.vector_count or 0,
+            index_version=collection.index_version,
+            needs_reindex=needs_reindex,
             created_at=collection.created_at.isoformat() if collection.created_at else "",
             updated_at=collection.updated_at.isoformat() if collection.updated_at else ""
         )

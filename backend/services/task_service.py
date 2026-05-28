@@ -606,6 +606,8 @@ class TaskService:
                 await self._process_file_ingestion(task_id, task.collection_id, input_params)
             elif task.type == "ingest_urls":
                 await self._process_url_ingestion(task_id, task.collection_id, input_params)
+            elif task.type == "reindex_collection":
+                await self._process_reindex_collection(task_id, task.collection_id)
             else:
                 error_msg = f"Unknown task type: {task.type}"
                 logger.error(error_msg)
@@ -616,6 +618,10 @@ class TaskService:
             if self._check_task_cancelled(task_id):
                 await self._apply_stop(task_id)
                 return
+
+            # Write current index_version to collection on success
+            from services.collection_service import compute_index_version
+            self.collection_service.collection_repo.update(task.collection_id, index_version=compute_index_version())
 
             # Refresh collection summary on success
             await self.collection_service.refresh_collection_summary(task.collection_id)
@@ -771,6 +777,78 @@ class TaskService:
                 )
 
         return len(chunk_records)
+
+    async def _process_reindex_collection(self, task_id: str, collection_id: str):
+        """Re-index all documents in a collection with current chunking parameters."""
+        self._log_info_task(task_id, "Starting collection re-indexing")
+
+        # Get all indexed documents for this collection
+        docs = self.doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
+        indexed_docs = [doc for doc in docs if doc.status == "indexed" and doc.content]
+        total = len(indexed_docs)
+
+        if not indexed_docs:
+            self._log_info_task(task_id, "No indexed documents to re-index")
+            return
+
+        self._log_info_task(task_id, f"Re-indexing {total} documents with current chunking parameters")
+
+        # Delete all existing chunks and vectors for this collection
+        chroma_collection = await self.chroma_manager.get_collection(collection_id)
+        for doc in indexed_docs:
+            if doc.id:
+                try:
+                    if chroma_collection:
+                        chroma_collection.delete(where={"document_id": doc.id})
+                    self.doc_chunk_repo.delete_by_document(doc.id)
+                except Exception as e:
+                    logger.warning(f"Failed to clean up existing data for doc {doc.id}: {e}")
+
+        # Re-chunk, re-embed, and re-store each document
+        completed = 0
+        for doc in indexed_docs:
+            if self._check_task_cancelled(task_id):
+                return
+
+            assert doc.id and doc.content
+            title = doc.name or doc.uri or ""
+
+            try:
+                # Re-chunk with current parameters
+                chunks = self.document_processor.process_file_content(
+                    doc.uri or title, doc.content, doc.mime_type or "text"
+                )
+                texts = [chunk.content for chunk in chunks]
+
+                if texts:
+                    chunk_embeddings = await self.llm_service.embed_documents(texts)
+                else:
+                    chunk_embeddings = []
+
+                # Re-store (reuse existing document ID to keep references intact)
+                await self._store_document(
+                    collection_id=collection_id,
+                    doc_page_uri=doc.uri or f"file://reindex/{doc.id}",
+                    doc_title=title,
+                    doc_content=doc.content,
+                    doc_summary=doc.summary or "",
+                    doc_mime_type=doc.mime_type or "text/plain",
+                    doc_status="indexed",
+                    doc_error_message=None,
+                    chunks=chunks,
+                    chunk_embeddings=chunk_embeddings,
+                    source_task_id=task_id,
+                )
+
+                completed += 1
+                progress = int(completed / total * 100)
+                self.task_repo.update_progress(task_id, progress)
+                self._log_info_task(task_id, f"Re-indexed ({completed}/{total}): {title}")
+
+            except Exception as e:
+                self._log_err_task(task_id, f"Failed to re-index {title}: {e}")
+
+        self._log_info_task(task_id, f"Re-indexing complete: {completed}/{total} documents")
 
     async def _process_file_ingestion(
         self,

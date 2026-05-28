@@ -188,3 +188,27 @@ async def serve_static_file(collection_id: str, path: str, request: Request):
         raise HTTPNotFoundException(f"Static file not found: {path}")
 
     return FileResponse(str(file_path))
+
+
+@router.post("/collections/{collection_id}/reindex", status_code=status.HTTP_202_ACCEPTED)
+async def reindex_collection(collection_id: str, request: Request):
+    """Trigger re-indexing of all documents in a collection with current chunking parameters."""
+    app_state = get_app_state(request)
+    task_service = app_state.task_service
+
+    # Verify collection exists and has documents
+    collection = await app_state.collection_service.get_collection(collection_id)
+    if not collection:
+        raise HTTPNotFoundException(f"Collection '{collection_id}' not found")
+    if collection.document_count == 0:
+        raise HTTPBadRequestException(f"Collection '{collection_id}' has no documents to re-index")
+
+    task = await task_service.create_task(
+        task_type="reindex_collection",
+        collection_id=collection_id,
+        input_params={},
+    )
+
+    logger.info(f"Created reindex task {task.task_id} for collection {collection_id}")
+
+    return {"task_id": task.task_id, "status": task.status}
