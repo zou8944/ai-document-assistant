@@ -115,36 +115,36 @@ const ThinkingBlock: React.FC<{ step: AgentStep; isRunning: boolean }> = ({ step
 
   return (
     <div
-      className="rounded-2xl border border-[#D1D1D6] cursor-pointer overflow-hidden"
+      className="rounded-xl border border-[#D1D1D6] cursor-pointer overflow-hidden"
       onClick={() => setExpanded((v) => !v)}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.5">
+      <div className="flex items-center justify-between px-3 py-2">
         <div className="flex items-center space-x-2">
-          <SparklesIcon className="w-5 h-5 text-[#8E8E93]" />
-          <span className="text-[13px] font-medium text-[#1c1c1e]">思考过程</span>
+          <SparklesIcon className="w-4 h-4 text-[#8E8E93]" />
+          <span className="text-[12px] font-medium text-[#1c1c1e]">思考过程</span>
           {isRunning && (
             <span className="w-1.5 h-1.5 rounded-full bg-[#8E8E93] animate-pulse" />
           )}
         </div>
-        <div className="flex items-center space-x-1.5">
+        <div className="flex items-center space-x-1">
           {step.thinkingMs !== undefined && !isRunning && (
-            <span className="text-[11px] text-[#AEAEB2] tabular-nums">
+            <span className="text-[10px] text-[#AEAEB2] tabular-nums">
               {step.thinkingMs >= 1000
                 ? `${(step.thinkingMs / 1000).toFixed(1)}s`
                 : `${step.thinkingMs}ms`}
             </span>
           )}
           <div className={clsx('transition-transform duration-200', expanded && 'rotate-180')}>
-            <ChevronDownIcon className="w-4 h-4 text-[#AEAEB2]" />
+            <ChevronDownIcon className="w-3.5 h-3.5 text-[#AEAEB2]" />
           </div>
         </div>
       </div>
 
       {/* Body */}
       <Collapsible expanded={expanded}>
-        <div className="px-4 pb-3 pt-0 ml-7">
-          <p className="text-[13px] text-[#3A3A3C] leading-[1.7] whitespace-pre-wrap">
+        <div className="px-3 pb-2 pt-0 ml-6">
+          <p className="text-[12px] text-[#3A3A3C] leading-[1.5] whitespace-pre-wrap">
             {step.text}
           </p>
         </div>
