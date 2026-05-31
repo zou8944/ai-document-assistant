@@ -2,6 +2,8 @@
 
 基于 React + Python 的 AI 文档阅读助手，支持本地文件处理和网站内容抓取，提供智能问答功能。
 
+> **Vibe Coding 项目** — 本项目主要通过 AI 辅助编程（Claude Code）完成，代码由 AI 生成并经人工审查，非纯手工编写。
+
 ## 功能
 
 - 支持 PDF、Word、Markdown、文本等多种格式
