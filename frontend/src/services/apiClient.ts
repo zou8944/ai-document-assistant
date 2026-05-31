@@ -182,6 +182,21 @@ export interface Settings {
   system: SystemConfig
 }
 
+export interface SettingItem {
+  key: string
+  value: string
+  value_type: string
+  category: string
+  description: string
+  is_sensitive: boolean
+  has_value?: boolean
+}
+
+export interface ConfigStatus {
+  complete: boolean
+  missing_keys: string[]
+}
+
 // Streaming types for SSE
 export interface SSEEvent {
   event: string
@@ -871,6 +886,36 @@ export class DocumentAssistantAPI {
       body: JSON.stringify(settings),
     })
   }
+
+  /**
+   * Check if critical configuration is complete
+   */
+  async getConfigStatus(): Promise<APIResponse<ConfigStatus>> {
+    return this.request<APIResponse<ConfigStatus>>('/api/v1/settings/status')
+  }
+
+  /**
+   * List all DB-backed settings, optionally filtered by category
+   */
+  async listSettingsItems(category?: string): Promise<APIResponse<SettingItem[]>> {
+    const query = category ? `?category=${category}` : ''
+    return this.request<APIResponse<SettingItem[]>>(`/api/v1/settings/items${query}`)
+  }
+
+  /**
+   * Batch upsert settings (used by setup wizard)
+   */
+  async upsertSettingsBatch(
+    items: SettingItem[]
+  ): Promise<APIResponse<{ complete: boolean; missing_keys: string[] }>> {
+    return this.request<APIResponse<{ complete: boolean; missing_keys: string[] }>>(
+      '/api/v1/settings/items/batch',
+      {
+        method: 'PUT',
+        body: JSON.stringify({ items }),
+      }
+    )
+  }
 }
 
 // Singleton instance management
@@ -906,11 +951,17 @@ export const useAPIClient = () => {
 
 // Helper function to extract data from API response
 export const extractData = <T>(response: APIResponse<T>): T => {
-  if (response.code !== 'Success') {
-    throw new Error(response.message || 'API request failed')
+  console.log('[extractData] response:', response)
+  // Handle both wrapped ({code, data}) and unwrapped (raw data) responses
+  if (response && typeof response === 'object' && 'code' in response) {
+    if (response.code !== 'Success') {
+      throw new Error(response.message || 'API request failed')
+    }
+    if (response.data === null || response.data === undefined) {
+      throw new Error('Response data is null')
+    }
+    return response.data as T
   }
-  if (response.data === null) {
-    throw new Error('Response data is null')
-  }
-  return response.data as T
+  // Fallback: response is already the data (unwrapped)
+  return response as T
 }

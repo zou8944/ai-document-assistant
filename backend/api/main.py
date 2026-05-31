@@ -28,7 +28,7 @@ from api.routes import (  # noqa: E402
     tasks,
 )
 from api.state import AppState, get_app_state_direct, set_app_state  # noqa: E402
-from config import get_config  # noqa: E402
+from config import get_config, load_config_from_db  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -38,13 +38,13 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager"""
 
     try:
-        # Initialize configuration
-        config = get_config()
+        # Initialize configuration (TOML fallback for pre-DB log config)
+        bootstrap_config = get_config()
 
         # 重新配置日志（uvicorn 会重置日志配置，所以需要在这里重新应用）
         from logging_config import configure_logging
 
-        configure_logging(config)
+        configure_logging(bootstrap_config)
 
         # 重新获取 logger，确保使用新配置
         global logger
@@ -55,6 +55,14 @@ async def lifespan(app: FastAPI):
         logger.info("Running database migrations...")
         alembic_cfg = Config("alembic.ini")
         command.upgrade(alembic_cfg, "head")
+
+        # Seed default settings into database
+        from settings_util import ensure_defaults
+        ensure_defaults()
+
+        # Load configuration from database (single source of truth)
+        config = load_config_from_db()
+        configure_logging(config)
 
         # Initialize services
         logger.info("Initializing services...")

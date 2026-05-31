@@ -1,10 +1,11 @@
 /**
- * Main App component with startup screen and main layout
+ * Main App component with startup screen, setup wizard, and main layout
  */
 
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import MainLayout from './components/layout/MainLayout'
 import StartupScreen from './components/StartupScreen'
+import SetupWizard from './components/settings/SetupWizard'
 import useStartup from './hooks/useStartup'
 import { useAPIClient, extractData } from './services/apiClient'
 import { useAppStore } from './store/appStore'
@@ -15,13 +16,32 @@ export const App: React.FC = () => {
   const setChatSessions = useAppStore((s) => s.setChatSessions)
   const bootstrapped = useRef(false)
 
-  // Once backend is ready, load chat list from server (single source of truth)
+  // Config completeness state
+  const [configChecked, setConfigChecked] = useState(false)
+  const [configComplete, setConfigComplete] = useState(true)
+
+  // Once backend is ready, check config status then load chat list
   useEffect(() => {
     if (!isReady || bootstrapped.current) return
     bootstrapped.current = true
 
-    apiClient.listChats(0, 1000)
-      .then((res) => {
+    const bootstrap = async () => {
+      try {
+        // Check config completeness first
+        const statusRes = await apiClient.getConfigStatus()
+        const status = extractData(statusRes)
+
+        if (!status?.complete) {
+          setConfigComplete(false)
+          setConfigChecked(true)
+          return
+        }
+
+        setConfigComplete(true)
+        setConfigChecked(true)
+
+        // Load chat list from server
+        const res = await apiClient.listChats(0, 1000)
         const data = extractData(res)
         const sessions = data.chats.map((chat) => ({
           id: chat.chat_id,
@@ -33,19 +53,56 @@ export const App: React.FC = () => {
           boundCollectionId: chat.bound_collection_id,
         }))
         setChatSessions(sessions)
-      })
-      .catch((err) => {
-        console.error('Failed to load chat list:', err)
-      })
+      } catch (err) {
+        console.error('Bootstrap failed:', err)
+        // If config check fails, assume config is incomplete
+        setConfigComplete(false)
+        setConfigChecked(true)
+      }
+    }
+
+    bootstrap()
   }, [isReady, apiClient, setChatSessions])
 
-  // Show startup screen while loading or if there's an error
+  // Called when setup wizard completes
+  const handleSetupComplete = async () => {
+    setConfigComplete(true)
+    // Load chats after setup
+    try {
+      const res = await apiClient.listChats(0, 1000)
+      const data = extractData(res)
+      const sessions = data.chats.map((chat) => ({
+        id: chat.chat_id,
+        name: chat.name,
+        knowledgeBaseIds: chat.collection_ids || [],
+        createdAt: chat.created_at,
+        lastMessageAt: chat.last_message_at || chat.created_at,
+        messageCount: chat.message_count || 0,
+        boundCollectionId: chat.bound_collection_id,
+      }))
+      setChatSessions(sessions)
+    } catch (err) {
+      console.error('Failed to load chats after setup:', err)
+    }
+  }
+
+  // Show startup screen while loading
   if (isLoading || !isReady) {
     return (
       <StartupScreen
         message={error ? `${message} - ${error}` : message}
       />
     )
+  }
+
+  // Show setup wizard if config is incomplete
+  if (configChecked && !configComplete) {
+    return <SetupWizard onComplete={handleSetupComplete} />
+  }
+
+  // Still checking config
+  if (!configChecked) {
+    return <StartupScreen message="正在检查配置..." />
   }
 
   return (

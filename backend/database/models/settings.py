@@ -48,7 +48,8 @@ class Settings(Base):
             name="chk_settings_value_type",
         ),
         CheckConstraint(
-            "category IN ('general', 'llm', 'embedding', 'paths', 'crawler')",
+            "category IN ('general', 'llm', 'embedding', 'paths', 'crawler', "
+            "'credentials', 'business', 'system', 'crawl', 'agent')",
             name="chk_settings_category",
         ),
         Index("idx_settings_category", "category"),
