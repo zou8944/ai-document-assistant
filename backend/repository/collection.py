@@ -20,7 +20,7 @@ class CollectionRepository(BaseRepository[Collection, CollectionDTO]):
         with session_context() as session:
             query = select(Collection).where(
                 Collection.name.ilike(f"%{search_term}%")
-            ).order_by(Collection.updated_at.desc())
+            ).order_by(Collection.created_at.desc())
 
             entities = list(session.scalars(query))
             return [self.dto_class.from_orm(item) for item in entities]
@@ -94,7 +94,7 @@ class CollectionRepository(BaseRepository[Collection, CollectionDTO]):
             if search:
                 query = query.where(Collection.name.ilike(f"%{search}%"))
 
-            query = query.order_by(Collection.updated_at.desc()).offset(offset)
+            query = query.order_by(Collection.created_at.desc()).offset(offset)
 
             if limit:
                 query = query.limit(limit)
