@@ -170,17 +170,24 @@ class LLMService:
     async def generate_readme_content(self, groups: list[dict], language: str = "en", total_pages: int = 0) -> str:
         """Generate README markdown. For 'zh' generates Chinese, otherwise English.
 
-        The number of representative pages per group scales with total document count:
+        The number of representative pages per group scales with total document count and group count:
         - < 30 pages: list all pages per group
-        - 30-100 pages: up to 40 per group
-        - > 100 pages: up to 45 per group
+        - 30-100 pages: up to 20 per group
+        - > 100 pages: up to 15 per group (further reduced if many groups)
         """
+        num_groups = len(groups)
         if total_pages < 30:
             max_per_group = total_pages  # effectively unlimited
         elif total_pages <= 100:
-            max_per_group = 40
+            max_per_group = 20
         else:
-            max_per_group = 45
+            # For large page counts, reduce per-group limit based on group count
+            if num_groups > 20:
+                max_per_group = 8
+            elif num_groups > 10:
+                max_per_group = 12
+            else:
+                max_per_group = 15
 
         groups_text = self._build_groups_text(groups, max_per_group=max_per_group)
 
@@ -245,11 +252,142 @@ Groups:
             [{"category": str, "pages": [{"id": str, "path": str, "title": str}, ...]}]
         Guarantees 100% coverage - all pages are assigned to a group.
         Raises exception on failure (no fallback).
+
+        For large page counts (>80), uses batch processing with AI-assisted merging.
+        """
+        if len(pages) <= 80:
+            return await self._categorize_pages_batch(pages)
+
+        # Batch processing for large page counts
+        batch_size = 80
+        all_groups: list[dict] = []
+        existing_categories: list[str] = []
+
+        logger.info(f"[categorize_pages] Using batch processing for {len(pages)} pages (batch_size={batch_size})")
+
+        for i in range(0, len(pages), batch_size):
+            batch = pages[i:i + batch_size]
+            batch_num = i // batch_size + 1
+            total_batches = (len(pages) + batch_size - 1) // batch_size
+            logger.info(f"[categorize_pages] Processing batch {batch_num}/{total_batches} ({len(batch)} pages)")
+
+            try:
+                batch_groups = await self._categorize_pages_batch(batch, existing_categories)
+                all_groups.extend(batch_groups)
+                # Update existing categories for next batch
+                existing_categories = list({g["category"] for g in all_groups})
+            except Exception as e:
+                logger.error(f"[categorize_pages] Batch {batch_num} failed: {e}")
+                all_groups.append({
+                    "category": "Other",
+                    "pages": batch,
+                })
+
+        # Final AI merge: consolidate similar category names
+        if len(all_groups) > 10:
+            logger.info(f"[categorize_pages] Running final AI merge for {len(all_groups)} groups")
+            result = await self._merge_categories_with_ai(all_groups)
+        else:
+            # Simple code merge for small group counts
+            result = self._merge_categories_by_name(all_groups)
+
+        logger.info(f"[categorize_pages] Batch processing complete: {len(result)} groups from {len(pages)} pages")
+        return result
+
+    def _merge_categories_by_name(self, all_groups: list[dict]) -> list[dict]:
+        """Merge groups with same category name using code logic."""
+        merged: dict[str, list[dict]] = {}
+        for g in all_groups:
+            cat = g["category"]
+            if cat not in merged:
+                merged[cat] = []
+            merged[cat].extend(g["pages"])
+
+        result = [{"category": cat, "pages": pgs} for cat, pgs in merged.items()]
+
+        # Keep "Other" at the end
+        other = [g for g in result if g["category"] == "Other"]
+        non_other = [g for g in result if g["category"] != "Other"]
+        return non_other + other
+
+    async def _merge_categories_with_ai(self, all_groups: list[dict]) -> list[dict]:
+        """Use AI to merge similar category names."""
+        # Build summary of current groups
+        groups_summary = []
+        for i, g in enumerate(all_groups):
+            groups_summary.append({
+                "index": i,
+                "name": g["category"],
+                "count": len(g["pages"])
+            })
+
+        summary_text = json.dumps(groups_summary, ensure_ascii=False, indent=2)
+
+        prompt = f"""You are consolidating documentation categories. The following groups were created by different batches and may have similar names that should be merged.
+
+Current groups:
+{summary_text}
+
+Instructions:
+1. Identify groups with similar or duplicate names (e.g., "API Reference" and "API Docs", "Getting Started" and "Introduction")
+2. Create a mapping from old names to new merged names
+3. Keep meaningful distinct categories separate
+4. If a group named "Other" exists, keep it as-is
+
+Return ONLY a JSON object mapping old category names to new merged names:
+{{"Old Name 1": "New Name", "Old Name 2": "New Name", ...}}"""
+
+        try:
+            logger.info(f"[_merge_categories_with_ai] Merging {len(all_groups)} categories")
+            raw = await self._invoke_crawl_llm(prompt, max_tokens=2000)
+            cleaned = raw.strip()
+            if cleaned.startswith("```"):
+                cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
+                cleaned = re.sub(r"\n?```$", "", cleaned)
+                cleaned = cleaned.strip()
+
+            name_mapping = json.loads(cleaned)
+            logger.info(f"[_merge_categories_with_ai] Mapping: {name_mapping}")
+
+            # Apply mapping
+            merged: dict[str, list[dict]] = {}
+            for g in all_groups:
+                old_name = g["category"]
+                new_name = name_mapping.get(old_name, old_name)
+                if new_name not in merged:
+                    merged[new_name] = []
+                merged[new_name].extend(g["pages"])
+
+        except Exception as e:
+            logger.warning(f"[_merge_categories_with_ai] AI merge failed: {e}, falling back to code merge")
+            return self._merge_categories_by_name(all_groups)
+
+        result = [{"category": cat, "pages": pgs} for cat, pgs in merged.items()]
+        # Keep "Other" at the end
+        other = [g for g in result if g["category"] == "Other"]
+        non_other = [g for g in result if g["category"] != "Other"]
+        return non_other + other
+
+    async def _categorize_pages_batch(self, pages: list[dict], existing_categories: list[str] | None = None) -> list[dict]:
+        """Categorize a single batch of pages (max 80).
+
+        Args:
+            pages: List of page dicts with 'id', 'path', 'title'.
+            existing_categories: If provided, AI should prefer these category names for consistency.
         """
         pages_text = "\n".join(f"- {p['id']}: {p['path']}: {p['title']}" for p in pages)
 
+        existing_hint = ""
+        if existing_categories:
+            existing_hint = f"""
+IMPORTANT: Previous batches have already created these categories. When a page fits one of these categories, use the EXACT same name:
+{', '.join(existing_categories)}
+
+You may also create new categories if needed, but prefer existing ones when appropriate."""
+
         prompt = f"""You are organizing documentation pages into logical topic groups.
 Analyze the page paths and titles below, and group them by content/theme similarity.
+{existing_hint}
 
 Each page must belong to exactly one group. Create meaningful, concise group names (2-4 words).
 The number of groups should be natural based on content diversity (typically 4-10 groups).
@@ -268,7 +406,7 @@ Return ONLY a JSON object in this exact format:
     }}
   ]
 }}"""
-        logger.info(f"[categorize_pages] pages={len(pages)}, prompt_len={len(prompt)}")
+        logger.info(f"[_categorize_pages_batch] pages={len(pages)}, prompt_len={len(prompt)}")
         raw = await self._invoke_crawl_llm(prompt, max_tokens=self.config.llm.max_tokens)
         cleaned = raw.strip()
         if cleaned.startswith("```"):
@@ -319,7 +457,7 @@ Return ONLY a JSON object in this exact format:
         other = [g for g in result if g["category"] == "Other"]
         non_other = [g for g in result if g["category"] != "Other"]
         result = non_other + other
-        logger.info(f"[categorize_pages] produced {len(result)} groups, covering {len(covered_ids | missing_ids)} pages")
+        logger.info(f"[_categorize_pages_batch] produced {len(result)} groups, covering {len(covered_ids | missing_ids)} pages")
         return result
 
     def _ensure_other_last(self, groups: list[dict]) -> list[dict]:
