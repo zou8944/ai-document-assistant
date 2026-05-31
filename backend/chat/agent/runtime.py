@@ -56,6 +56,13 @@ class AgentRuntime:
         transcript: TranscriptWriter | None = None,
     ) -> AsyncIterator[SSEEvent]:
         messages: list[dict] = [dict(m) for m in history]
+        # Inject constraint reminder when history exists so the LLM won't
+        # skip retrieval and answer from its own knowledge.
+        if history:
+            messages.append({
+                "role": "user",
+                "content": "[约束] 回答必须基于知识库文档，禁止凭通用知识回答。可复用之前检索结果，不足时请调用搜索工具重新检索。每次必须调用 cite_sources。",
+            })
         messages.append({"role": "user", "content": query})
 
         yield SSEEvent(
