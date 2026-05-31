@@ -18,6 +18,14 @@ logger = logging.getLogger(__name__)
 # Overall timeout (seconds) for any single LLM call; prevents Ctrl+C from hanging
 LLM_TIMEOUT = 300
 
+# Max consecutive failures before aborting task
+MAX_CONSECUTIVE_FAILURES = 3
+
+
+class LLMConsecutiveFailureError(Exception):
+    """Raised when LLM API calls fail consecutively."""
+    pass
+
 
 class LLMService:
     """Centralized service for all LLM-related operations"""
@@ -49,31 +57,80 @@ class LLMService:
         # Initialize output parser for text generation
         self.text_parser = StrOutputParser()
 
+        # Consecutive failure tracking for task abort
+        self._consecutive_failures = 0
+
         logger.info("LLMService initialized successfully")
+
+    def reset_failure_counter(self):
+        """Reset consecutive failure counter. Call at task start."""
+        self._consecutive_failures = 0
+
+    def _on_success(self):
+        """Reset failure counter on success."""
+        self._consecutive_failures = 0
+
+    def _on_failure(self, error: Exception):
+        """Increment failure counter and raise if exceeded."""
+        self._consecutive_failures += 1
+        if self._consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+            raise LLMConsecutiveFailureError(
+                f"AI API 连续 {self._consecutive_failures} 次调用失败，中止任务"
+            ) from error
 
     # ==================== Embedding Operations ====================
 
     async def embed_query(self, query: str) -> list[float]:
         logger.info("[LLM] embed_query start, model=%s, query_len=%d", self.embeddings.model, len(query))
         t0 = time.monotonic()
-        result = await asyncio.wait_for(self.embeddings.aembed_query(query), timeout=LLM_TIMEOUT)
-        logger.info("[LLM] embed_query done, %.2fs", time.monotonic() - t0)
-        return result
+        try:
+            result = await asyncio.wait_for(self.embeddings.aembed_query(query), timeout=LLM_TIMEOUT)
+            self._on_success()
+            logger.info("[LLM] embed_query done, %.2fs", time.monotonic() - t0)
+            return result
+        except LLMConsecutiveFailureError:
+            raise
+        except Exception as e:
+            self._on_failure(e)
+            raise
 
     async def embed_documents(self, texts: list[str]) -> list[list[float]]:
         logger.info("[LLM] embed_documents start, model=%s, count=%d", self.embeddings.model, len(texts))
         t0 = time.monotonic()
-        result = await asyncio.wait_for(self.embeddings.aembed_documents(texts), timeout=LLM_TIMEOUT)
-        logger.info("[LLM] embed_documents done, %.2fs", time.monotonic() - t0)
-        return result
+        try:
+            result = await asyncio.wait_for(self.embeddings.aembed_documents(texts), timeout=LLM_TIMEOUT)
+            self._on_success()
+            logger.info("[LLM] embed_documents done, %.2fs", time.monotonic() - t0)
+            return result
+        except LLMConsecutiveFailureError:
+            raise
+        except Exception as e:
+            self._on_failure(e)
+            raise
 
     # ==================== Document Summarization ====================
 
     async def summarize_document(self, content: str) -> str:
-        return await self.document_summarizer.summarize_document_async(content, llm=self.crawl_llm)
+        try:
+            result = await self.document_summarizer.summarize_document_async(content, llm=self.crawl_llm)
+            self._on_success()
+            return result
+        except LLMConsecutiveFailureError:
+            raise
+        except Exception as e:
+            self._on_failure(e)
+            raise
 
     async def summarize_collection(self, document_summaries: list[str]) -> str:
-        return await self.document_summarizer.summarize_collection_async(document_summaries, llm=self.crawl_llm)
+        try:
+            result = await self.document_summarizer.summarize_collection_async(document_summaries, llm=self.crawl_llm)
+            self._on_success()
+            return result
+        except LLMConsecutiveFailureError:
+            raise
+        except Exception as e:
+            self._on_failure(e)
+            raise
 
     # ==================== README Generation ====================
 
@@ -455,12 +512,19 @@ Format:
     async def _invoke_crawl_llm(self, prompt: str, **kwargs) -> str:
         logger.info("[LLM] _invoke_crawl_llm start, model=%s, prompt_len=%d", self.crawl_llm.model_name, len(prompt))
         t0 = time.monotonic()
-        result = await asyncio.wait_for(
-            self.crawl_llm.ainvoke(prompt, **kwargs), timeout=LLM_TIMEOUT
-        )
-        output = str(result.content) if hasattr(result, 'content') and result is not None else str(result)
-        logger.info("[LLM] _invoke_crawl_llm done, %.2fs, output_len=%d", time.monotonic() - t0, len(output))
-        return output
+        try:
+            result = await asyncio.wait_for(
+                self.crawl_llm.ainvoke(prompt, **kwargs), timeout=LLM_TIMEOUT
+            )
+            output = str(result.content) if hasattr(result, 'content') and result is not None else str(result)
+            self._on_success()
+            logger.info("[LLM] _invoke_crawl_llm done, %.2fs, output_len=%d", time.monotonic() - t0, len(output))
+            return output
+        except LLMConsecutiveFailureError:
+            raise
+        except Exception as e:
+            self._on_failure(e)
+            raise
 
     def close(self):
         logger.info("LLMService resources closed")

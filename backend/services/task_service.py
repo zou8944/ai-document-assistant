@@ -33,7 +33,7 @@ from models.responses import TaskResponse
 from repository.document import DocumentChunkRepository, DocumentRepository
 from repository.task import TaskLogRepository, TaskRepository
 from services.collection_service import CollectionService
-from services.llm_service import LLMService
+from services.llm_service import LLMConsecutiveFailureError, LLMService
 from vector_store.chroma_client import create_chroma_manager
 
 logger = logging.getLogger(__name__)
@@ -571,6 +571,9 @@ class TaskService:
             current = self.task_repo.get_by_id(task_id)
             if not current or current.status != "stopped":
                 self.task_repo.update_status(task_id, "stopped")
+        except LLMConsecutiveFailureError as e:
+            logger.error(f"Task {task_id} aborted: {e}")
+            self.task_repo.mark_completed(task_id, success=False, error_message=str(e))
         except Exception as e:
             logger.error(f"Error processing task {task_id}: {e}", exc_info=True)
             self.task_repo.mark_completed(task_id, success=False, error_message=str(e))
@@ -581,6 +584,9 @@ class TaskService:
         if not task:
             logger.error(f"Task {task_id} not found")
             return
+
+        # Reset LLM failure counter at task start
+        self.llm_service.reset_failure_counter()
 
         # Reset crawler stop state so a restarted task can run
         self.web_crawler.clear_stop()
