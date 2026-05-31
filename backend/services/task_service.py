@@ -500,9 +500,6 @@ class TaskService:
             logger.warning("Workers already running")
             return
 
-        # Requeue processing tasks
-        await self.requeue_processing_task()
-
         self.running = True
         self.executor.submit(self._sync_worker, "Task_queue_worker")
 

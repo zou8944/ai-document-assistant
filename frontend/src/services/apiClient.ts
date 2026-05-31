@@ -548,6 +548,16 @@ export class DocumentAssistantAPI {
   }
 
   /**
+   * Restart all pending/processing tasks (for startup recovery)
+   */
+  async restartPendingTasks(): Promise<APIResponse<{ restarted: string[] }>> {
+    return this.request<APIResponse<{ restarted: string[] }>>(
+      '/api/v1/tasks/restart-pending',
+      { method: 'POST' }
+    )
+  }
+
+  /**
    * Cleanup task resources and reset to pending
    */
   async cleanupTask(taskId: string): Promise<APIResponse<{ success: boolean }>> {

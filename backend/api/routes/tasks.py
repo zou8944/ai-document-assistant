@@ -108,3 +108,19 @@ async def list_tasks(
         tasks = [task_service._to_response(t) for t in tasks]
 
     return {"tasks": tasks}
+
+
+@router.post("/tasks/restart-pending")
+async def restart_pending_tasks(request: Request):
+    """
+    Restart all pending/processing tasks (for startup recovery)
+    """
+    task_service = get_app_state(request).task_service
+
+    tasks = task_service.task_repo.get_active_tasks()
+    restarted = []
+    for task in tasks:
+        await task_service.restart_task(task.id)
+        restarted.append(task.id)
+
+    return {"restarted": restarted}

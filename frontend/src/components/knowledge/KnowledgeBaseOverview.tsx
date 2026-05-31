@@ -31,6 +31,9 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
   const [loading, setLoading] = useState(true)
   const [reindexingId, setReindexingId] = useState<string | null>(null)
   const [activeTasks, setActiveTasks] = useState<Task[]>([])
+  const [showRestartModal, setShowRestartModal] = useState(false)
+  const [pendingRestartTasks, setPendingRestartTasks] = useState<Task[]>([])
+  const [restarting, setRestarting] = useState(false)
   const apiClient = useAPIClient()
 
   const {
@@ -94,9 +97,36 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
       const response = await apiClient.listTasks(['pending', 'processing', 'failed'])
       const data = extractData(response)
       setActiveTasks(data.tasks)
+
+      // Check if there are tasks needing restart (pending/processing)
+      const needsRestart = data.tasks.filter(
+        (t: Task) => t.status === 'pending' || t.status === 'processing'
+      )
+      if (needsRestart.length > 0) {
+        setPendingRestartTasks(needsRestart)
+        setShowRestartModal(true)
+      }
     } catch (error) {
       console.error('加载任务列表失败:', error)
     }
+  }
+
+  const handleRestartAll = async () => {
+    try {
+      setRestarting(true)
+      await apiClient.restartPendingTasks()
+      setShowRestartModal(false)
+      await loadActiveTasks()
+    } catch (error) {
+      console.error('重启任务失败:', error)
+      alert('重启任务失败: ' + (error as Error).message)
+    } finally {
+      setRestarting(false)
+    }
+  }
+
+  const handleDismissRestart = () => {
+    setShowRestartModal(false)
   }
 
   // Group active tasks by collection_id
@@ -391,6 +421,61 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
         onSuccess={loadCollections}
       />
 
+      {/* Restart Tasks Modal */}
+      {showRestartModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 animate-fade-in">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">发现未完成任务</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                有 {pendingRestartTasks.length} 个任务需要继续处理，是否立即重启？
+              </p>
+            </div>
+            <div className="px-6 py-4 max-h-60 overflow-y-auto">
+              <div className="space-y-2">
+                {pendingRestartTasks.map(task => {
+                  const collection = collections.find(c => c.id === task.collection_id)
+                  return (
+                    <div
+                      key={task.task_id}
+                      className="flex items-center gap-3 p-2 rounded-lg bg-gray-50 border border-gray-100"
+                    >
+                      <div className={clsx(
+                        'w-2.5 h-2.5 rounded-full flex-shrink-0',
+                        task.status === 'processing' && 'bg-yellow-500 animate-pulse',
+                        task.status === 'pending' && 'bg-gray-400'
+                      )} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-800 truncate">
+                          {task.title || (task.task_type === 'ingest_urls' ? '网页抓取' : '文件上传')}
+                        </div>
+                        <div className="text-xs text-gray-500 truncate">
+                          {collection?.name || '未知知识库'}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={handleDismissRestart}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                稍后
+              </button>
+              <button
+                onClick={handleRestartAll}
+                disabled={restarting}
+                className="px-4 py-2 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors disabled:opacity-50"
+              >
+                {restarting ? '重启中...' : '重启所有'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
