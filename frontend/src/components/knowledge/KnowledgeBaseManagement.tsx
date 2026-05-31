@@ -19,6 +19,9 @@ import {
   StopIcon,
   EllipsisVerticalIcon,
   XCircleIcon,
+  PencilIcon,
+  CheckIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { useAppStore } from '../../store/appStore'
@@ -82,6 +85,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     displayLanguage,
     setDisplayLanguage,
     deleteKnowledgeBase,
+    updateKnowledgeBase,
     addChatSession,
     docChatSidebarOpen,
     setDocChatSidebarOpen,
@@ -129,6 +133,9 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const [loadingMoreLogs, setLoadingMoreLogs] = useState(false)
   const LOGS_PAGE_SIZE = 100
   const [showActionsMenu, setShowActionsMenu] = useState(false)
+  const [isRenaming, setIsRenaming] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [renaming, setRenaming] = useState(false)
   const [clearModalOpen, setClearModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [confirmName, setConfirmName] = useState('')
@@ -517,6 +524,37 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   }
 
   // Collection actions
+  const handleStartRename = () => {
+    setShowActionsMenu(false)
+    if (!currentKb) return
+    setNewName(currentKb.name)
+    setIsRenaming(true)
+  }
+
+  const handleConfirmRename = async () => {
+    if (!currentKb) return
+    const trimmed = newName.trim()
+    if (!trimmed || trimmed === currentKb.name) {
+      setIsRenaming(false)
+      return
+    }
+    setRenaming(true)
+    try {
+      await apiClient.updateCollection(currentKb.id, { name: trimmed })
+      updateKnowledgeBase(currentKb.id, { name: trimmed })
+      setIsRenaming(false)
+    } catch (err) {
+      console.error('Rename failed:', err)
+      alert('重命名失败: ' + (err as Error).message)
+    } finally {
+      setRenaming(false)
+    }
+  }
+
+  const handleCancelRename = () => {
+    setIsRenaming(false)
+  }
+
   const handleClearCollection = () => {
     setShowActionsMenu(false)
     setConfirmName('')
@@ -860,7 +898,38 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
               <ChevronLeftIcon className="w-5 h-5 text-gray-600" />
             </button>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">{currentKb.name}</h1>
+              {isRenaming ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleConfirmRename()
+                      if (e.key === 'Escape') handleCancelRename()
+                    }}
+                    autoFocus
+                    className="text-xl font-bold text-gray-900 border border-blue-300 rounded-lg px-2 py-0.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  />
+                  <button
+                    onClick={handleConfirmRename}
+                    disabled={renaming}
+                    className="p-1 text-green-600 hover:bg-green-50 rounded transition-colors"
+                    title="确认"
+                  >
+                    <CheckIcon className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={handleCancelRename}
+                    className="p-1 text-gray-400 hover:bg-gray-50 rounded transition-colors"
+                    title="取消"
+                  >
+                    <XMarkIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <h1 className="text-xl font-bold text-gray-900">{currentKb.name}</h1>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -889,6 +958,13 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
               </button>
               {showActionsMenu && (
                 <div className="absolute right-0 mt-1 w-40 bg-white rounded-lg shadow-lg border border-gray-200/50 py-1 z-50">
+                  <button
+                    onClick={handleStartRename}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <PencilIcon className="w-4 h-4" />
+                    重命名
+                  </button>
                   <button
                     onClick={handleClearCollection}
                     className="w-full flex items-center gap-2 px-4 py-2 text-sm text-yellow-700 hover:bg-yellow-50 transition-colors"
