@@ -132,6 +132,7 @@ class TaskService:
             task_id=task.id or "",
             type=task.type or "",
             status=task.status or "",
+            stage=task.stage,
             progress=task.progress_percentage or 0,
             stats=input_params,
             collection_id=task.collection_id or "",
@@ -153,6 +154,11 @@ class TaskService:
 
     def _log_err_task(self, task_id: str, message: str) -> None:
         self._log_task(task_id, "error", message)
+
+    def _update_stage(self, task_id: str, stage: str) -> None:
+        """Update task processing stage and log it."""
+        self.task_repo.update_stage(task_id, stage)
+        self._log_info_task(task_id, f"Stage: {stage}")
 
     def _log_task(self, task_id: str, level: str, message: str):
         self.task_log_repo.add_log(task_id, level, message, None)
@@ -293,7 +299,7 @@ class TaskService:
         return True
 
     async def restart_task(self, task_id: str) -> TaskResponse:
-        """Restart a completed or stopped task from scratch."""
+        """Restart a completed or stopped task, resuming from last stage if available."""
         task = self.task_repo.get_by_id(task_id)
         if not task:
             raise HTTPNotFoundException(f"Task {task_id} not found")
@@ -309,7 +315,8 @@ class TaskService:
 
         # Delete old logs before restarting
         self.task_log_repo.delete_by_task(task_id)
-        self.task_repo.reset_task(task_id)
+        # Keep stage info for resume support
+        self.task_repo.reset_task(task_id, keep_stage=True)
 
         # Submit directly to the worker event-loop for immediate start
         loop = self._worker_loop
@@ -318,7 +325,7 @@ class TaskService:
         else:
             self.task_queue.put(task_id)
 
-        logger.info(f"Restarted task {task_id}")
+        logger.info(f"Restarted task {task_id} from stage: {task.stage}")
         return self._to_response(self.task_repo.get_by_id(task_id))
 
     async def cleanup_task(self, task_id: str) -> bool:
@@ -1001,8 +1008,21 @@ class TaskService:
         collection_id: str,
         input_params: dict[str, Any]
     ):
-        """Process URL ingestion task: crawl-and-store incrementally → rewrite links → generate README"""
+        """Process URL ingestion task with stage support for resume.
+
+        Stages:
+        - crawl: Crawl and store pages
+        - vectorize: Generate embeddings for documents
+        - rewrite: Rewrite in-page links to local routes
+        - readme: Generate AI README and categories
+        """
         self._log_info_task(task_id, "Starting URL ingestion")
+
+        # Get task to check for resume stage
+        task = self.task_repo.get_by_id(task_id)
+        resume_stage = task.stage if task else None
+        if resume_stage:
+            self._log_info_task(task_id, f"Resuming from stage: {resume_stage}")
 
         urls = input_params["urls"]
         recursive_prefix = input_params["recursive_prefix"]
@@ -1013,158 +1033,189 @@ class TaskService:
         stats = UrlTaskStats()
         self.update_url_task_progress(task_id, stats)
 
-        def progress_callback(current_url: str, completed: int, total: int) -> None:
-            stats.urls_crawled = completed
-            stats.urls_crawl_total = total
-            stats.pages_total = max(stats.pages_total, total)
-            self.update_url_task_progress(task_id, stats)
-            self._log_info_task(task_id, f"Crawling page {completed + 1}/{total}: {current_url}")
+        # Stage order for resume support
+        STAGES = ["crawl", "vectorize", "rewrite_static", "categorize", "readme"]
+        start_index = STAGES.index(resume_stage) if resume_stage in STAGES else 0
 
-        # When not overriding, skip URLs already indexed in DB for this collection.
-        # Failed pages will be retried on the next run.
-        existing_docs = self.doc_repo.get_by_collection(collection_id)
-        skip_urls = {
-            d.uri for d in existing_docs if d.uri
-        }
+        # ========================================
+        # Stage: crawl
+        # ========================================
+        if start_index <= STAGES.index("crawl"):
+            self._update_stage(task_id, "crawl")
 
-        # Recover URLs discovered by previously crawled pages so that an
-        # interrupted crawl does not lose newly-found links.
-        recovered_urls: set[str] = set()
-        indexed_docs = self.doc_repo.get_by_collection(collection_id, status="indexed")
-        for doc in indexed_docs:
-            if doc.html_content and doc.uri:
-                links = self.web_crawler.extract_links_from_html(doc.html_content, doc.uri)
-                for link in links:
-                    if link in skip_urls:
-                        continue
-                    if recursive_prefix and not link.startswith(recursive_prefix):
-                        continue
-                    recovered_urls.add(link)
-
-        if recovered_urls:
-            self._log_info_task(task_id, f"Recovered {len(recovered_urls)} URLs from previously crawled pages")
-
-        seed_urls = list(dict.fromkeys(urls + list(recovered_urls)))
-
-        # Stream crawl results and process pages concurrently.
-        # The synchronous crawler runs in a background thread so its
-        # rate-limit sleeps and HTTP requests do not block the event loop.
-        # Storage and LLM summarizing run on the loop in parallel.
-        crawl_count = 0
-        sem = asyncio.Semaphore(5)
-        stats_lock = asyncio.Lock()
-
-        async def process_bg(crawl_result: SimpleCrawlResult) -> None:
-            async with sem:
-                await self._process_single_page(task_id, collection_id, crawl_result)
-            async with stats_lock:
-                stats.pages_processed += 1
+            def progress_callback(current_url: str, completed: int, total: int) -> None:
+                stats.urls_crawled = completed
+                stats.urls_crawl_total = total
+                stats.pages_total = max(stats.pages_total, total)
                 self.update_url_task_progress(task_id, stats)
+                self._log_info_task(task_id, f"Crawling page {completed + 1}/{total}: {current_url}")
 
-        pending_tasks: list[asyncio.Task] = []
+            existing_docs = self.doc_repo.get_by_collection(collection_id)
+            skip_urls = {d.uri for d in existing_docs if d.uri}
 
-        def _next_crawl_result(gen):
-            try:
-                return next(gen)
-            except StopIteration:
-                return None
+            # Recover URLs discovered by previously crawled pages
+            recovered_urls: set[str] = set()
+            indexed_docs = self.doc_repo.get_by_collection(collection_id, status="indexed")
+            for doc in indexed_docs:
+                if doc.html_content and doc.uri:
+                    links = self.web_crawler.extract_links_from_html(doc.html_content, doc.uri)
+                    for link in links:
+                        if link in skip_urls:
+                            continue
+                        if recursive_prefix and not link.startswith(recursive_prefix):
+                            continue
+                        recovered_urls.add(link)
 
-        crawl_gen = self.web_crawler.crawl_recursive_stream(
-            urls=seed_urls,
-            recursive_prefix=recursive_prefix,
-            skip_urls=skip_urls,
-            progress_callback=progress_callback,
-        )
+            if recovered_urls:
+                self._log_info_task(task_id, f"Recovered {len(recovered_urls)} URLs from previously crawled pages")
 
-        while True:
-            # Check stop flag before fetching next crawl result
-            if self._check_task_cancelled(task_id):
-                await self._apply_stop(task_id, pending_tasks)
-                return
+            seed_urls = list(dict.fromkeys(urls + list(recovered_urls)))
 
-            try:
-                crawl_result = await asyncio.to_thread(_next_crawl_result, crawl_gen)
-            except RuntimeError:
-                # Crawler was stopped
-                await self._apply_stop(task_id, pending_tasks)
-                return
-            if crawl_result is None:
-                break
-            crawl_count += 1
-            task = asyncio.create_task(process_bg(crawl_result))
-            pending_tasks.append(task)
+            crawl_count = 0
+            sem = asyncio.Semaphore(5)
+            stats_lock = asyncio.Lock()
 
-        if pending_tasks:
-            await asyncio.gather(*pending_tasks)
-        self._log_info_task(task_id, f"Incremental crawl/store completed: {crawl_count} pages processed in this run")
+            async def process_bg(crawl_result: SimpleCrawlResult) -> None:
+                async with sem:
+                    await self._process_single_page(task_id, collection_id, crawl_result)
+                async with stats_lock:
+                    stats.pages_processed += 1
+                    self.update_url_task_progress(task_id, stats)
 
-        # Phase 1.5: vectorize documents stored without vectors (idempotency recovery)
-        unvectorized = [
-            d for d in self.doc_repo.get_by_collection(collection_id, status="indexed")
-            if (d.chunk_count or 0) == 0 and d.content
-        ]
-        if unvectorized:
-            self._log_info_task(task_id, f"Vectorizing {len(unvectorized)} documents without vectors")
-            for doc in unvectorized:
+            pending_tasks: list[asyncio.Task] = []
+
+            def _next_crawl_result(gen):
                 try:
-                    chunks = self.document_processor.process_web_content(doc.uri or "", doc.content)
-                    texts = [chunk.content for chunk in chunks]
-                    chunk_embeddings = await self.llm_service.embed_documents(texts)
-                    collection = await self.chroma_manager.get_collection(collection_id)
-                    assert doc.id
-                    vector_ids = []
-                    embedding_list = []
-                    metadatas_list = []
-                    documents_list = []
-                    for i, (chunk, embedding) in enumerate(zip(chunks, chunk_embeddings)):
-                        vector_id = f"{doc.id}_chunk_{i}"
-                        chunk_record = DocumentChunkDTO(
-                            document_id=doc.id,
-                            collection_id=collection_id,
-                            chunk_index=i,
-                            content_preview=chunk.content[:200] if chunk.content else "",
-                            vector_id=vector_id,
-                            content_hash=hashlib.md5(chunk.content.encode()).hexdigest(),
-                            chunk_metadata=json.dumps(chunk.metadata)
-                        )
-                        self.doc_chunk_repo.create_by_model(chunk_record)
-                        vector_ids.append(vector_id)
-                        embedding_list.append(embedding)
-                        metadatas_list.append({
-                            "document_id": doc.id,
-                            "document_name": doc.name or "",
-                            "document_uri": doc.uri or "",
-                            "collection_id": collection_id,
-                            "chunk_index": i,
-                        })
-                        documents_list.append(chunk.content)
-                    if vector_ids and collection:
-                        collection.add(ids=vector_ids, embeddings=embedding_list, metadatas=metadatas_list, documents=documents_list)
-                    self.doc_repo.update(doc.id, chunk_count=len(chunks))
-                except Exception as e:
-                    self._log_err_task(task_id, f"Vectorization failed for {doc.uri}: {e}")
+                    return next(gen)
+                except StopIteration:
+                    return None
 
-        # Phase 2: rewrite in-page links to local routes
-        if self._check_task_cancelled(task_id):
-            await self._apply_stop(task_id)
-            return
+            crawl_gen = self.web_crawler.crawl_recursive_stream(
+                urls=seed_urls,
+                recursive_prefix=recursive_prefix,
+                skip_urls=skip_urls,
+                progress_callback=progress_callback,
+            )
 
-        docs = self.doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
-        crawled_docs = [d for d in docs if d.uri and d.source_path and d.clean_html]
-        stats.phase = "rewrite"
-        stats.rewrite_total = len(crawled_docs)
-        stats.rewrite_done = 0
-        self.update_url_task_progress(task_id, stats)
-        await self._rewrite_html_links(task_id, collection_id, stats)
+            while True:
+                if self._check_task_cancelled(task_id):
+                    await self._apply_stop(task_id, pending_tasks)
+                    return
 
-        # Phase 3: generate AI README
-        if self._check_task_cancelled(task_id):
-            await self._apply_stop(task_id)
-            return
+                try:
+                    crawl_result = await asyncio.to_thread(_next_crawl_result, crawl_gen)
+                except RuntimeError:
+                    await self._apply_stop(task_id, pending_tasks)
+                    return
+                if crawl_result is None:
+                    break
+                crawl_count += 1
+                task = asyncio.create_task(process_bg(crawl_result))
+                pending_tasks.append(task)
 
-        stats.phase = "readme"
-        self.update_url_task_progress(task_id, stats)
-        await self._generate_readme(task_id, collection_id, stats)
+            if pending_tasks:
+                await asyncio.gather(*pending_tasks)
+            self._log_info_task(task_id, f"Crawl completed: {crawl_count} pages processed")
+
+        # ========================================
+        # Stage: vectorize
+        # ========================================
+        if start_index <= STAGES.index("vectorize"):
+            if self._check_task_cancelled(task_id):
+                await self._apply_stop(task_id)
+                return
+
+            self._update_stage(task_id, "vectorize")
+
+            unvectorized = [
+                d for d in self.doc_repo.get_by_collection(collection_id, status="indexed")
+                if (d.chunk_count or 0) == 0 and d.content
+            ]
+            if unvectorized:
+                self._log_info_task(task_id, f"Vectorizing {len(unvectorized)} documents")
+                for doc in unvectorized:
+                    try:
+                        chunks = self.document_processor.process_web_content(doc.uri or "", doc.content)
+                        texts = [chunk.content for chunk in chunks]
+                        chunk_embeddings = await self.llm_service.embed_documents(texts)
+                        collection = await self.chroma_manager.get_collection(collection_id)
+                        assert doc.id
+                        vector_ids = []
+                        embedding_list = []
+                        metadatas_list = []
+                        documents_list = []
+                        for i, (chunk, embedding) in enumerate(zip(chunks, chunk_embeddings)):
+                            vector_id = f"{doc.id}_chunk_{i}"
+                            chunk_record = DocumentChunkDTO(
+                                document_id=doc.id,
+                                collection_id=collection_id,
+                                chunk_index=i,
+                                content_preview=chunk.content[:200] if chunk.content else "",
+                                vector_id=vector_id,
+                                content_hash=hashlib.md5(chunk.content.encode()).hexdigest(),
+                                chunk_metadata=json.dumps(chunk.metadata)
+                            )
+                            self.doc_chunk_repo.create_by_model(chunk_record)
+                            vector_ids.append(vector_id)
+                            embedding_list.append(embedding)
+                            metadatas_list.append({
+                                "document_id": doc.id,
+                                "document_name": doc.name or "",
+                                "document_uri": doc.uri or "",
+                                "collection_id": collection_id,
+                                "chunk_index": i,
+                            })
+                            documents_list.append(chunk.content)
+                        if vector_ids and collection:
+                            collection.add(ids=vector_ids, embeddings=embedding_list, metadatas=metadatas_list, documents=documents_list)
+                        self.doc_repo.update(doc.id, chunk_count=len(chunks))
+                    except Exception as e:
+                        self._log_err_task(task_id, f"Vectorization failed for {doc.uri}: {e}")
+            else:
+                self._log_info_task(task_id, "No documents need vectorization")
+
+        # ========================================
+        # Stage: rewrite_static
+        # ========================================
+        if start_index <= STAGES.index("rewrite_static"):
+            if self._check_task_cancelled(task_id):
+                await self._apply_stop(task_id)
+                return
+
+            self._update_stage(task_id, "rewrite_static")
+
+            docs = self.doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
+            crawled_docs = [d for d in docs if d.uri and d.source_path and d.clean_html]
+            stats.phase = "rewrite"
+            stats.rewrite_total = len(crawled_docs)
+            stats.rewrite_done = 0
+            self.update_url_task_progress(task_id, stats)
+            await self._rewrite_html_links(task_id, collection_id, stats)
+
+        # ========================================
+        # Stage: categorize
+        # ========================================
+        if start_index <= STAGES.index("categorize"):
+            if self._check_task_cancelled(task_id):
+                await self._apply_stop(task_id)
+                return
+
+            self._update_stage(task_id, "categorize")
+            await self._categorize_collection(task_id, collection_id)
+
+        # ========================================
+        # Stage: readme
+        # ========================================
+        if start_index <= STAGES.index("readme"):
+            if self._check_task_cancelled(task_id):
+                await self._apply_stop(task_id)
+                return
+
+            self._update_stage(task_id, "readme")
+
+            stats.phase = "readme"
+            self.update_url_task_progress(task_id, stats)
+            await self._generate_readme(task_id, collection_id, stats)
 
         self.task_repo.update_progress(task_id, 100)
         self.task_repo.mark_completed(task_id, True)
@@ -1929,14 +1980,14 @@ class TaskService:
         non_other = [g for g in result if g["category"] != "Other"]
         return non_other + other
 
-    async def _generate_readme(self, task_id: str, collection_id: str, stats: UrlTaskStats):
-        """Phase 4: generate AI-smart categories and README navigation guide."""
-        self._log_info_task(task_id, "Generating categories and README...")
+    async def _categorize_collection(self, task_id: str, collection_id: str):
+        """Categorize pages and store results for later README generation."""
+        self._log_info_task(task_id, "Categorizing collection pages...")
         docs = self.doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
         crawled = [d for d in docs if d.source_path]
 
         if not crawled:
-            self._log_info_task(task_id, "No crawled pages found, skipping README generation")
+            self._log_info_task(task_id, "No crawled pages found, skipping categorization")
             return
 
         pages = [{"id": d.id, "path": d.source_path, "title": d.name or ""} for d in crawled]
@@ -1952,33 +2003,16 @@ class TaskService:
         for g in groups:
             self._log_info_task(task_id, f"  Group '{g['category']}': {len(g['pages'])} pages")
 
-        # Step 1.5: Reorder by complexity (beginner -> advanced)
+        # Step 2: Reorder by complexity (beginner -> advanced)
         self._log_info_task(task_id, "Ordering categories by complexity...")
         groups = await self.llm_service.order_categories_by_complexity(groups)
         self._log_info_task(task_id, f"Categories reordered: {[g['category'] for g in groups]}")
 
-        # Step 2: Generate README content (failure propagates)
-        self._log_info_task(task_id, "Generating README content...")
-        readme_content = await self.llm_service.generate_readme_content(
-            groups, source_language, total_pages=len(pages)
-        )
-        self._log_info_task(task_id, f"README generated, length={len(readme_content)}")
-
-        # Step 3-6: Translations and persistence (errors are logged but not fatal)
-        readme_content_zh = ""
+        # Step 3: Translate if English source (errors are logged but not fatal)
         category_names_zh: dict[str, str] = {}
         page_titles_zh: dict[str, str] = {}
 
         if source_language == "en":
-            # 3a: Translate README
-            try:
-                self._log_info_task(task_id, "Translating README to Chinese...")
-                readme_content_zh = await self.llm_service.translate_readme(readme_content)
-                self._log_info_task(task_id, f"README translated, length={len(readme_content_zh)}")
-            except Exception as e:
-                self._log_err_task(task_id, f"README translation failed: {e}")
-
-            # 3b: Translate category names
             try:
                 self._log_info_task(task_id, "Translating category names...")
                 category_names_zh = await self.llm_service.translate_category_names(
@@ -1988,7 +2022,6 @@ class TaskService:
             except Exception as e:
                 self._log_err_task(task_id, f"Category name translation failed: {e}")
 
-            # 3c: Translate all page titles (batch)
             try:
                 self._log_info_task(task_id, f"Translating all {len(pages)} page titles...")
                 page_titles_zh = await self.llm_service.translate_all_page_titles(pages)
@@ -1996,7 +2029,7 @@ class TaskService:
             except Exception as e:
                 self._log_err_task(task_id, f"Page title translation failed: {e}")
 
-        # Step 4: Build categories JSON for frontend
+        # Step 4: Build categories JSON
         categories_for_json = []
         categories_zh_for_json = []
         for g in groups:
@@ -2010,42 +2043,28 @@ class TaskService:
                 title = p["title"]
                 title_zh = page_titles_zh.get(path, title)
 
-                cat_pages.append({
-                    "path": path,
-                    "title": title,
-                    "description": "",
-                })
-                cat_pages_zh.append({
-                    "path": path,
-                    "title": title_zh,
-                    "description": "",
-                })
+                cat_pages.append({"path": path, "title": title, "description": ""})
+                cat_pages_zh.append({"path": path, "title": title_zh, "description": ""})
 
-            categories_for_json.append({
-                "category": cat_name,
-                "pages": cat_pages,
-            })
+            categories_for_json.append({"category": cat_name, "pages": cat_pages})
             if source_language == "en":
-                categories_zh_for_json.append({
-                    "category": cat_name_zh,
-                    "pages": cat_pages_zh,
-                })
+                categories_zh_for_json.append({"category": cat_name_zh, "pages": cat_pages_zh})
 
         categories_json = json_lib.dumps(categories_for_json, ensure_ascii=False)
         categories_json_zh = json_lib.dumps(categories_zh_for_json, ensure_ascii=False) if source_language == "en" else ""
 
-        # Step 5: Persist to database
+        # Step 5: Store category data and source_language (readme_content will be filled later)
         try:
             await self.collection_service.update_readme(
                 collection_id,
-                readme_content=readme_content,
+                readme_content="",  # will be filled in readme stage
                 categories_json=categories_json,
-                readme_content_zh=readme_content_zh,
+                readme_content_zh="",
                 categories_json_zh=categories_json_zh,
                 source_language=source_language
             )
         except Exception as e:
-            self._log_err_task(task_id, f"Failed to persist README: {e}")
+            self._log_err_task(task_id, f"Failed to persist categories: {e}")
             return
 
         # Step 6: Update document name_translated for English source documents
@@ -2054,7 +2073,63 @@ class TaskService:
                 if doc.source_path and doc.source_path in page_titles_zh:
                     self.doc_repo.update(doc.id, name_translated=page_titles_zh[doc.source_path])
 
-        self._log_info_task(task_id, "Categories and README stored successfully")
+        self._log_info_task(task_id, f"Categorization completed: {len(groups)} groups")
+
+    async def _generate_readme(self, task_id: str, collection_id: str, _stats: UrlTaskStats):
+        """Generate README content from previously stored categories."""
+        import json as json_lib
+
+        collection = self.collection_service.collection_repo.get_by_id(collection_id)
+        if not collection:
+            self._log_err_task(task_id, "Collection not found")
+            return
+
+        categories_json = collection.categories_json
+        if not categories_json:
+            self._log_err_task(task_id, "No categories found - run categorize stage first")
+            return
+
+        groups = json_lib.loads(categories_json)
+        source_language = collection.source_language or "en"
+        total_pages = sum(len(g.get("pages", [])) for g in groups)
+
+        if total_pages == 0:
+            self._log_info_task(task_id, "No pages in categories, skipping README generation")
+            return
+
+        self._log_info_task(task_id, f"Generating README for {len(groups)} groups, {total_pages} pages...")
+
+        # Generate README content
+        readme_content = await self.llm_service.generate_readme_content(
+            groups, source_language, total_pages=total_pages
+        )
+        self._log_info_task(task_id, f"README generated, length={len(readme_content)}")
+
+        # Translate if English source
+        readme_content_zh = ""
+        if source_language == "en":
+            try:
+                self._log_info_task(task_id, "Translating README to Chinese...")
+                readme_content_zh = await self.llm_service.translate_readme(readme_content)
+                self._log_info_task(task_id, f"README translated, length={len(readme_content_zh)}")
+            except Exception as e:
+                self._log_err_task(task_id, f"README translation failed: {e}")
+
+        # Persist to database (keep existing categories)
+        try:
+            await self.collection_service.update_readme(
+                collection_id,
+                readme_content=readme_content,
+                categories_json=categories_json,
+                readme_content_zh=readme_content_zh,
+                categories_json_zh=collection.categories_json_zh or "",
+                source_language=source_language
+            )
+        except Exception as e:
+            self._log_err_task(task_id, f"Failed to persist README: {e}")
+            return
+
+        self._log_info_task(task_id, "README stored successfully")
 
     def close(self):
         """Close connections and cleanup resources"""

@@ -156,6 +156,7 @@ class TaskDTO(DTOConvertible[Task, "TaskDTO"]):
     id: str | None = None
     type: str | None = None
     status: str | None = None
+    stage: str | None = None
     collection_id: str | None = None
     progress_percentage: int | None = None
     input_params: str | None = None  # JSON string

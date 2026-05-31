@@ -116,6 +116,7 @@ class TaskResponse(BaseModel):
     task_id: str = Field(..., description="Task ID")
     type: str = Field(..., description="Task type")
     status: str = Field(..., description="Task status")
+    stage: Optional[str] = Field(None, description="Current processing stage")
     progress: int = Field(..., description="Progress percentage (0-100)")
     stats: dict = Field(..., description="Task statistics")
     collection_id: Optional[str] = Field(None, description="Associated collection ID")

@@ -67,7 +67,24 @@ class TaskRepository(BaseRepository[Task, TaskDTO]):
             session.flush()
             return True
 
-    def reset_task(self, task_id: str) -> bool:
+    def update_stage(self, task_id: str, stage: Optional[str]) -> bool:
+        """Update task processing stage."""
+        with session_context() as session:
+            task = session.get(Task, task_id)
+            if not task:
+                return False
+
+            task.stage = stage
+            session.flush()
+            return True
+
+    def reset_task(self, task_id: str, keep_stage: bool = False) -> bool:
+        """Reset task to pending status.
+
+        Args:
+            task_id: Task ID to reset.
+            keep_stage: If True, preserve the stage field for resume support.
+        """
         with session_context() as session:
             task = session.get(Task, task_id)
             if not task:
@@ -79,6 +96,8 @@ class TaskRepository(BaseRepository[Task, TaskDTO]):
             task.error_message = None
             task.started_at = None
             task.completed_at = None
+            if not keep_stage:
+                task.stage = None
             session.flush()
             return True
 

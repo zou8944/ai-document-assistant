@@ -40,6 +40,13 @@ class Task(Base):
         doc="Task status"
     )
 
+    # Processing stage (for resume support)
+    stage: Mapped[Optional[str]] = mapped_column(
+        String(50),
+        nullable=True,
+        doc="Current processing stage (crawl, vectorize, rewrite, readme, etc.)"
+    )
+
     # Associated collection
     collection_id: Mapped[Optional[str]] = mapped_column(
         String(100),
