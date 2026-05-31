@@ -145,9 +145,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
   // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchQuery !== '') {
-        loadCollections()
-      }
+      loadCollections()
     }, 500)
 
     return () => clearTimeout(timer)
