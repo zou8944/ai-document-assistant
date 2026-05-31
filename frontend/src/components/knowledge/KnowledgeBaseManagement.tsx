@@ -125,6 +125,9 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const [isStreaming, setIsStreaming] = useState(false)
   const logTextAreaRef = useRef<HTMLTextAreaElement>(null)
   const [logsExpanded, setLogsExpanded] = useState(false)
+  const [logOffset, setLogOffset] = useState(0)
+  const [loadingMoreLogs, setLoadingMoreLogs] = useState(false)
+  const LOGS_PAGE_SIZE = 100
   const [showActionsMenu, setShowActionsMenu] = useState(false)
   const [clearModalOpen, setClearModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
@@ -580,6 +583,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     if (selectedTaskId === taskId) return
     setSelectedTaskId(taskId)
     setTaskLogs([])
+    setLogOffset(0)
     apiClient.cancelRequests()
 
     const task = tasks.find(t => t.task_id === taskId)
@@ -591,13 +595,49 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       try {
         const response = await apiClient.getTaskLogs(taskId)
         const data = extractData(response)
-        setTaskLogs(data.logs.map((log: APITaskLog) => {
+        // Only load latest logs
+        const offset = Math.max(0, data.total - LOGS_PAGE_SIZE)
+        setLogOffset(offset)
+        const logsResponse = await apiClient.getTaskLogs(taskId, LOGS_PAGE_SIZE, offset)
+        const logsData = extractData(logsResponse)
+        setTaskLogs(logsData.logs.map((log: APITaskLog) => {
           const timestamp = new Date(log.timestamp).toLocaleTimeString()
           return `[${timestamp}] ${log.message}`
         }))
+        // Scroll to bottom after loading
+        setTimeout(() => {
+          if (logTextAreaRef.current) logTextAreaRef.current.scrollTop = logTextAreaRef.current.scrollHeight
+        }, 0)
       } catch (error) {
         console.error('获取日志失败:', error)
       }
+    }
+  }
+
+  const loadOlderLogs = async () => {
+    if (!selectedTaskId || logOffset <= 0 || loadingMoreLogs) return
+    setLoadingMoreLogs(true)
+    try {
+      const newOffset = Math.max(0, logOffset - LOGS_PAGE_SIZE)
+      const logsResponse = await apiClient.getTaskLogs(selectedTaskId, logOffset - newOffset, newOffset)
+      const logsData = extractData(logsResponse)
+      const olderLogs = logsData.logs.map((log: APITaskLog) => {
+        const timestamp = new Date(log.timestamp).toLocaleTimeString()
+        return `[${timestamp}] ${log.message}`
+      })
+      setTaskLogs(prev => [...olderLogs, ...prev])
+      setLogOffset(newOffset)
+    } catch (error) {
+      console.error('加载更多日志失败:', error)
+    } finally {
+      setLoadingMoreLogs(false)
+    }
+  }
+
+  const handleLogScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
+    const target = e.target as HTMLTextAreaElement
+    if (target.scrollTop === 0 && logOffset > 0 && !loadingMoreLogs) {
+      loadOlderLogs()
     }
   }
 
@@ -1035,6 +1075,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                   )}
                   value={taskLogs.join('\n')}
                   readOnly
+                  onScroll={handleLogScroll}
                 />
               </div>
             )}
