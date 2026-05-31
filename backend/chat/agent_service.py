@@ -267,7 +267,7 @@ class AgentChatService:
         """
         messages: list[dict] = []
         try:
-            msgs = self.chat_message_repo.get_by_chat(chat_id, max_messages=50)
+            msgs = self.chat_message_repo.get_by_chat(chat_id, limit=50)
         except Exception:
             logger.exception("Failed to load history for chat %s", chat_id)
             return messages
