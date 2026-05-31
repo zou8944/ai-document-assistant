@@ -15,7 +15,7 @@ import {
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { useAppStore } from '../../store/appStore'
-import { useAPIClient, extractData, Collection } from '../../services/apiClient'
+import { useAPIClient, extractData, Collection, Task } from '../../services/apiClient'
 import AddKnowledgeBaseModal from './AddKnowledgeBaseModal'
 
 interface KnowledgeBaseOverviewProps {
@@ -30,6 +30,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
   const [collections, setCollections] = useState<Collection[]>([])
   const [loading, setLoading] = useState(true)
   const [reindexingId, setReindexingId] = useState<string | null>(null)
+  const [activeTasks, setActiveTasks] = useState<Task[]>([])
   const apiClient = useAPIClient()
 
   const {
@@ -87,9 +88,28 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
     }
   }
   
+  // Load active tasks (pending/processing) for all collections
+  const loadActiveTasks = async () => {
+    try {
+      const response = await apiClient.listTasks(['pending', 'processing', 'failed'])
+      const data = extractData(response)
+      setActiveTasks(data.tasks)
+    } catch (error) {
+      console.error('加载任务列表失败:', error)
+    }
+  }
+
+  // Group active tasks by collection_id
+  const getCollectionTasks = (collectionId: string): Task[] => {
+    return activeTasks
+      .filter(t => t.collection_id === collectionId)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+  }
+
   // Load collections on component mount and when search query changes
   useEffect(() => {
     loadCollections()
+    loadActiveTasks()
   }, [])
   
   // Debounced search
@@ -99,9 +119,10 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
         loadCollections()
       }
     }, 500)
-    
+
     return () => clearTimeout(timer)
   }, [searchQuery])
+
 
   const handleManageClick = (collectionId: string) => {
     // Map collection to knowledge base format for compatibility
@@ -179,15 +200,6 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
       month: 'short',
       day: 'numeric'
     })
-  }
-
-  const getSourceTypeLabel = (sourceType: string) => {
-    switch (sourceType) {
-      case 'files': return '本地文件'
-      case 'website': return '网站内容'
-      case 'mixed': return '混合来源'
-      default: return '未知来源'
-    }
   }
 
   return (
@@ -285,11 +297,31 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                 {/* Card Header */}
                 <div className="p-4 pb-3">
                   <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center space-x-2">
-                      <BookOpenIcon className="w-5 h-5 text-blue-500" />
+                    <div className="flex items-center space-x-2 min-w-0">
+                      <BookOpenIcon className="w-5 h-5 text-blue-500 flex-shrink-0" />
                       <h3 className="font-semibold text-gray-900 truncate">{collection.name}</h3>
                     </div>
-                    {/**/}
+                    {/* Active task dots */}
+                    {(() => {
+                      const tasks = getCollectionTasks(collection.id)
+                      if (tasks.length === 0) return null
+                      return (
+                        <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
+                          {tasks.map(task => (
+                            <div
+                              key={task.task_id}
+                              title={task.title || (task.task_type === 'ingest_urls' ? '网页抓取' : '文件上传')}
+                              className={clsx(
+                                'w-2.5 h-2.5 rounded-full',
+                                task.status === 'processing' && 'bg-yellow-500 animate-pulse',
+                                task.status === 'pending' && 'bg-gray-400',
+                                task.status === 'failed' && 'bg-red-500'
+                              )}
+                            />
+                          ))}
+                        </div>
+                      )
+                    })()}
                   </div>
                   
                   <p className="text-sm text-gray-600 mb-3 line-clamp-2">

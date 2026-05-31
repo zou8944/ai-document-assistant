@@ -506,9 +506,12 @@ export class DocumentAssistantAPI {
   /**
    * List tasks
    */
-  async listTasks(status?: string, taskType?: string): Promise<APIResponse<{ tasks: Task[], total: number }>> {
+  async listTasks(status?: string | string[], taskType?: string): Promise<APIResponse<{ tasks: Task[], total: number }>> {
     const params = new URLSearchParams()
-    if (status) params.append('status', status)
+    if (status) {
+      const statusValue = Array.isArray(status) ? status.join(',') : status
+      params.append('status', statusValue)
+    }
     if (taskType) params.append('task_type', taskType)
 
     const url = params.toString() ? `/api/v1/tasks?${params}` : '/api/v1/tasks'

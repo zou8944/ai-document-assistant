@@ -130,7 +130,11 @@ class TaskRepository(BaseRepository[Task, TaskDTO]):
             query = select(Task)
 
             if status:
-                query = query.where(Task.status == status)
+                if isinstance(status, str) and "," in status:
+                    status_list = [s.strip() for s in status.split(",")]
+                    query = query.where(Task.status.in_(status_list))
+                else:
+                    query = query.where(Task.status == status)
             if task_type:
                 query = query.where(Task.type == task_type)
             if collection_id:
