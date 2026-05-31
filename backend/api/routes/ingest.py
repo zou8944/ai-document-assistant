@@ -68,16 +68,18 @@ async def ingest_urls(
         raise HTTPNotFoundException(f"Collection '{collection_id}' not found")
 
     # Validate URLs list
-    if not request_data.urls:
+    if not request_data.url_configs:
         raise HTTPBadRequestException("URLs list cannot be empty")
 
-    # Create task
+    # Create task — serialize url_configs for multi-prefix support
     task = await task_service.create_task(
         task_type="ingest_urls",
         collection_id=collection_id,
         input_params={
-            "urls": request_data.urls,
-            "recursive_prefix": request_data.recursive_prefix,
+            "url_configs": [c.model_dump() for c in request_data.url_configs],
+            # Keep legacy fields for backward-compatible task display
+            "urls": request_data.url_configs[0].seed_urls,
+            "recursive_prefix": request_data.url_configs[0].recursive_prefix,
         }
     )
 

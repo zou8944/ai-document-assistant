@@ -99,6 +99,7 @@ class DocumentDTO(DTOConvertible[Document, "DocumentDTO"]):
     category: str | None = None
     keywords: str | None = None
     total_tokens: int | None = None
+    categorized_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

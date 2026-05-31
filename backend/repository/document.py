@@ -1,8 +1,9 @@
 """Document and DocumentChunk repositories."""
 
+from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from database.connection import session_context
 from database.models.document import Document, DocumentChunk
@@ -166,6 +167,38 @@ class DocumentRepository(BaseRepository[Document, DocumentDTO]):
                 "category": result.category,
                 "total_tokens": result.total_tokens,
             }
+
+    def mark_categorized(self, collection_id: str) -> int:
+        """Mark all uncategorized indexed documents in a collection as categorized."""
+        with session_context() as session:
+            now = datetime.now(timezone.utc)
+            stmt = (
+                update(Document)
+                .where(
+                    Document.collection_id == collection_id,
+                    Document.status == "indexed",
+                    Document.categorized_at.is_(None),
+                )
+                .values(categorized_at=now)
+            )
+            result = session.execute(stmt)
+            session.flush()
+            return result.rowcount
+
+    def clear_categorized(self, collection_id: str) -> int:
+        """Clear categorized_at for all documents in a collection."""
+        with session_context() as session:
+            stmt = (
+                update(Document)
+                .where(
+                    Document.collection_id == collection_id,
+                    Document.categorized_at.is_not(None),
+                )
+                .values(categorized_at=None)
+            )
+            result = session.execute(stmt)
+            session.flush()
+            return result.rowcount
 
 
 class DocumentChunkRepository(BaseRepository[DocumentChunk, DocumentChunkDTO]):

@@ -149,6 +149,13 @@ class Document(Base):
         doc="MD5 hash for deduplication"
     )
 
+    # Incremental categorization tracking
+    categorized_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        doc="Timestamp when this document was last included in categorization"
+    )
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

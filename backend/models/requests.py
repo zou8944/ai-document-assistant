@@ -4,7 +4,7 @@ Request models for API endpoints.
 
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ProcessFilesRequest(BaseModel):
@@ -60,10 +60,29 @@ class IngestFilesRequest(BaseModel):
     files: list[str] = Field(..., description="List of file or folder paths to process")
 
 
-class IngestUrlsRequest(BaseModel):
-    """Request model for URL ingestion"""
-    urls: list[str] = Field(..., description="List of URLs to crawl")
+class UrlConfig(BaseModel):
+    """Configuration for a set of URLs with a shared recursive prefix."""
+    seed_urls: list[str] = Field(..., min_length=1, description="List of seed URLs")
     recursive_prefix: str = Field(default="", description="Recursive prefix for crawling")
+
+
+class IngestUrlsRequest(BaseModel):
+    """Request model for URL ingestion. Supports both old format (urls + recursive_prefix)
+    and new multi-prefix format (url_configs)."""
+    # Old format (backward compatible)
+    urls: Optional[list[str]] = Field(None, description="List of URLs to crawl")
+    recursive_prefix: Optional[str] = Field(None, description="Recursive prefix for crawling")
+    # New format
+    url_configs: Optional[list[UrlConfig]] = Field(None, description="Multiple URL configs with independent prefixes")
+
+    @model_validator(mode="after")
+    def _normalize(self):
+        if self.url_configs:
+            return self
+        if self.urls:
+            self.url_configs = [UrlConfig(seed_urls=self.urls, recursive_prefix=self.recursive_prefix or "")]
+            return self
+        raise ValueError("必须提供 urls 或 url_configs")
 
 
 class CreateChatRequest(BaseModel):

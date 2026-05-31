@@ -168,9 +168,14 @@ class TaskService:
         self,
         urls: list[str],
         recursive_prefix: str,
-        existing_titles: list[str]
+        existing_titles: list[str],
+        url_configs: list[dict] | None = None,
     ) -> str:
         """Generate a Chinese title for a URL ingestion task using LLM."""
+        # Multi-config: short circuit with a generic title
+        if url_configs and len(url_configs) > 1:
+            return f"多源抓取 ({len(url_configs)} 个配置)"
+
         urls_str = "\n".join(f"- {url}" for url in urls[:5])
         if len(urls) > 5:
             urls_str += f"\n... 等共 {len(urls)} 个 URL"
@@ -215,6 +220,7 @@ class TaskService:
         """Create a new task"""
         # Generate AI title for URL ingestion tasks
         if task_type == "ingest_urls":
+            url_configs = input_params.get("url_configs", [])
             urls = input_params.get("urls", [])
             recursive_prefix = input_params.get("recursive_prefix", "")
 
@@ -231,7 +237,7 @@ class TaskService:
                 except json.JSONDecodeError:
                     pass
 
-            title = await self._generate_task_title(urls, recursive_prefix, existing_titles)
+            title = await self._generate_task_title(urls, recursive_prefix, existing_titles, url_configs)
             input_params["title"] = title
             logger.info(f"Generated task title: {title}")
 
@@ -618,6 +624,8 @@ class TaskService:
                 await self._process_url_ingestion(task_id, task.collection_id, input_params)
             elif task.type == "reindex_collection":
                 await self._process_reindex_collection(task_id, task.collection_id)
+            elif task.type == "regenerate_readme":
+                await self._process_regenerate_readme(task_id, task.collection_id, input_params)
             else:
                 error_msg = f"Unknown task type: {task.type}"
                 logger.error(error_msg)
@@ -1024,10 +1032,17 @@ class TaskService:
         if resume_stage:
             self._log_info_task(task_id, f"Resuming from stage: {resume_stage}")
 
-        urls = input_params["urls"]
-        recursive_prefix = input_params["recursive_prefix"]
+        # Support multi-prefix url_configs (new) or legacy urls+recursive_prefix
+        url_configs = input_params.get("url_configs")
+        if not url_configs:
+            # Legacy format fallback
+            urls = input_params.get("urls", [])
+            recursive_prefix = input_params.get("recursive_prefix", "")
+            url_configs = [{"seed_urls": urls, "recursive_prefix": recursive_prefix}]
 
-        if not urls:
+        # Validate at least one config has URLs
+        has_urls = any(cfg.get("seed_urls") for cfg in url_configs)
+        if not has_urls:
             raise ValueError("No URLs specified for ingestion")
 
         stats = UrlTaskStats()
@@ -1043,33 +1058,11 @@ class TaskService:
         if start_index <= STAGES.index("crawl"):
             self._update_stage(task_id, "crawl")
 
-            def progress_callback(current_url: str, completed: int, total: int) -> None:
-                stats.urls_crawled = completed
-                stats.urls_crawl_total = total
-                stats.pages_total = max(stats.pages_total, total)
-                self.update_url_task_progress(task_id, stats)
-                self._log_info_task(task_id, f"Crawling page {completed + 1}/{total}: {current_url}")
-
             existing_docs = self.doc_repo.get_by_collection(collection_id)
             skip_urls = {d.uri for d in existing_docs if d.uri}
 
             # Recover URLs discovered by previously crawled pages
-            recovered_urls: set[str] = set()
             indexed_docs = self.doc_repo.get_by_collection(collection_id, status="indexed")
-            for doc in indexed_docs:
-                if doc.html_content and doc.uri:
-                    links = self.web_crawler.extract_links_from_html(doc.html_content, doc.uri)
-                    for link in links:
-                        if link in skip_urls:
-                            continue
-                        if recursive_prefix and not link.startswith(recursive_prefix):
-                            continue
-                        recovered_urls.add(link)
-
-            if recovered_urls:
-                self._log_info_task(task_id, f"Recovered {len(recovered_urls)} URLs from previously crawled pages")
-
-            seed_urls = list(dict.fromkeys(urls + list(recovered_urls)))
 
             crawl_count = 0
             sem = asyncio.Semaphore(5)
@@ -1082,40 +1075,89 @@ class TaskService:
                     stats.pages_processed += 1
                     self.update_url_task_progress(task_id, stats)
 
-            pending_tasks: list[asyncio.Task] = []
-
             def _next_crawl_result(gen):
                 try:
                     return next(gen)
                 except StopIteration:
                     return None
 
-            crawl_gen = self.web_crawler.crawl_recursive_stream(
-                urls=seed_urls,
-                recursive_prefix=recursive_prefix,
-                skip_urls=skip_urls,
-                progress_callback=progress_callback,
-            )
-
-            while True:
+            for config_idx, config in enumerate(url_configs):
                 if self._check_task_cancelled(task_id):
-                    await self._apply_stop(task_id, pending_tasks)
                     return
 
+                urls = config.get("seed_urls", [])
+                prefix = config.get("recursive_prefix", "")
+                if not urls:
+                    continue
+
+                config_label = f"[{config_idx + 1}/{len(url_configs)}]" if len(url_configs) > 1 else ""
+                self._log_info_task(task_id, f"Crawling {config_label} prefix={prefix!r}, seeds={len(urls)}")
+
+                # Recover URLs matching this prefix from previously crawled pages
+                recovered_urls: set[str] = set()
+                for doc in indexed_docs:
+                    if doc.html_content and doc.uri:
+                        links = self.web_crawler.extract_links_from_html(doc.html_content, doc.uri)
+                        for link in links:
+                            if link in skip_urls:
+                                continue
+                            if prefix and not link.startswith(prefix):
+                                continue
+                            recovered_urls.add(link)
+
+                if recovered_urls:
+                    self._log_info_task(task_id, f"Recovered {len(recovered_urls)} URLs for prefix {prefix!r}")
+
+                seed_urls = list(dict.fromkeys(urls + list(recovered_urls)))
+
+                def progress_callback(current_url: str, completed: int, total: int, _label: str = config_label) -> None:
+                    stats.urls_crawled = completed
+                    stats.urls_crawl_total = total
+                    stats.pages_total = max(stats.pages_total, total)
+                    self.update_url_task_progress(task_id, stats)
+                    self._log_info_task(task_id, f"Crawling {_label} page {completed + 1}/{total}: {current_url}")
+
+                pending_tasks: list[asyncio.Task] = []
+
+                crawl_gen = self.web_crawler.crawl_recursive_stream(
+                    urls=seed_urls,
+                    recursive_prefix=prefix,
+                    skip_urls=skip_urls,
+                    progress_callback=progress_callback,
+                )
+
+                loop_aborted = False
                 try:
-                    crawl_result = await asyncio.to_thread(_next_crawl_result, crawl_gen)
-                except RuntimeError:
-                    await self._apply_stop(task_id, pending_tasks)
-                    return
-                if crawl_result is None:
-                    break
-                crawl_count += 1
-                task = asyncio.create_task(process_bg(crawl_result))
-                pending_tasks.append(task)
+                    while True:
+                        if self._check_task_cancelled(task_id):
+                            loop_aborted = True
+                            await self._apply_stop(task_id, pending_tasks)
+                            return
 
-            if pending_tasks:
-                await asyncio.gather(*pending_tasks)
-            self._log_info_task(task_id, f"Crawl completed: {crawl_count} pages processed")
+                        try:
+                            crawl_result = await asyncio.to_thread(_next_crawl_result, crawl_gen)
+                        except RuntimeError:
+                            loop_aborted = True
+                            await self._apply_stop(task_id, pending_tasks)
+                            return
+                        if crawl_result is None:
+                            break
+                        crawl_count += 1
+                        # Add crawled URL to skip_urls so cross-config dedup works
+                        skip_urls.add(crawl_result.url)
+                        t = asyncio.create_task(process_bg(crawl_result))
+                        pending_tasks.append(t)
+                except Exception:
+                    loop_aborted = True
+                    await self._apply_stop(task_id, pending_tasks)
+                    raise
+                finally:
+                    if not loop_aborted and pending_tasks:
+                        await asyncio.gather(*pending_tasks)
+
+                self._log_info_task(task_id, f"Crawl {config_label} completed")
+
+            self._log_info_task(task_id, f"All crawls completed: {crawl_count} pages processed")
 
         # ========================================
         # Stage: vectorize
@@ -1201,7 +1243,13 @@ class TaskService:
                 return
 
             self._update_stage(task_id, "categorize")
-            await self._categorize_collection(task_id, collection_id)
+            # Incremental categorize if collection already has categories
+            collection = self.collection_service.collection_repo.get_by_id(collection_id)
+            if collection and collection.categories_json:
+                await self._categorize_incremental(task_id, collection_id)
+            else:
+                await self._categorize_collection(task_id, collection_id)
+                self._mark_categorized(collection_id)
 
         # ========================================
         # Stage: readme
@@ -2075,6 +2123,112 @@ class TaskService:
 
         self._log_info_task(task_id, f"Categorization completed: {len(groups)} groups")
 
+    def _mark_categorized(self, collection_id: str) -> None:
+        """Mark all indexed documents in a collection as categorized."""
+        count = self.doc_repo.mark_categorized(collection_id)
+        logger.info(f"Marked {count} documents as categorized in {collection_id}")
+
+    async def _categorize_incremental(self, task_id: str, collection_id: str):
+        """Incrementally categorize: only process new (uncategorized) documents, merge with existing."""
+        self._log_info_task(task_id, "Starting incremental categorization...")
+
+        all_docs = self.doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
+        new_docs = [d for d in all_docs if d.source_path and not d.categorized_at]
+        existing_categorized = [d for d in all_docs if d.source_path and d.categorized_at]
+
+        if not new_docs:
+            self._log_info_task(task_id, "No new documents to categorize, skipping")
+            return
+
+        if not existing_categorized:
+            # First categorization — use full flow
+            self._log_info_task(task_id, "No existing categorized docs, running full categorization")
+            await self._categorize_collection(task_id, collection_id)
+            self._mark_categorized(collection_id)
+            return
+
+        self._log_info_task(task_id, f"Incremental: {len(new_docs)} new, {len(existing_categorized)} existing")
+
+        # Get existing categories
+        collection = self.collection_service.collection_repo.get_by_id(collection_id)
+        if not collection or not collection.categories_json:
+            self._log_info_task(task_id, "No existing categories found, running full categorization")
+            await self._categorize_collection(task_id, collection_id)
+            self._mark_categorized(collection_id)
+            return
+
+        old_categories = json.loads(collection.categories_json)
+        old_categories_zh = json.loads(collection.categories_json_zh) if collection.categories_json_zh else None
+
+        # Build new page records
+        new_page_records = [
+            {"id": d.id, "path": d.source_path, "title": d.name or ""}
+            for d in new_docs
+        ]
+
+        # Step 1: Merge new pages into existing categories
+        self._log_info_task(task_id, "Merging new pages into existing categories...")
+        merged = await self.llm_service.merge_categories(
+            existing_categories=old_categories,
+            new_pages=new_page_records,
+        )
+        self._log_info_task(task_id, f"Merge produced {len(merged)} categories")
+
+        # Step 2: Optimize merged categories
+        all_page_records = [
+            {"id": d.id, "path": d.source_path, "title": d.name or ""}
+            for d in all_docs if d.source_path
+        ]
+        self._log_info_task(task_id, "Optimizing merged categories...")
+        optimized = await self.llm_service.optimize_categories(
+            categories=merged,
+            all_pages=all_page_records,
+        )
+        self._log_info_task(task_id, f"Optimization produced {len(optimized)} categories")
+
+        # Step 3: Handle Chinese translation for English source
+        source_language = collection.source_language or "en"
+        if source_language == "en" and old_categories_zh:
+            self._log_info_task(task_id, "Merging Chinese categories...")
+            merged_zh = await self.llm_service.merge_categories(
+                existing_categories=old_categories_zh,
+                new_pages=new_page_records,
+            )
+            optimized_zh = await self.llm_service.optimize_categories(
+                categories=merged_zh,
+                all_pages=all_page_records,
+            )
+            # Translate page titles for new docs
+            try:
+                page_titles_zh = await self.llm_service.translate_all_page_titles(new_page_records)
+                for doc in new_docs:
+                    if doc.source_path and doc.source_path in page_titles_zh:
+                        self.doc_repo.update(doc.id, name_translated=page_titles_zh[doc.source_path])
+            except Exception as e:
+                self._log_err_task(task_id, f"Page title translation failed: {e}")
+        else:
+            optimized_zh = optimized
+
+        # Step 4: Store merged categories
+        categories_json = json.dumps(optimized, ensure_ascii=False)
+        categories_json_zh = json.dumps(optimized_zh, ensure_ascii=False) if source_language == "en" else ""
+        try:
+            await self.collection_service.update_readme(
+                collection_id,
+                readme_content="",  # will be regenerated in readme stage
+                categories_json=categories_json,
+                readme_content_zh="",
+                categories_json_zh=categories_json_zh,
+                source_language=source_language,
+            )
+        except Exception as e:
+            self._log_err_task(task_id, f"Failed to persist merged categories: {e}")
+            return
+
+        # Step 5: Mark all documents as categorized
+        self._mark_categorized(collection_id)
+        self._log_info_task(task_id, f"Incremental categorization completed: {len(optimized)} groups")
+
     async def _generate_readme(self, task_id: str, collection_id: str, _stats: UrlTaskStats):
         """Generate README content from previously stored categories."""
         import json as json_lib
@@ -2130,6 +2284,29 @@ class TaskService:
             return
 
         self._log_info_task(task_id, "README stored successfully")
+
+    async def _process_regenerate_readme(
+        self,
+        task_id: str,
+        collection_id: str,
+        input_params: dict[str, Any]
+    ):
+        """Re-categorize all documents and regenerate README without re-crawling."""
+        self._log_info_task(task_id, "Starting README regeneration")
+
+        # Stage: categorize — clear all marks and re-categorize from scratch
+        self._update_stage(task_id, "categorize")
+        self.doc_repo.clear_categorized(collection_id)
+        await self._categorize_collection(task_id, collection_id)
+        self._mark_categorized(collection_id)
+
+        # Stage: readme
+        self._update_stage(task_id, "readme")
+        stats = UrlTaskStats()
+        await self._generate_readme(task_id, collection_id, stats)
+
+        self.task_repo.mark_completed(task_id, True)
+        self._log_info_task(task_id, "README regeneration completed")
 
     def close(self):
         """Close connections and cleanup resources"""

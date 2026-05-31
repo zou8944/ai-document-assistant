@@ -645,6 +645,120 @@ Format:
         logger.info(f"[translate_all_page_titles] total translated {len(results)}/{len(pages)} titles")
         return results
 
+    # ==================== Incremental Category Merge ====================
+
+    async def merge_categories(
+        self,
+        existing_categories: list[dict],
+        new_pages: list[dict],
+    ) -> list[dict]:
+        """Merge new pages into existing categories.
+
+        existing_categories: [{"category": str, "pages": [{"path": str, "title": str}, ...]}]
+        new_pages: [{"id": str, "path": str, "title": str}]
+        Returns the same format as existing_categories.
+        """
+        existing_text = json.dumps(existing_categories, ensure_ascii=False, indent=2)
+        new_text = json.dumps(
+            [{"path": p["path"], "title": p["title"]} for p in new_pages],
+            ensure_ascii=False, indent=2,
+        )
+
+        prompt = f"""You are a documentation categorization expert.
+
+Existing categories:
+{existing_text}
+
+New documents to merge:
+{new_text}
+
+Instructions:
+- If a new document fits an existing category, add it to that category
+- If a new document doesn't fit any existing category, create a new category for it
+- You may create multiple new categories if the new documents cover distinct topics
+- Maintain the overall order from beginner-friendly to advanced
+- Do NOT remove or rename existing categories unless necessary for clarity
+
+Return ONLY a JSON array in this exact format (same as input categories format):
+[
+  {{"category": "Category Name", "pages": [{{"path": "/path", "title": "Title"}}, ...]}},
+  ...
+]"""
+
+        logger.info(f"[merge_categories] existing={len(existing_categories)} cats, new={len(new_pages)} pages")
+        raw = await self._invoke_crawl_llm(prompt, max_tokens=self.config.llm.max_tokens)
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
+            cleaned = re.sub(r"\n?```$", "", cleaned)
+            cleaned = cleaned.strip()
+
+        try:
+            result = json.loads(cleaned)
+            if isinstance(result, list):
+                return self._ensure_other_last(result)
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning(f"[merge_categories] parse failed: {e}, raw={raw[:300]}")
+
+        # Fallback: just append new pages to a "New" category
+        return existing_categories + [{"category": "New", "pages": [
+            {"path": p["path"], "title": p["title"]} for p in new_pages
+        ]}]
+
+    async def optimize_categories(
+        self,
+        categories: list[dict],
+        all_pages: list[dict],
+    ) -> list[dict]:
+        """Check category balance and optimize: merge small groups, split large ones."""
+        categories_text = json.dumps(categories, ensure_ascii=False, indent=2)
+        all_pages_text = json.dumps(
+            [{"path": p["path"], "title": p["title"]} for p in all_pages],
+            ensure_ascii=False, indent=2,
+        )
+
+        prompt = f"""You are a documentation categorization expert. Review the current category structure and optimize it.
+
+Current categories:
+{categories_text}
+
+All documents (for reference):
+{all_pages_text}
+
+Optimization rules:
+- Merge categories with fewer than 2 pages into the most related category
+- Split categories with more than 20 pages into sub-topics
+- Ensure every document appears in exactly one category
+- Ensure category names are clear and descriptive
+- Keep "Other" category last if it exists
+- Maintain order from beginner-friendly to advanced
+
+If no changes are needed, return the input unchanged.
+
+Return ONLY a JSON array in this exact format:
+[
+  {{"category": "Category Name", "pages": [{{"path": "/path", "title": "Title"}}, ...]}},
+  ...
+]"""
+
+        logger.info(f"[optimize_categories] input={len(categories)} categories, {len(all_pages)} pages")
+        raw = await self._invoke_crawl_llm(prompt, max_tokens=self.config.llm.max_tokens)
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
+            cleaned = re.sub(r"\n?```$", "", cleaned)
+            cleaned = cleaned.strip()
+
+        try:
+            result = json.loads(cleaned)
+            if isinstance(result, list):
+                return self._ensure_other_last(result)
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning(f"[optimize_categories] parse failed: {e}, raw={raw[:300]}")
+
+        # Fallback: return original unchanged
+        return categories
+
     # ==================== Direct LLM Access ====================
 
     async def _invoke_crawl_llm(self, prompt: str, **kwargs) -> str:
