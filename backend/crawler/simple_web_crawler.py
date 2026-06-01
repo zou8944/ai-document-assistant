@@ -198,7 +198,7 @@ class SimpleWebCrawler:
                 url = self._clean_url(loc.text.strip())
                 if (
                     self._is_valid_url(url)
-                    and (not recursive_prefix or url.startswith(recursive_prefix))
+                    and (not recursive_prefix or url.lower().startswith(recursive_prefix.lower()))
                 ):
                     urls.append(url)
             logger.info(f"Found {len(urls)} URLs in sitemap.xml at {sitemap_url}")
@@ -287,7 +287,7 @@ class SimpleWebCrawler:
             for link in result.links:
                 if link in crawled_urls or link in failed_urls or link in skip_urls:
                     continue
-                if recursive_prefix and not link.startswith(recursive_prefix):
+                if recursive_prefix and not link.lower().startswith(recursive_prefix.lower()):
                     continue
                 if any(queued == link for queued in to_crawl):
                     continue
