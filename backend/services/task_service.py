@@ -386,6 +386,66 @@ class TaskService:
         logger.info(f"Cleaned up task {task_id}")
         return True
 
+    async def delete_task(self, task_id: str, cleanup_resources: bool = False) -> bool:
+        """Permanently delete a task and its logs.
+
+        When cleanup_resources is True, also delete all documents, vectors
+        and crawl cache produced by this task.
+        """
+        task = self.task_repo.get_by_id(task_id)
+        if not task:
+            return False
+        if task.status == "processing":
+            from exception import HTTPBadRequestException
+            raise HTTPBadRequestException("不能删除正在执行的任务")
+
+        # Stop any async tracking for this task
+        with self._task_lock:
+            self._stop_flags.discard(task_id)
+            self._task_events.pop(task_id, None)
+            self._active_tasks.pop(task_id, None)
+
+        collection_id = task.collection_id
+
+        if cleanup_resources and collection_id:
+            # 1. Delete all documents produced by this task
+            docs = self.doc_repo.get_by_task(task_id)
+            if docs:
+                chroma_collection = await self.chroma_manager.get_collection(collection_id)
+                for doc in docs:
+                    if chroma_collection and doc.id:
+                        try:
+                            chroma_collection.delete(where={"document_id": doc.id})
+                        except Exception as e:
+                            logger.warning(f"Failed to delete vectors for doc {doc.id}: {e}")
+                    self.doc_chunk_repo.delete_by_document(doc.id)
+                    self.doc_repo.delete_by_id(doc.id)
+
+            # 2. Delete local crawl cache for URL tasks
+            if task.type == "ingest_urls":
+                self._delete_crawl_cache(collection_id)
+
+            # 3. Regenerate collection summary if documents remain
+            remaining = self.doc_repo.count_by_collection(collection_id)
+            if remaining > 0:
+                await self.collection_service.refresh_collection_summary(collection_id)
+            else:
+                self.collection_service.collection_repo.update(
+                    collection_id,
+                    readme_content=None,
+                    categories_json=None,
+                    readme_content_zh=None,
+                    categories_json_zh=None,
+                    source_language=None,
+                )
+
+        # 4. Delete task logs, then the task itself
+        self.task_log_repo.delete_by_task(task_id)
+        self.task_repo.delete(task_id)
+
+        logger.info(f"Deleted task {task_id} (cleanup_resources={cleanup_resources})")
+        return True
+
     def _delete_crawl_cache(self, collection_id: str) -> None:
         """Delete local crawl cache directory for a collection."""
         cache_root = Path(self.config.get_crawl_cache_dir())

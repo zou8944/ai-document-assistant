@@ -583,6 +583,18 @@ export class DocumentAssistantAPI {
   }
 
   /**
+   * Permanently delete a task. Pass cleanupResources=true to also remove
+   * documents, vectors and crawl cache produced by the task.
+   */
+  async deleteTask(taskId: string, cleanupResources?: boolean): Promise<APIResponse<{ success: boolean }>> {
+    const query = cleanupResources ? '?cleanup_resources=true' : ''
+    return this.request<APIResponse<{ success: boolean }>>(
+      `/api/v1/tasks/${encodeURIComponent(taskId)}${query}`,
+      { method: 'DELETE' }
+    )
+  }
+
+  /**
    * Get task logs (non-streaming). Omit limit to fetch all logs.
    */
   async getTaskLogs(

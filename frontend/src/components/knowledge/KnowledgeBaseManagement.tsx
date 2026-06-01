@@ -142,6 +142,11 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const [stoppingTaskIds, setStoppingTaskIds] = useState<Set<string>>(new Set())
   const actionsMenuRef = useRef<HTMLDivElement>(null)
 
+  // Delete task modal state
+  const [deleteTaskModalOpen, setDeleteTaskModalOpen] = useState(false)
+  const [taskToDeleteId, setTaskToDeleteId] = useState<string | null>(null)
+  const [cleanupDocsChecked, setCleanupDocsChecked] = useState(false)
+
   // Whether this collection supports bilingual display
   const isBilingual = sourceLanguage === 'en' && !!categoriesJsonZh
 
@@ -510,16 +515,28 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     }
   }
 
-  const handleCleanupTask = async (taskId: string) => {
-    if (!confirm('确定要清理该任务吗？这会删除该任务产生的所有文档和日志。')) return
+  const handleDeleteTask = (taskId: string) => {
+    setTaskToDeleteId(taskId)
+    setCleanupDocsChecked(false)
+    setDeleteTaskModalOpen(true)
+  }
+
+  const handleConfirmDeleteTask = async () => {
+    if (!taskToDeleteId) return
     try {
-      await apiClient.cleanupTask(taskId)
-      loadTasks()
-      loadDocuments()
-      loadReadme()
+      await apiClient.deleteTask(taskToDeleteId, cleanupDocsChecked)
+      setTasks(prev => prev.filter(t => t.task_id !== taskToDeleteId))
+      if (selectedTaskId === taskToDeleteId) {
+        setSelectedTaskId(null)
+        setTaskLogs([])
+        setIsStreaming(false)
+      }
+      setDeleteTaskModalOpen(false)
+      setTaskToDeleteId(null)
+      setCleanupDocsChecked(false)
     } catch (error) {
-      console.error('清理任务失败:', error)
-      alert('清理任务失败: ' + (error as Error).message)
+      console.error('删除任务失败:', error)
+      alert('删除任务失败: ' + (error as Error).message)
     }
   }
 
@@ -1099,9 +1116,9 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                       )}
                       {(task.status === 'success' || task.status === 'failed' || task.status === 'stopped') && (
                         <button
-                          onClick={() => handleCleanupTask(task.task_id)}
+                          onClick={() => handleDeleteTask(task.task_id)}
                           className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                          title="清理"
+                          title="删除任务"
                         >
                           <TrashIcon className="w-4 h-4" />
                         </button>
@@ -1502,6 +1519,53 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                 onClick={handleConfirmDelete}
                 disabled={confirmName !== currentKb.name}
                 className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors"
+              >
+                确认删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Task Confirm Modal */}
+      {deleteTaskModalOpen && taskToDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => { setDeleteTaskModalOpen(false); setTaskToDeleteId(null); setCleanupDocsChecked(false) }}
+        >
+          <div
+            className="w-full max-w-md bg-white rounded-xl shadow-2xl flex flex-col mx-4 overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">删除任务</h3>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <p className="text-sm text-gray-600">
+                确定要删除该任务吗？任务记录及其日志将被
+                <span className="text-red-600 font-semibold">永久删除</span>。
+              </p>
+              <label className="flex items-start space-x-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                <input
+                  type="checkbox"
+                  checked={cleanupDocsChecked}
+                  onChange={e => setCleanupDocsChecked(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                />
+                <div className="flex-1">
+                  <span className="text-sm text-gray-700">同时清理该任务下载的文档、向量和缓存</span>
+                </div>
+              </label>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={() => { setDeleteTaskModalOpen(false); setTaskToDeleteId(null); setCleanupDocsChecked(false) }}
+                className="px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleConfirmDeleteTask}
+                className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
               >
                 确认删除
               </button>

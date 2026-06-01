@@ -4,6 +4,7 @@ Lightweight solution for basic document crawling with domain restrictions.
 """
 
 import logging
+import re
 import threading
 import time
 import xml.etree.ElementTree as ET
@@ -163,12 +164,71 @@ class SimpleWebCrawler:
         _, _, links = self._extract_content(html, base_url)
         return links
 
+    def _check_markdown_alternate(self, html: str, base_url: str) -> Optional[str]:
+        """Check if HTML has an alternate markdown link and return its absolute URL."""
+        soup = BeautifulSoup(html, "lxml")
+        link = soup.find("link", rel="alternate", type="text/markdown")
+        if link and link.get("href"):
+            return urljoin(base_url, link["href"])
+        return None
+
+    def _extract_from_markdown(self, markdown_text: str, base_url: str) -> tuple[str, str, list[str]]:
+        """Extract title, content and links from markdown text."""
+        title_match = re.search(r"^#\s+(.+)$", markdown_text, re.MULTILINE)
+        title = title_match.group(1).strip() if title_match else ""
+
+        # Match both [text](url) and ![text](url); images go to first group
+        pattern = r"!\[.*?\]\((.*?)\)|\[.*?\]\((.*?)\)"
+        matches = re.findall(pattern, markdown_text)
+        raw_links = [m[0] or m[1] for m in matches if m[0] or m[1]]
+
+        links = []
+        for raw in raw_links:
+            url = raw.split('"')[0].strip()
+            if not url:
+                continue
+            if any(url.startswith(prefix) for prefix in ["#", "javascript:", "mailto:", "tel:", "ftp:"]):
+                continue
+            absolute_url = urljoin(base_url, url)
+            if self._is_valid_url(absolute_url) and self._is_same_domain(base_url, absolute_url):
+                clean_url = self._clean_url(absolute_url)
+                if clean_url and clean_url not in links and clean_url != self._clean_url(base_url):
+                    links.append(clean_url)
+
+        return title, markdown_text, links
+
     def _fetch_page(self, url: str) -> SimpleCrawlResult:
-        """Fetch a page from the network and return its content."""
+        """Fetch a page from the network and return its content.
+
+        If the HTML page advertises an alternate markdown version via
+        <link rel="alternate" type="text/markdown">, the markdown is
+        fetched and parsed instead of the rendered HTML.
+        """
         self._check_stopped()
         response = self.session.get(url, timeout=10)
         response.raise_for_status()
         html_content = response.text
+
+        # Prefer alternate markdown when available (e.g. Apple Developer docs)
+        md_url = self._check_markdown_alternate(html_content, url)
+        if md_url:
+            try:
+                md_response = self.session.get(md_url, timeout=10)
+                md_response.raise_for_status()
+                title, content, links = self._extract_from_markdown(md_response.text, url)
+                clean_html = self._clean_html(html_content)
+                return SimpleCrawlResult(
+                    url=url,
+                    title=title,
+                    content=content,
+                    html_content=html_content,
+                    clean_html=clean_html,
+                    links=links,
+                    success=True,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to fetch markdown alternate {md_url}: {e}, falling back to HTML")
+
         clean_html = self._clean_html(html_content)
         title, content, links = self._extract_content(clean_html, url)
         return SimpleCrawlResult(

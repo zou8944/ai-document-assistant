@@ -86,6 +86,20 @@ async def cleanup_task(task_id: str, request: Request):
     return {"success": success}
 
 
+@router.delete("/tasks/{task_id}")
+async def delete_task(task_id: str, request: Request, cleanup_resources: bool = False):
+    """
+    Permanently delete a task. Set cleanup_resources=true to also remove
+    documents, vectors and crawl cache produced by the task.
+    """
+    task_service = get_app_state(request).task_service
+
+    success = await task_service.delete_task(task_id, cleanup_resources)
+    if not success:
+        raise HTTPBadRequestException("任务不存在")
+    return {"success": True}
+
+
 @router.get("/tasks")
 async def list_tasks(
     request: Request,
