@@ -395,14 +395,16 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   // Import handlers
   const handleUrlDialogConfirm = async (config: {
     urls: string[]
-    recursivePrefix: string
+    recursivePrefixes: string[]
   }) => {
     setShowUrlDialog(false)
     if (!currentKb || config.urls.length === 0) return
     try {
       const response = await apiClient.ingestUrls(currentKb.id, {
-        urls: config.urls,
-        recursive_prefix: config.recursivePrefix,
+        url_configs: [{
+          seed_urls: config.urls,
+          recursive_prefixes: config.recursivePrefixes,
+        }],
       })
       const taskData = extractData(response)
       setSelectedTaskId(taskData.task_id)
@@ -1088,8 +1090,12 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                             ? `URL: ${task.urls[0]}${task.urls.length > 1 ? ` 等${task.urls.length}个` : ''}`
                             : ''}
                         </span>
-                        <span className="col-span-4 truncate" title={task.recursive_prefix || ''}>
-                          {task.recursive_prefix ? `前缀: ${task.recursive_prefix}` : ''}
+                        <span className="col-span-4 truncate" title={task.recursive_prefixes?.join(', ') || task.recursive_prefix || ''}>
+                          {task.recursive_prefixes?.length
+                            ? `前缀: ${task.recursive_prefixes.join(', ')}`
+                            : task.recursive_prefix
+                              ? `前缀: ${task.recursive_prefix}`
+                              : ''}
                         </span>
                       </div>
                     </div>

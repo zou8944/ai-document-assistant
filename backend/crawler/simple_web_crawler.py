@@ -241,7 +241,7 @@ class SimpleWebCrawler:
             success=True,
         )
 
-    def _try_sitemap(self, base_url: str, recursive_prefix: str) -> list[str]:
+    def _try_sitemap(self, base_url: str, recursive_prefixes: list[str]) -> list[str]:
         """Try to fetch sitemap.xml and return filtered URLs. Returns empty list on failure."""
         if self._stop_event.is_set():
             return []
@@ -256,11 +256,12 @@ class SimpleWebCrawler:
                 if not loc.text:
                     continue
                 url = self._clean_url(loc.text.strip())
-                if (
-                    self._is_valid_url(url)
-                    and (not recursive_prefix or url.lower().startswith(recursive_prefix.lower()))
-                ):
-                    urls.append(url)
+                if not self._is_valid_url(url):
+                    continue
+                if recursive_prefixes:
+                    if not any(url.lower().startswith(p.lower()) for p in recursive_prefixes):
+                        continue
+                urls.append(url)
             logger.info(f"Found {len(urls)} URLs in sitemap.xml at {sitemap_url}")
             return urls
         except Exception as e:
@@ -275,6 +276,7 @@ class SimpleWebCrawler:
         self,
         urls: list[str],
         recursive_prefix: str = "",
+        recursive_prefixes: Optional[list[str]] = None,
         skip_urls: Optional[set[str]] = None,
         progress_callback: Optional[Callable[[str, int, int], None]] = None,
     ) -> Iterator[SimpleCrawlResult]:
@@ -285,16 +287,28 @@ class SimpleWebCrawler:
 
         Stream crawl results one-by-one so callers can persist progress immediately.
         skip_urls: URLs already stored in the database; skipped without fetching.
+
+        Prefix matching: supports both legacy single `recursive_prefix` and new
+        `recursive_prefixes` list. A URL is accepted if it matches ANY prefix.
         """
         if skip_urls is None:
             skip_urls = set()
+
+        # Normalize prefixes — legacy single prefix is merged into the list
+        prefixes: list[str] = []
+        if recursive_prefixes:
+            prefixes = [p for p in recursive_prefixes if p]
+        if recursive_prefix:
+            prefixes.append(recursive_prefix)
+        prefixes = list(dict.fromkeys(prefixes))  # dedup while preserving order
 
         crawled_urls: set[str] = set()
         failed_urls: set[str] = set()
         yielded = 0
 
         # URL discovery — prefer sitemap.xml, fall back to BFS seed
-        sitemap_urls = self._try_sitemap(urls[0] if urls else recursive_prefix, recursive_prefix)
+        sitemap_base = urls[0] if urls else (prefixes[0] if prefixes else "")
+        sitemap_urls = self._try_sitemap(sitemap_base, prefixes)
         if sitemap_urls:
             # Merge user-provided URLs (priority) with sitemap-discovered URLs
             merged = list(dict.fromkeys(list(urls) + sitemap_urls))
@@ -343,11 +357,11 @@ class SimpleWebCrawler:
                 time.sleep(self.delay)
                 continue
 
-            # Discover new links for BFS
+            # Discover new links for BFS — accept if it matches ANY prefix
             for link in result.links:
                 if link in crawled_urls or link in failed_urls or link in skip_urls:
                     continue
-                if recursive_prefix and not link.lower().startswith(recursive_prefix.lower()):
+                if prefixes and not any(link.lower().startswith(p.lower()) for p in prefixes):
                     continue
                 if any(queued == link for queued in to_crawl):
                     continue

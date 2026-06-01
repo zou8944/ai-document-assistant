@@ -72,14 +72,16 @@ async def ingest_urls(
         raise HTTPBadRequestException("URLs list cannot be empty")
 
     # Create task — serialize url_configs for multi-prefix support
+    first_config = request_data.url_configs[0]
     task = await task_service.create_task(
         task_type="ingest_urls",
         collection_id=collection_id,
         input_params={
             "url_configs": [c.model_dump() for c in request_data.url_configs],
             # Keep legacy fields for backward-compatible task display
-            "urls": request_data.url_configs[0].seed_urls,
-            "recursive_prefix": request_data.url_configs[0].recursive_prefix,
+            "urls": first_config.seed_urls,
+            "recursive_prefix": first_config.recursive_prefix,
+            "recursive_prefixes": first_config.recursive_prefixes,
         }
     )
 

@@ -126,6 +126,7 @@ class TaskResponse(BaseModel):
     completed_at: Optional[str] = Field(None, description="Task completion timestamp")
     urls: list[str] = Field(default=[], description="URLs to crawl")
     recursive_prefix: str = Field(default="", description="Recursive prefix for crawling")
+    recursive_prefixes: list[str] = Field(default=[], description="Multiple recursive prefixes for crawling")
     error: Optional[str] = Field(None, description="Error message if failed")
     title: Optional[str] = Field(None, description="AI-generated task title")
 

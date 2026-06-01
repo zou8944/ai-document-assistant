@@ -8,7 +8,7 @@ import clsx from 'clsx'
 
 interface UrlCrawlConfig {
   urls: string[]
-  recursivePrefix: string
+  recursivePrefixes: string[]
 }
 
 interface UrlInputDialogProps {
@@ -25,7 +25,7 @@ export const UrlInputDialog: React.FC<UrlInputDialogProps> = ({
   className
 }) => {
   const [urls, setUrls] = useState<string[]>([''])
-  const [recursivePrefix, setRecursivePrefix] = useState<string>('')
+  const [recursivePrefixes, setRecursivePrefixes] = useState<string[]>([''])
   const [errors, setErrors] = useState<string[]>([])
 
   if (!isOpen) return null
@@ -78,9 +78,10 @@ export const UrlInputDialog: React.FC<UrlInputDialogProps> = ({
     }
 
     setErrors([])
+    const validPrefixes = recursivePrefixes.map(p => p.trim()).filter(p => p)
     onConfirm({
       urls: validUrls,
-      recursivePrefix: recursivePrefix.trim()
+      recursivePrefixes: validPrefixes
     })
   }
 
@@ -177,26 +178,54 @@ export const UrlInputDialog: React.FC<UrlInputDialogProps> = ({
               </div>
             </div>
 
-            {/* Recursive Prefix */}
+            {/* Recursive Prefixes */}
             <div>
-              <label htmlFor="recursivePrefix" className="block text-sm font-medium text-macos-gray-900 mb-2">
+              <label className="block text-sm font-medium text-macos-gray-900 mb-3">
                 爬取前缀匹配
               </label>
-              <input
-                type="text"
-                id="recursivePrefix"
-                value={recursivePrefix}
-                onChange={(e) => setRecursivePrefix(e.target.value)}
-                placeholder="https://example.com/docs/"
-                className={clsx(
-                  'w-full px-4 py-2 border border-macos-gray-300 rounded-lg',
-                  'focus:ring-2 focus:ring-macos-blue focus:border-macos-blue',
-                  'bg-white/70 backdrop-blur-sm text-macos-gray-900 placeholder-macos-gray-500',
-                  'transition-all duration-200'
-                )}
-              />
+              <div className="space-y-2">
+                {recursivePrefixes.map((prefix, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={prefix}
+                      onChange={(e) => {
+                        const newPrefixes = [...recursivePrefixes]
+                        newPrefixes[index] = e.target.value
+                        setRecursivePrefixes(newPrefixes)
+                      }}
+                      placeholder="https://example.com/docs/"
+                      className={clsx(
+                        'flex-1 px-4 py-2 border border-macos-gray-300 rounded-lg',
+                        'focus:ring-2 focus:ring-macos-blue focus:border-macos-blue',
+                        'bg-white/70 backdrop-blur-sm text-macos-gray-900 placeholder-macos-gray-500',
+                        'transition-all duration-200'
+                      )}
+                    />
+                    {recursivePrefixes.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRecursivePrefixes(recursivePrefixes.filter((_, i) => i !== index))
+                        }}
+                        className="p-2 text-macos-gray-400 hover:text-red-500 transition-colors"
+                      >
+                        <MinusIcon className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setRecursivePrefixes([...recursivePrefixes, ''])}
+                  className="flex items-center gap-1 text-sm text-macos-blue hover:text-blue-600 transition-colors"
+                >
+                  <PlusIcon className="w-4 h-4" />
+                  添加前缀
+                </button>
+              </div>
               <p className="mt-1 text-xs text-macos-gray-500">
-                只爬取以此前缀开头的链接，为空则爬取同域名下的所有链接
+                只爬取以任一前缀开头的链接，全部为空则爬取同域名下的所有链接
               </p>
             </div>
 

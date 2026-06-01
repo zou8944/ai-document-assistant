@@ -127,6 +127,7 @@ class TaskService:
         if isinstance(urls, str):
             urls = [urls]
         recursive_prefix = input_params.get("recursive_prefix", "")
+        recursive_prefixes = input_params.get("recursive_prefixes", [])
 
         return TaskResponse(
             task_id=task.id or "",
@@ -142,6 +143,7 @@ class TaskService:
             completed_at=task.completed_at.isoformat() if task.completed_at else None,
             urls=urls,
             recursive_prefix=recursive_prefix,
+            recursive_prefixes=recursive_prefixes,
             error=task.error_message,
             title=input_params.get("title")
         )
@@ -1147,13 +1149,15 @@ class TaskService:
 
                 urls = config.get("seed_urls", [])
                 prefix = config.get("recursive_prefix", "")
+                prefixes = config.get("recursive_prefixes", []) or ([prefix] if prefix else [])
                 if not urls:
                     continue
 
                 config_label = f"[{config_idx + 1}/{len(url_configs)}]" if len(url_configs) > 1 else ""
-                self._log_info_task(task_id, f"Crawling {config_label} prefix={prefix!r}, seeds={len(urls)}")
+                prefix_repr = ", ".join(prefixes) if prefixes else "无"
+                self._log_info_task(task_id, f"Crawling {config_label} prefixes=[{prefix_repr}], seeds={len(urls)}")
 
-                # Recover URLs matching this prefix from previously crawled pages
+                # Recover URLs matching any of the prefixes from previously crawled pages
                 recovered_urls: set[str] = set()
                 for doc in indexed_docs:
                     if doc.html_content and doc.uri:
@@ -1161,12 +1165,12 @@ class TaskService:
                         for link in links:
                             if link in skip_urls:
                                 continue
-                            if prefix and not link.startswith(prefix):
+                            if prefixes and not any(link.lower().startswith(p.lower()) for p in prefixes):
                                 continue
                             recovered_urls.add(link)
 
                 if recovered_urls:
-                    self._log_info_task(task_id, f"Recovered {len(recovered_urls)} URLs for prefix {prefix!r}")
+                    self._log_info_task(task_id, f"Recovered {len(recovered_urls)} URLs for prefixes [{prefix_repr}]")
 
                 seed_urls = list(dict.fromkeys(urls + list(recovered_urls)))
 
@@ -1181,7 +1185,7 @@ class TaskService:
 
                 crawl_gen = self.web_crawler.crawl_recursive_stream(
                     urls=seed_urls,
-                    recursive_prefix=prefix,
+                    recursive_prefixes=prefixes,
                     skip_urls=skip_urls,
                     progress_callback=progress_callback,
                 )

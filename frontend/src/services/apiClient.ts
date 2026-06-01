@@ -57,9 +57,14 @@ export interface IngestFilesRequest {
   files: string[]
 }
 
+export interface UrlConfig {
+  seed_urls: string[]
+  recursive_prefix?: string
+  recursive_prefixes?: string[]
+}
+
 export interface IngestUrlsRequest {
-  urls: string[]
-  recursive_prefix: string
+  url_configs: UrlConfig[]
 }
 
 // Task types
@@ -77,6 +82,7 @@ export interface Task {
   completed_at?: string
   urls?: string[]
   recursive_prefix?: string
+  recursive_prefixes?: string[]
   title?: string
 }
 

@@ -61,9 +61,10 @@ class IngestFilesRequest(BaseModel):
 
 
 class UrlConfig(BaseModel):
-    """Configuration for a set of URLs with a shared recursive prefix."""
+    """Configuration for a set of URLs with recursive prefixes."""
     seed_urls: list[str] = Field(..., min_length=1, description="List of seed URLs")
-    recursive_prefix: str = Field(default="", description="Recursive prefix for crawling")
+    recursive_prefix: str = Field(default="", description="Recursive prefix for crawling (legacy single prefix)")
+    recursive_prefixes: list[str] = Field(default=[], description="Multiple recursive prefixes — a URL matching ANY prefix will be crawled")
 
 
 class IngestUrlsRequest(BaseModel):
