@@ -481,9 +481,8 @@ export const useChat = (chatId: string | null): UseChatReturn => {
         } else if (stepIndex >= 0) {
           // Fallback: no marker detected, promote thinking text to bubble
           const promotedText = state.steps[stepIndex].text || ''
-          const newFinalText = state.finalText
-            ? state.finalText + '\n\n' + promotedText
-            : promotedText
+          // Use only the current iteration's thinking text, not cumulative
+          const newFinalText = promotedText
           const newState: AgentMessageState = {
             ...state,
             finalText: newFinalText,
