@@ -32,7 +32,6 @@ export const DocReader: React.FC<DocReaderProps> = ({ doc, previewUrl, collectio
   const containerRef = useRef<HTMLDivElement>(null)
 
   const loadMarkdown = useCallback(async () => {
-    if (markdownContent !== null || loading) return
     setLoading(true)
     setError(null)
     try {
@@ -44,7 +43,13 @@ export const DocReader: React.FC<DocReaderProps> = ({ doc, previewUrl, collectio
     } finally {
       setLoading(false)
     }
-  }, [apiClient, collectionId, doc.id, markdownContent, loading])
+  }, [apiClient, collectionId, doc.id])
+
+  // Reset markdown content when document changes
+  useEffect(() => {
+    setMarkdownContent(null)
+    setError(null)
+  }, [doc.id])
 
   useEffect(() => {
     if (viewMode === 'markdown') {

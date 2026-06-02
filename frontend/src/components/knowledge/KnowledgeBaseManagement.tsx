@@ -369,6 +369,12 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     const startX = e.clientX
     const startWidth = docListSidebarWidth
 
+    // Disable pointer events on iframes during drag so mouse events
+    // are not captured by iframe content (fixes stuck drag when
+    // releasing mouse over HTML preview).
+    const iframes = document.querySelectorAll('iframe')
+    iframes.forEach((iframe) => { iframe.style.pointerEvents = 'none' })
+
     const handleMouseMove = (e: MouseEvent) => {
       const newWidth = Math.max(200, Math.min(500, startWidth + e.clientX - startX))
       setDocListSidebarWidth(newWidth)
@@ -377,6 +383,8 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     const handleMouseUp = () => {
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
+      // Restore pointer events
+      iframes.forEach((iframe) => { iframe.style.pointerEvents = '' })
     }
 
     document.addEventListener('mousemove', handleMouseMove)
@@ -1298,6 +1306,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
         <div className="flex-1 flex flex-col overflow-hidden bg-gray-50/30">
           {showReader && selectedDoc ? (
             <DocReader
+              key={selectedDoc.id}
               doc={{ id: selectedDoc.id, name: selectedDoc.name, nameTranslated: selectedDoc.nameTranslated, url: selectedDoc.url }}
               previewUrl={previewUrl}
               collectionId={currentKb.id}
