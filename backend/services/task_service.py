@@ -1008,8 +1008,8 @@ class TaskService:
             self._log_info_task(task_id, f"Stopped before summarizing: {file_path_obj.name}")
             return
 
-        self._log_info_task(task_id, f"Summarizing content for: {file_path_obj.name}")
-        summary = await self.llm_service.summarize_document(result.content) if result.success else ""
+        self._log_info_task(task_id, f"Processing content for: {file_path_obj.name}")
+        summary = ""
 
         if not result.success:
             self._log_err_task(task_id, f"Failed to process {file_path_obj.name}: {result.error}")
@@ -1374,11 +1374,8 @@ class TaskService:
             self._log_info_task(task_id, f"Stopped before summarizing: {page_url}")
             return
 
-        self._log_info_task(task_id, f"Summarizing: {page_url}")
-        if crawl_result.content:
-            summary = await self.llm_service.summarize_document(crawl_result.content)
-        else:
-            summary = ""
+        self._log_info_task(task_id, f"Processing: {page_url}")
+        summary = ""
 
         # Check stop flag before persisting
         if self._check_task_cancelled(task_id):
