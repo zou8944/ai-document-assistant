@@ -44,6 +44,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
   const [savingEdit, setSavingEdit] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const apiClient = useAPIClient()
+  const RESTART_DISMISS_KEY = 'knowledge_restart_dismissed'
 
   const {
     knowledgeBases,
@@ -100,18 +101,16 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
     }
   }
   
-  // Load active tasks (pending/processing) for all collections
+  // Load active tasks (pending/processing/failed) for all collections
   const loadActiveTasks = async () => {
     try {
       const response = await apiClient.listTasks(['pending', 'processing', 'failed'])
       const data = extractData(response)
       setActiveTasks(data.tasks)
 
-      // Check if there are tasks needing restart (pending/failed)
-      const needsRestart = data.tasks.filter(
-        (t: Task) => t.status === 'pending' || t.status === 'failed'
-      )
-      if (needsRestart.length > 0) {
+      // Only failed tasks need user intervention to restart
+      const needsRestart = data.tasks.filter((t: Task) => t.status === 'failed')
+      if (needsRestart.length > 0 && !sessionStorage.getItem(RESTART_DISMISS_KEY)) {
         setPendingRestartTasks(needsRestart)
         setShowRestartModal(true)
       }
@@ -125,6 +124,8 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
       setRestarting(true)
       await apiClient.restartPendingTasks()
       setShowRestartModal(false)
+      // Clear dismiss flag so future failures can still prompt
+      sessionStorage.removeItem(RESTART_DISMISS_KEY)
       await loadActiveTasks()
     } catch (error) {
       console.error('重启任务失败:', error)
@@ -136,6 +137,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
 
   const handleDismissRestart = () => {
     setShowRestartModal(false)
+    sessionStorage.setItem(RESTART_DISMISS_KEY, 'true')
   }
 
   // Group active tasks by collection_id
@@ -588,7 +590,8 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                       <div className={clsx(
                         'w-2.5 h-2.5 rounded-full flex-shrink-0',
                         task.status === 'processing' && 'bg-yellow-500 animate-pulse',
-                        task.status === 'pending' && 'bg-gray-400'
+                        task.status === 'pending' && 'bg-gray-400',
+                        task.status === 'failed' && 'bg-red-500'
                       )} />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-gray-800 truncate">

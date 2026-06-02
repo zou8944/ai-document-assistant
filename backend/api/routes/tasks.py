@@ -127,14 +127,18 @@ async def list_tasks(
 @router.post("/tasks/restart-pending")
 async def restart_pending_tasks(request: Request):
     """
-    Restart all pending/processing tasks (for startup recovery)
+    Restart all failed tasks.
+    Pending tasks are already in the worker queue (re-queued at startup).
     """
     task_service = get_app_state(request).task_service
 
-    tasks = task_service.task_repo.get_active_tasks()
     restarted = []
-    for task in tasks:
-        await task_service.restart_task(task.id)
-        restarted.append(task.id)
+    failed_tasks = task_service.task_repo.list_tasks_with_filters(status="failed")
+    for task in failed_tasks:
+        try:
+            await task_service.restart_task(task.id)
+            restarted.append(task.id)
+        except Exception as e:
+            logger.warning(f"Failed to restart task {task.id}: {e}")
 
     return {"restarted": restarted}

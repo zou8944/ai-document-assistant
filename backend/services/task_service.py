@@ -576,6 +576,8 @@ class TaskService:
             return
 
         self.running = True
+        # Re-queue any pending/processing tasks from previous sessions
+        await self.requeue_processing_task()
         self.executor.submit(self._sync_worker, "Task_queue_worker")
 
     async def stop_workers(self):
@@ -658,6 +660,12 @@ class TaskService:
         task = self.task_repo.get_by_id(task_id)
         if not task:
             logger.error(f"Task {task_id} not found")
+            return
+
+        # Skip already-completed tasks to avoid duplicate execution
+        # (e.g. when a task is re-queued while already running)
+        if task.status == "success":
+            logger.info(f"Task {task_id} already completed, skipping")
             return
 
         # Reset LLM failure counter at task start

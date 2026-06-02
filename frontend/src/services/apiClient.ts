@@ -569,7 +569,7 @@ export class DocumentAssistantAPI {
   }
 
   /**
-   * Restart all pending/processing tasks (for startup recovery)
+   * Restart all failed tasks
    */
   async restartPendingTasks(): Promise<APIResponse<{ restarted: string[] }>> {
     return this.request<APIResponse<{ restarted: string[] }>>(
