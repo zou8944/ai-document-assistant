@@ -2,7 +2,7 @@
  * Knowledge base overview page with search and grid layout
  */
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -11,7 +11,9 @@ import {
   CogIcon,
   CalendarIcon,
   DocumentIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  EllipsisVerticalIcon,
+  PencilIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { useAppStore } from '../../store/appStore'
@@ -34,6 +36,12 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
   const [showRestartModal, setShowRestartModal] = useState(false)
   const [pendingRestartTasks, setPendingRestartTasks] = useState<Task[]>([])
   const [restarting, setRestarting] = useState(false)
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
+  const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
   const apiClient = useAPIClient()
 
   const {
@@ -222,6 +230,68 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
     }
   }
 
+  // Menu and edit handlers
+  const handleToggleMenu = (e: React.MouseEvent, collectionId: string) => {
+    e.stopPropagation()
+    setMenuOpenId(menuOpenId === collectionId ? null : collectionId)
+  }
+
+  const handleStartEdit = (collection: Collection) => {
+    setMenuOpenId(null)
+    setEditingCollection(collection)
+    setEditName(collection.name)
+    setEditDescription(collection.description || '')
+  }
+
+  const handleConfirmEdit = async () => {
+    if (!editingCollection) return
+    const trimmedName = editName.trim()
+    if (!trimmedName) return
+    setSavingEdit(true)
+    try {
+      await apiClient.updateCollection(editingCollection.id, {
+        name: trimmedName,
+        description: editDescription.trim() || undefined,
+      })
+      // Update local state
+      setCollections(prev =>
+        prev.map(c =>
+          c.id === editingCollection.id
+            ? { ...c, name: trimmedName, description: editDescription.trim() || undefined }
+            : c
+        )
+      )
+      // Update store
+      updateKnowledgeBase(editingCollection.id, {
+        name: trimmedName,
+        description: editDescription.trim() || '',
+      })
+      setEditingCollection(null)
+    } catch (err) {
+      console.error('Edit failed:', err)
+      alert('编辑失败: ' + (err as Error).message)
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditingCollection(null)
+  }
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpenId(null)
+      }
+    }
+    if (menuOpenId) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [menuOpenId])
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('zh-CN', {
       year: 'numeric',
@@ -329,27 +399,50 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                       <BookOpenIcon className="w-5 h-5 text-blue-500 flex-shrink-0" />
                       <h3 className="font-semibold text-gray-900 truncate">{collection.name}</h3>
                     </div>
-                    {/* Active task dots */}
-                    {(() => {
-                      const tasks = getCollectionTasks(collection.id)
-                      if (tasks.length === 0) return null
-                      return (
-                        <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
-                          {tasks.map(task => (
-                            <div
-                              key={task.task_id}
-                              title={task.title || (task.task_type === 'ingest_urls' ? '网页抓取' : '文件上传')}
-                              className={clsx(
-                                'w-2.5 h-2.5 rounded-full',
-                                task.status === 'processing' && 'bg-yellow-500 animate-pulse',
-                                task.status === 'pending' && 'bg-gray-400',
-                                task.status === 'failed' && 'bg-red-500'
-                              )}
-                            />
-                          ))}
-                        </div>
-                      )
-                    })()}
+                    <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
+                      {/* Active task dots */}
+                      {(() => {
+                        const tasks = getCollectionTasks(collection.id)
+                        if (tasks.length === 0) return null
+                        return (
+                          <div className="flex items-center gap-1.5">
+                            {tasks.map(task => (
+                              <div
+                                key={task.task_id}
+                                title={task.title || (task.task_type === 'ingest_urls' ? '网页抓取' : '文件上传')}
+                                className={clsx(
+                                  'w-2.5 h-2.5 rounded-full',
+                                  task.status === 'processing' && 'bg-yellow-500 animate-pulse',
+                                  task.status === 'pending' && 'bg-gray-400',
+                                  task.status === 'failed' && 'bg-red-500'
+                                )}
+                              />
+                            ))}
+                          </div>
+                        )
+                      })()}
+                      {/* More actions menu */}
+                      <div className="relative" ref={menuOpenId === collection.id ? menuRef : undefined}>
+                        <button
+                          onClick={(e) => handleToggleMenu(e, collection.id)}
+                          className="p-1 hover:bg-gray-100 rounded-md transition-colors text-gray-400 hover:text-gray-600"
+                          title="更多操作"
+                        >
+                          <EllipsisVerticalIcon className="w-4 h-4" />
+                        </button>
+                        {menuOpenId === collection.id && (
+                          <div className="absolute right-0 mt-1 w-32 bg-white rounded-lg shadow-lg border border-gray-200/50 py-1 z-50">
+                            <button
+                              onClick={() => handleStartEdit(collection)}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                            >
+                              <PencilIcon className="w-3.5 h-3.5" />
+                              编辑
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                   
                   <p className="text-sm text-gray-600 mb-3 line-clamp-2">
@@ -418,6 +511,60 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
         onClose={() => setIsAddModalOpen(false)}
         onSuccess={loadCollections}
       />
+
+      {/* Edit Collection Modal */}
+      {editingCollection && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 animate-fade-in">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">编辑知识库</h2>
+              <p className="text-sm text-gray-500 mt-1">修改知识库的名称和描述</p>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">名称</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleConfirmEdit()
+                    if (e.key === 'Escape') handleCancelEdit()
+                  }}
+                  autoFocus
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  placeholder="知识库名称"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">描述</label>
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
+                  placeholder="知识库描述（可选）"
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={handleCancelEdit}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleConfirmEdit}
+                disabled={savingEdit || !editName.trim()}
+                className="px-4 py-2 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors disabled:opacity-50"
+              >
+                {savingEdit ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Restart Tasks Modal */}
       {showRestartModal && (
