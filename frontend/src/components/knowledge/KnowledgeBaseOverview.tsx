@@ -19,6 +19,7 @@ import clsx from 'clsx'
 import { useAppStore } from '../../store/appStore'
 import { useAPIClient, extractData, Collection, Task } from '../../services/apiClient'
 import AddKnowledgeBaseModal from './AddKnowledgeBaseModal'
+import CircularProgress from './CircularProgress'
 
 interface KnowledgeBaseOverviewProps {
   className?: string
@@ -400,27 +401,6 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                       <h3 className="font-semibold text-gray-900 truncate">{collection.name}</h3>
                     </div>
                     <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
-                      {/* Active task dots */}
-                      {(() => {
-                        const tasks = getCollectionTasks(collection.id)
-                        if (tasks.length === 0) return null
-                        return (
-                          <div className="flex items-center gap-1.5">
-                            {tasks.map(task => (
-                              <div
-                                key={task.task_id}
-                                title={task.title || (task.task_type === 'ingest_urls' ? '网页抓取' : '文件上传')}
-                                className={clsx(
-                                  'w-2.5 h-2.5 rounded-full',
-                                  task.status === 'processing' && 'bg-yellow-500 animate-pulse',
-                                  task.status === 'pending' && 'bg-gray-400',
-                                  task.status === 'failed' && 'bg-red-500'
-                                )}
-                              />
-                            ))}
-                          </div>
-                        )
-                      })()}
                       {/* More actions menu */}
                       <div className="relative" ref={menuOpenId === collection.id ? menuRef : undefined}>
                         <button
@@ -459,9 +439,29 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                       <DocumentIcon className="w-3 h-3" />
                       <span>{collection.document_count} 个文档</span>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 rounded-full bg-green-400" />
-                      <span>知识库</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-3 h-3 rounded-full bg-green-400" />
+                        <span>知识库</span>
+                      </div>
+                      {(() => {
+                        const tasks = getCollectionTasks(collection.id)
+                        if (tasks.length === 0) return null
+                        return (
+                          <div className="flex items-center gap-2">
+                            {tasks.map(task => {
+                              const progress = typeof task.progress === 'number' ? task.progress : 0
+                              const color = task.status === 'failed' ? '#ef4444' : task.status === 'pending' ? '#9ca3af' : '#3b82f6'
+                              return (
+                                <div key={task.task_id} className="flex items-center gap-1" title={task.title || (task.task_type === 'ingest_urls' ? '网页抓取' : '文件上传')}>
+                                  <CircularProgress progress={progress} size={16} color={color} />
+                                  <span className="text-[10px] text-gray-500">{progress}%</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )
+                      })()}
                     </div>
                   </div>
                 </div>
