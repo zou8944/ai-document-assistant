@@ -106,9 +106,9 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
       const data = extractData(response)
       setActiveTasks(data.tasks)
 
-      // Check if there are tasks needing restart (pending/processing)
+      // Check if there are tasks needing restart (pending/failed)
       const needsRestart = data.tasks.filter(
-        (t: Task) => t.status === 'pending' || t.status === 'processing'
+        (t: Task) => t.status === 'pending' || t.status === 'failed'
       )
       if (needsRestart.length > 0) {
         setPendingRestartTasks(needsRestart)
