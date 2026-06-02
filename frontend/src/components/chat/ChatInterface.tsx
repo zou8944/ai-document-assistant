@@ -119,6 +119,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
     if (!userMessageContent) return
     setMessage('')
 
+    // Always scroll to bottom when user sends a new message
+    wasNearBottomRef.current = true
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+
     await sendMessage(
       userMessageContent,
       selectedDocumentIds.length > 0 ? selectedDocumentIds : undefined
