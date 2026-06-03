@@ -299,9 +299,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
                     <p className="text-sm text-gray-600 mt-1">{section.subtitle}</p>
                   </div>
 
-                  <div className="p-6 space-y-6">
-                    {section.subsections.map((sub, idx) => (
-                      <div key={idx}>
+                  <div className="p-6 space-y-4">
+                    {section.subsections.map((sub) => (
+                      <div key={sub.title} className="bg-gray-50/60 rounded-lg border border-gray-200/70 p-4">
                         <h3 className="text-sm font-semibold text-gray-800 mb-3">{sub.title}</h3>
                         <div className="space-y-4">
                           {sub.fields.map((field) => (
@@ -314,7 +314,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
                                 <select
                                   value={values[field.key] || ''}
                                   onChange={(e) => handleChange(field.key, e.target.value)}
-                                  className={clsx('w-full px-3 py-2 border border-gray-300 rounded-lg', colors.ring, 'focus:border-transparent')}
+                                  className={clsx('w-full px-3 py-2 border border-gray-300 rounded-lg bg-white', colors.ring, 'focus:border-transparent')}
                                 >
                                   {field.options?.map((opt) => (
                                     <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -327,7 +327,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
                                     value={values[field.key] || ''}
                                     onChange={(e) => handleChange(field.key, e.target.value)}
                                     placeholder={field.placeholder}
-                                    className={clsx('w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm', colors.ring, 'focus:border-transparent')}
+                                    className={clsx('w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm bg-white', colors.ring, 'focus:border-transparent')}
                                   />
                                   <button
                                     type="button"
@@ -344,7 +344,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
                                   value={values[field.key] || ''}
                                   onChange={(e) => handleChange(field.key, e.target.value)}
                                   placeholder={field.placeholder}
-                                  className={clsx('w-full px-3 py-2 border border-gray-300 rounded-lg', colors.ring, 'focus:border-transparent')}
+                                  className={clsx('w-full px-3 py-2 border border-gray-300 rounded-lg bg-white', colors.ring, 'focus:border-transparent')}
                                 />
                               )}
 
@@ -352,9 +352,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
                             </div>
                           ))}
                         </div>
-                        {idx < section.subsections.length - 1 && (
-                          <div className="border-b border-gray-100 mt-5" />
-                        )}
                       </div>
                     ))}
                   </div>
