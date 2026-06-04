@@ -696,6 +696,8 @@ class TaskService:
                 await self._process_reindex_collection(task_id, task.collection_id)
             elif task.type == "regenerate_readme":
                 await self._process_regenerate_readme(task_id, task.collection_id, input_params)
+            elif task.type == "recategorize":
+                await self._process_recategorize(task_id, task.collection_id, input_params)
             else:
                 error_msg = f"Unknown task type: {task.type}"
                 logger.error(error_msg)
@@ -1118,8 +1120,15 @@ class TaskService:
         stats = UrlTaskStats()
         self.update_url_task_progress(task_id, stats)
 
-        # Stage order for resume support
-        STAGES = ["crawl", "vectorize", "rewrite_static", "categorize", "readme"]
+        # Determine stages dynamically based on user options
+        categorize_mode = input_params.get("categorize_mode", "ai")
+        generate_readme = input_params.get("generate_readme", True)
+        active_stages = ["crawl", "vectorize", "rewrite_static"]
+        if categorize_mode != "skip":
+            active_stages.append("categorize")
+        if generate_readme and categorize_mode != "skip":
+            active_stages.append("readme")
+        STAGES = active_stages
         start_index = STAGES.index(resume_stage) if resume_stage in STAGES else 0
 
         # ========================================
@@ -1309,7 +1318,7 @@ class TaskService:
         # ========================================
         # Stage: categorize
         # ========================================
-        if start_index <= STAGES.index("categorize"):
+        if "categorize" in STAGES and start_index <= STAGES.index("categorize"):
             if self._check_task_cancelled(task_id):
                 await self._apply_stop(task_id)
                 return
@@ -1318,15 +1327,15 @@ class TaskService:
             # Incremental categorize if collection already has categories
             collection = self.collection_service.collection_repo.get_by_id(collection_id)
             if collection and collection.categories_json:
-                await self._categorize_incremental(task_id, collection_id)
+                await self._categorize_incremental(task_id, collection_id, categorize_mode)
             else:
-                await self._categorize_collection(task_id, collection_id)
+                await self._categorize_collection(task_id, collection_id, categorize_mode)
                 self._mark_categorized(collection_id)
 
         # ========================================
         # Stage: readme
         # ========================================
-        if start_index <= STAGES.index("readme"):
+        if "readme" in STAGES and start_index <= STAGES.index("readme"):
             if self._check_task_cancelled(task_id):
                 await self._apply_stop(task_id)
                 return
@@ -1336,6 +1345,13 @@ class TaskService:
             stats.phase = "readme"
             self.update_url_task_progress(task_id, stats)
             await self._generate_readme(task_id, collection_id, stats)
+
+        # Update collection preferences
+        self.collection_service.collection_repo.update(
+            collection_id,
+            categorize_mode=categorize_mode,
+            generate_readme=generate_readme,
+        )
 
         self.task_repo.update_progress(task_id, 100)
         self.task_repo.mark_completed(task_id, True)
@@ -2097,7 +2113,7 @@ class TaskService:
         non_other = [g for g in result if g["category"] != "Other"]
         return non_other + other
 
-    async def _categorize_collection(self, task_id: str, collection_id: str):
+    async def _categorize_collection(self, task_id: str, collection_id: str, categorize_mode: str = "ai"):
         """Categorize pages and store results for later README generation."""
         self._log_info_task(task_id, "Categorizing collection pages...")
         docs = self.doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
@@ -2113,38 +2129,48 @@ class TaskService:
         source_language = self._detect_source_language(pages)
         self._log_info_task(task_id, f"Detected source language: {source_language}")
 
-        # Step 1: AI smart grouping (failure propagates - no fallback)
-        self._log_info_task(task_id, "Categorizing pages with AI...")
-        groups = await self.llm_service.categorize_pages(pages)
-        self._log_info_task(task_id, f"Built {len(groups)} AI groups from {len(pages)} pages")
-        for g in groups:
-            self._log_info_task(task_id, f"  Group '{g['category']}': {len(g['pages'])} pages")
+        if categorize_mode == "path_prefix":
+            # Path-prefix based grouping — no LLM calls
+            self._log_info_task(task_id, "Categorizing pages by path prefix...")
+            groups = self._build_path_groups(pages)
+            self._log_info_task(task_id, f"Built {len(groups)} path groups from {len(pages)} pages")
+            for g in groups:
+                self._log_info_task(task_id, f"  Group '{g['category']}': {len(g['pages'])} pages")
+            category_names_zh = {}
+            page_titles_zh = {}
+        else:
+            # Step 1: AI smart grouping (failure propagates - no fallback)
+            self._log_info_task(task_id, "Categorizing pages with AI...")
+            groups = await self.llm_service.categorize_pages(pages)
+            self._log_info_task(task_id, f"Built {len(groups)} AI groups from {len(pages)} pages")
+            for g in groups:
+                self._log_info_task(task_id, f"  Group '{g['category']}': {len(g['pages'])} pages")
 
-        # Step 2: Reorder by complexity (beginner -> advanced)
-        self._log_info_task(task_id, "Ordering categories by complexity...")
-        groups = await self.llm_service.order_categories_by_complexity(groups)
-        self._log_info_task(task_id, f"Categories reordered: {[g['category'] for g in groups]}")
+            # Step 2: Reorder by complexity (beginner -> advanced)
+            self._log_info_task(task_id, "Ordering categories by complexity...")
+            groups = await self.llm_service.order_categories_by_complexity(groups)
+            self._log_info_task(task_id, f"Categories reordered: {[g['category'] for g in groups]}")
 
-        # Step 3: Translate if English source (errors are logged but not fatal)
-        category_names_zh: dict[str, str] = {}
-        page_titles_zh: dict[str, str] = {}
+            # Step 3: Translate if English source (errors are logged but not fatal)
+            category_names_zh: dict[str, str] = {}
+            page_titles_zh: dict[str, str] = {}
 
-        if source_language == "en":
-            try:
-                self._log_info_task(task_id, "Translating category names...")
-                category_names_zh = await self.llm_service.translate_category_names(
-                    [g["category"] for g in groups]
-                )
-                self._log_info_task(task_id, f"Category names translated: {len(category_names_zh)}")
-            except Exception as e:
-                self._log_err_task(task_id, f"Category name translation failed: {e}")
+            if source_language == "en":
+                try:
+                    self._log_info_task(task_id, "Translating category names...")
+                    category_names_zh = await self.llm_service.translate_category_names(
+                        [g["category"] for g in groups]
+                    )
+                    self._log_info_task(task_id, f"Category names translated: {len(category_names_zh)}")
+                except Exception as e:
+                    self._log_err_task(task_id, f"Category name translation failed: {e}")
 
-            try:
-                self._log_info_task(task_id, f"Translating all {len(pages)} page titles...")
-                page_titles_zh = await self.llm_service.translate_all_page_titles(pages)
-                self._log_info_task(task_id, f"Page titles translated: {len(page_titles_zh)}")
-            except Exception as e:
-                self._log_err_task(task_id, f"Page title translation failed: {e}")
+                try:
+                    self._log_info_task(task_id, f"Translating all {len(pages)} page titles...")
+                    page_titles_zh = await self.llm_service.translate_all_page_titles(pages)
+                    self._log_info_task(task_id, f"Page titles translated: {len(page_titles_zh)}")
+                except Exception as e:
+                    self._log_err_task(task_id, f"Page title translation failed: {e}")
 
         # Step 4: Build categories JSON
         categories_for_json = []
@@ -2197,8 +2223,15 @@ class TaskService:
         count = self.doc_repo.mark_categorized(collection_id)
         logger.info(f"Marked {count} documents as categorized in {collection_id}")
 
-    async def _categorize_incremental(self, task_id: str, collection_id: str):
+    async def _categorize_incremental(self, task_id: str, collection_id: str, categorize_mode: str = "ai"):
         """Incrementally categorize: only process new (uncategorized) documents, merge with existing."""
+        if categorize_mode == "path_prefix":
+            # Path prefix mode: just rebuild from scratch (no LLM cost)
+            self._log_info_task(task_id, "Path prefix mode: rebuilding categories from all docs")
+            await self._categorize_collection(task_id, collection_id, categorize_mode)
+            self._mark_categorized(collection_id)
+            return
+
         self._log_info_task(task_id, "Starting incremental categorization...")
 
         all_docs = self.doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
@@ -2212,7 +2245,7 @@ class TaskService:
         if not existing_categorized:
             # First categorization — use full flow
             self._log_info_task(task_id, "No existing categorized docs, running full categorization")
-            await self._categorize_collection(task_id, collection_id)
+            await self._categorize_collection(task_id, collection_id, categorize_mode)
             self._mark_categorized(collection_id)
             return
 
@@ -2222,7 +2255,7 @@ class TaskService:
         collection = self.collection_service.collection_repo.get_by_id(collection_id)
         if not collection or not collection.categories_json:
             self._log_info_task(task_id, "No existing categories found, running full categorization")
-            await self._categorize_collection(task_id, collection_id)
+            await self._categorize_collection(task_id, collection_id, categorize_mode)
             self._mark_categorized(collection_id)
             return
 
@@ -2363,10 +2396,14 @@ class TaskService:
         """Re-categorize all documents and regenerate README without re-crawling."""
         self._log_info_task(task_id, "Starting README regeneration")
 
+        # Use collection's saved categorize_mode, default to ai
+        collection = self.collection_service.collection_repo.get_by_id(collection_id)
+        categorize_mode = collection.categorize_mode if collection and collection.categorize_mode else "ai"
+
         # Stage: categorize — clear all marks and re-categorize from scratch
         self._update_stage(task_id, "categorize")
         self.doc_repo.clear_categorized(collection_id)
-        await self._categorize_collection(task_id, collection_id)
+        await self._categorize_collection(task_id, collection_id, categorize_mode)
         self._mark_categorized(collection_id)
 
         # Stage: readme
@@ -2376,6 +2413,30 @@ class TaskService:
 
         self.task_repo.mark_completed(task_id, True)
         self._log_info_task(task_id, "README regeneration completed")
+
+    async def _process_recategorize(
+        self,
+        task_id: str,
+        collection_id: str,
+        input_params: dict[str, Any]
+    ):
+        """Re-categorize all documents without re-crawling or regenerating README."""
+        categorize_mode = input_params.get("categorize_mode", "ai")
+        self._log_info_task(task_id, f"Starting recategorization with mode: {categorize_mode}")
+
+        # Stage: categorize — clear all marks and re-categorize from scratch
+        self._update_stage(task_id, "categorize")
+        self.doc_repo.clear_categorized(collection_id)
+        await self._categorize_collection(task_id, collection_id, categorize_mode)
+        self._mark_categorized(collection_id)
+
+        # Update collection's categorize_mode
+        self.collection_service.collection_repo.update(
+            collection_id, categorize_mode=categorize_mode
+        )
+
+        self.task_repo.mark_completed(task_id, True)
+        self._log_info_task(task_id, "Recategorization completed")
 
     def close(self):
         """Close connections and cleanup resources"""

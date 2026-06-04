@@ -13,6 +13,7 @@ from exception import HTTPBadRequestException, HTTPConflictException, HTTPNotFou
 from models.config import AppConfig
 from models.requests import (
     CreateCollectionRequest,
+    RecategorizeRequest,
     UpdateCollectionRequest,
 )
 from models.responses import ListCollectionsResponseV1, ReadmeResponse
@@ -234,5 +235,36 @@ async def regenerate_readme(collection_id: str, request: Request):
     )
 
     logger.info(f"Created regenerate_readme task {task.task_id} for collection {collection_id}")
+
+    return {"task_id": task.task_id, "status": task.status}
+
+
+@router.post("/collections/{collection_id}/recategorize", status_code=status.HTTP_202_ACCEPTED)
+async def recategorize_collection(
+    collection_id: str,
+    request_data: RecategorizeRequest,
+    request: Request,
+):
+    """Re-categorize all documents in a collection without re-crawling."""
+    app_state = get_app_state(request)
+    task_service = app_state.task_service
+
+    # Verify collection exists and has documents
+    collection = await app_state.collection_service.get_collection(collection_id)
+    if not collection:
+        raise HTTPNotFoundException(f"Collection '{collection_id}' not found")
+    if collection.document_count == 0:
+        raise HTTPBadRequestException(f"Collection '{collection_id}' has no documents")
+
+    task = await task_service.create_task(
+        task_type="recategorize",
+        collection_id=collection_id,
+        input_params={
+            "categorize_mode": request_data.categorize_mode,
+            "title": "重新分类文档",
+        },
+    )
+
+    logger.info(f"Created recategorize task {task.task_id} for collection {collection_id}")
 
     return {"task_id": task.task_id, "status": task.status}

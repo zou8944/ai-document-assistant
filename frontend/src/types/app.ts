@@ -11,6 +11,8 @@ export interface KnowledgeBase {
   createdAt: string
   documentCount: number
   sourceType: 'files' | 'website' | 'mixed'
+  categorizeMode?: string
+  generateReadme?: boolean
 }
 
 export interface ChatSession {

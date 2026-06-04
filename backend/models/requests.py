@@ -75,6 +75,9 @@ class IngestUrlsRequest(BaseModel):
     recursive_prefix: Optional[str] = Field(None, description="Recursive prefix for crawling")
     # New format
     url_configs: Optional[list[UrlConfig]] = Field(None, description="Multiple URL configs with independent prefixes")
+    # Categorization options
+    categorize_mode: str = Field(default="ai", description="Categorization mode: ai or path_prefix")
+    generate_readme: bool = Field(default=True, description="Whether to generate README after ingestion")
 
     @model_validator(mode="after")
     def _normalize(self):
@@ -84,6 +87,11 @@ class IngestUrlsRequest(BaseModel):
             self.url_configs = [UrlConfig(seed_urls=self.urls, recursive_prefix=self.recursive_prefix or "")]
             return self
         raise ValueError("必须提供 urls 或 url_configs")
+
+
+class RecategorizeRequest(BaseModel):
+    """Request model for recategorizing a collection"""
+    categorize_mode: str = Field(default="ai", description="Categorization mode: ai or path_prefix")
 
 
 class CreateChatRequest(BaseModel):

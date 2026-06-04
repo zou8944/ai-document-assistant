@@ -68,6 +68,17 @@ class Collection(Base):
         nullable=True,
         doc="Detected source language of documents (zh, en, mixed)"
     )
+    categorize_mode: Mapped[str] = mapped_column(
+        String(20),
+        default="ai",
+        server_default="ai",
+        doc="Categorization mode: ai or path_prefix"
+    )
+    generate_readme: Mapped[bool] = mapped_column(
+        default=True,
+        server_default="1",
+        doc="Whether to generate README during ingestion"
+    )
 
     # Statistics (cached values)
     document_count: Mapped[int] = mapped_column(

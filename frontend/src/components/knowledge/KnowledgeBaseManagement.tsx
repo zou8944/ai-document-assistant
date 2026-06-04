@@ -135,6 +135,10 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const [stoppingTaskIds, setStoppingTaskIds] = useState<Set<string>>(new Set())
   const actionsMenuRef = useRef<HTMLDivElement>(null)
 
+  // Recategorize modal state
+  const [recategorizeModalOpen, setRecategorizeModalOpen] = useState(false)
+  const [recategorizeMode, setRecategorizeMode] = useState('ai')
+
   // Delete task modal state
   const [deleteTaskModalOpen, setDeleteTaskModalOpen] = useState(false)
   const [taskToDeleteId, setTaskToDeleteId] = useState<string | null>(null)
@@ -397,6 +401,8 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const handleUrlDialogConfirm = async (config: {
     urls: string[]
     recursivePrefixes: string[]
+    categorizeMode: string
+    generateReadme: boolean
   }) => {
     setShowUrlDialog(false)
     if (!currentKb || config.urls.length === 0) return
@@ -406,6 +412,8 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
           seed_urls: config.urls,
           recursive_prefixes: config.recursivePrefixes,
         }],
+        categorize_mode: config.categorizeMode,
+        generate_readme: config.generateReadme,
       })
       const taskData = extractData(response)
       setSelectedTaskId(taskData.task_id)
@@ -573,6 +581,50 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     setShowActionsMenu(false)
     setConfirmName('')
     setDeleteModalOpen(true)
+  }
+
+  const handleRecategorize = () => {
+    setShowActionsMenu(false)
+    setRecategorizeMode(currentKb?.categorizeMode || 'ai')
+    setRecategorizeModalOpen(true)
+  }
+
+  const handleConfirmRecategorize = async () => {
+    if (!currentKb) return
+    setRecategorizeModalOpen(false)
+    try {
+      const response = await apiClient.recategorizeCollection(currentKb.id, {
+        categorize_mode: recategorizeMode,
+      })
+      const taskData = extractData(response)
+      setSelectedTaskId(taskData.task_id)
+      setTaskLogs([])
+      setIsStreaming(true)
+      apiClient.cancelRequests()
+      streamTaskProgress(taskData.task_id)
+      loadTasks()
+    } catch (error) {
+      console.error('重新分类失败:', error)
+      alert('重新分类失败: ' + (error as Error).message)
+    }
+  }
+
+  const handleRegenerateReadme = async () => {
+    setShowActionsMenu(false)
+    if (!currentKb) return
+    try {
+      const response = await apiClient.regenerateReadme(currentKb.id)
+      const taskData = extractData(response)
+      setSelectedTaskId(taskData.task_id)
+      setTaskLogs([])
+      setIsStreaming(true)
+      apiClient.cancelRequests()
+      streamTaskProgress(taskData.task_id)
+      loadTasks()
+    } catch (error) {
+      console.error('重新生成 README 失败:', error)
+      alert('重新生成 README 失败: ' + (error as Error).message)
+    }
   }
 
   const handleConfirmDelete = async () => {
@@ -913,7 +965,22 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                 <EllipsisVerticalIcon className="w-5 h-5" />
               </button>
               {showActionsMenu && (
-                <div className="absolute right-0 mt-1 w-40 bg-white rounded-lg shadow-lg border border-gray-200/50 py-1 z-50">
+                <div className="absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200/50 py-1 z-50">
+                  <button
+                    onClick={handleRecategorize}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <ArrowPathIcon className="w-4 h-4" />
+                    重新分类
+                  </button>
+                  <button
+                    onClick={handleRegenerateReadme}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <DocumentIcon className="w-4 h-4" />
+                    重新生成 README
+                  </button>
+                  <div className="border-t border-gray-100 my-1" />
                   <button
                     onClick={handleClearCollection}
                     className="w-full flex items-center gap-2 px-4 py-2 text-sm text-yellow-700 hover:bg-yellow-50 transition-colors"
@@ -1357,6 +1424,72 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
         onClose={() => setShowFileUpload(false)}
         isProcessing={isStreaming}
       />
+
+      {/* Recategorize Modal */}
+      {recategorizeModalOpen && currentKb && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setRecategorizeModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md bg-white rounded-xl shadow-2xl flex flex-col mx-4 overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">重新分类文档</h3>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <p className="text-sm text-gray-600">
+                选择分类方式后，系统将重新对知识库
+                <span className="font-semibold text-gray-900">&nbsp;"{currentKb.name}"&nbsp;</span>
+                中的所有文档进行分类。
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  分类方式
+                </label>
+                <div className="flex gap-3">
+                  <label className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors">
+                    <input
+                      type="radio"
+                      name="recategorizeMode"
+                      value="ai"
+                      checked={recategorizeMode === 'ai'}
+                      onChange={(e) => setRecategorizeMode(e.target.value)}
+                      className="w-4 h-4 text-macos-blue"
+                    />
+                    <span className="text-sm text-gray-700">AI 智能分类</span>
+                  </label>
+                  <label className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors">
+                    <input
+                      type="radio"
+                      name="recategorizeMode"
+                      value="path_prefix"
+                      checked={recategorizeMode === 'path_prefix'}
+                      onChange={(e) => setRecategorizeMode(e.target.value)}
+                      className="w-4 h-4 text-macos-blue"
+                    />
+                    <span className="text-sm text-gray-700">按路径前缀分类</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={() => setRecategorizeModalOpen(false)}
+                className="px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleConfirmRecategorize}
+                className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+              >
+                确认重新分类
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Clear Collection Confirm Modal */}
       {clearModalOpen && currentKb && (

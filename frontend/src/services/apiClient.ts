@@ -10,6 +10,8 @@ export interface Collection {
   name: string
   description?: string
   source_language?: string
+  categorize_mode?: string
+  generate_readme?: boolean
   document_count: number
   vector_count: number
   index_version?: string
@@ -65,6 +67,12 @@ export interface UrlConfig {
 
 export interface IngestUrlsRequest {
   url_configs: UrlConfig[]
+  categorize_mode?: string
+  generate_readme?: boolean
+}
+
+export interface RecategorizeRequest {
+  categorize_mode: string
 }
 
 // Task types
@@ -351,10 +359,35 @@ export class DocumentAssistantAPI {
   }
 
   /**
+   * Re-categorize all documents in a collection without re-crawling
+   */
+  async recategorizeCollection(
+    collectionId: string,
+    request: RecategorizeRequest
+  ): Promise<APIResponse<{ task_id: string; status: string }>> {
+    return this.request<APIResponse<{ task_id: string; status: string }>>(
+      `/api/v1/collections/${encodeURIComponent(collectionId)}/recategorize`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }
+    )
+  }
+
+  /**
    * Trigger re-indexing of all documents in a collection with current chunking parameters
    */
   async reindexCollection(collectionId: string): Promise<APIResponse<{ task_id: string; status: string }>> {
     return this.request<APIResponse<{ task_id: string; status: string }>>(`/api/v1/collections/${encodeURIComponent(collectionId)}/reindex`, {
+      method: 'POST',
+    })
+  }
+
+  /**
+   * Re-categorize all documents and regenerate README without re-crawling
+   */
+  async regenerateReadme(collectionId: string): Promise<APIResponse<{ task_id: string; status: string }>> {
+    return this.request<APIResponse<{ task_id: string; status: string }>>(`/api/v1/collections/${encodeURIComponent(collectionId)}/regenerate-readme`, {
       method: 'POST',
     })
   }

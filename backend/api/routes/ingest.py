@@ -82,6 +82,8 @@ async def ingest_urls(
             "urls": first_config.seed_urls,
             "recursive_prefix": first_config.recursive_prefix,
             "recursive_prefixes": first_config.recursive_prefixes,
+            "categorize_mode": request_data.categorize_mode,
+            "generate_readme": request_data.generate_readme,
         }
     )
 

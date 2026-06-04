@@ -117,7 +117,7 @@ class Task(Base):
     # Constraints
     __table_args__ = (
         CheckConstraint(
-            "type IN ('ingest_files', 'ingest_urls', 'reindex_collection', 'regenerate_readme')",
+            "type IN ('ingest_files', 'ingest_urls', 'reindex_collection', 'regenerate_readme', 'recategorize')",
             name="chk_task_type"
         ),
         CheckConstraint(

@@ -6,9 +6,11 @@ import React, { useState } from 'react'
 import { XMarkIcon, PlusIcon, MinusIcon } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 
-interface UrlCrawlConfig {
+export interface UrlCrawlConfig {
   urls: string[]
   recursivePrefixes: string[]
+  categorizeMode: string
+  generateReadme: boolean
 }
 
 interface UrlInputDialogProps {
@@ -26,6 +28,8 @@ export const UrlInputDialog: React.FC<UrlInputDialogProps> = ({
 }) => {
   const [urls, setUrls] = useState<string[]>([''])
   const [recursivePrefixes, setRecursivePrefixes] = useState<string[]>([''])
+  const [categorizeMode, setCategorizeMode] = useState<string>('ai')
+  const [generateReadme, setGenerateReadme] = useState<boolean>(true)
   const [errors, setErrors] = useState<string[]>([])
 
   if (!isOpen) return null
@@ -81,7 +85,9 @@ export const UrlInputDialog: React.FC<UrlInputDialogProps> = ({
     const validPrefixes = recursivePrefixes.map(p => p.trim()).filter(p => p)
     onConfirm({
       urls: validUrls,
-      recursivePrefixes: validPrefixes
+      recursivePrefixes: validPrefixes,
+      categorizeMode,
+      generateReadme,
     })
   }
 
@@ -227,6 +233,49 @@ export const UrlInputDialog: React.FC<UrlInputDialogProps> = ({
               <p className="mt-1 text-xs text-macos-gray-500">
                 只爬取以任一前缀开头的链接，全部为空则爬取同域名下的所有链接
               </p>
+            </div>
+
+            {/* Categorization Options */}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-macos-gray-900 mb-2">
+                  文档分类方式
+                </label>
+                <div className="flex gap-3">
+                  <label className="flex items-center gap-2 px-4 py-2 rounded-lg border border-macos-gray-200 cursor-pointer hover:bg-macos-gray-50/50 transition-colors">
+                    <input
+                      type="radio"
+                      name="categorizeMode"
+                      value="ai"
+                      checked={categorizeMode === 'ai'}
+                      onChange={(e) => setCategorizeMode(e.target.value)}
+                      className="w-4 h-4 text-macos-blue"
+                    />
+                    <span className="text-sm text-macos-gray-700">AI 智能分类</span>
+                  </label>
+                  <label className="flex items-center gap-2 px-4 py-2 rounded-lg border border-macos-gray-200 cursor-pointer hover:bg-macos-gray-50/50 transition-colors">
+                    <input
+                      type="radio"
+                      name="categorizeMode"
+                      value="path_prefix"
+                      checked={categorizeMode === 'path_prefix'}
+                      onChange={(e) => setCategorizeMode(e.target.value)}
+                      className="w-4 h-4 text-macos-blue"
+                    />
+                    <span className="text-sm text-macos-gray-700">按路径前缀分类</span>
+                  </label>
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={generateReadme}
+                  onChange={(e) => setGenerateReadme(e.target.checked)}
+                  className="w-4 h-4 rounded border-macos-gray-300 text-macos-blue focus:ring-macos-blue"
+                />
+                <span className="text-sm text-macos-gray-700">生成 README 导航页</span>
+              </label>
             </div>
 
             {/* Actions */}
