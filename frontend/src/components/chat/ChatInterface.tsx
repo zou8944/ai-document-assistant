@@ -186,10 +186,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
 
   if (!currentChat) {
     return (
-      <div className="flex items-center justify-center h-full text-[#8E8E93]">
+      <div className="flex items-center justify-center h-full text-muted">
         <div className="text-center">
-          <CpuChipIcon className="w-16 h-16 mx-auto mb-4 opacity-50" />
-          <p>请选择一个聊天会话</p>
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full accent-tile flex items-center justify-center">
+            <CpuChipIcon className="w-7 h-7 text-accent" />
+          </div>
+          <p className="font-display text-lg italic text-ink-soft">请选择一条对话</p>
+          <p className="text-xs mt-1.5 text-muted">从左侧选一个 chat 开始，或创建新对话</p>
         </div>
       </div>
     )
@@ -201,26 +204,26 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
   return (
     <div className={clsx('h-full flex flex-col', className)}>
       {/* Header */}
-      <div className="flex-shrink-0 px-6 py-3 border-b border-gray-200/40 bg-white/30 backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-2 text-sm text-[#8E8E93]">
-            <span>知识库:</span>
+      <div className="flex-shrink-0 px-6 py-3 border-b border-paper-edge/60 surface-glass">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="section-label text-muted-soft">Reading</span>
             {kbNames.length > 0 ? (
-              <span className="text-[#1c1c1e] font-medium">
-                {kbNames.join(' + ')}
+              <span className="font-display italic text-ink-soft truncate">
+                {kbNames.join(' · ')}
               </span>
             ) : (
-              <span>暂无</span>
+              <span className="font-display italic text-muted">未指定文库</span>
             )}
           </div>
 
           {!isBoundChat && (
             <button
               onClick={() => setShowKnowledgeBaseSelector(true)}
-              className="flex items-center space-x-1 text-sm text-[#8E8E93] hover:text-[#007AFF] transition-colors"
+              className="btn-ghost"
             >
-              <PlusIcon className="w-4 h-4" />
-              <span>管理知识库</span>
+              <PlusIcon className="w-3.5 h-3.5" />
+              <span>管理文库</span>
             </button>
           )}
         </div>
@@ -228,53 +231,53 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
 
       {/* Messages Area */}
       <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-4xl mx-auto py-6">
           {/* Loading older messages indicator */}
           {isLoadingOlder && (
             <div className="px-6 py-3 flex justify-center">
               <div className="flex space-x-1.5">
-                <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" />
-                <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                <div className="w-1.5 h-1.5 bg-muted-soft rounded-full animate-bounce" />
+                <div className="w-1.5 h-1.5 bg-muted-soft rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                <div className="w-1.5 h-1.5 bg-muted-soft rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
               </div>
             </div>
           )}
           {messages.map((msg) => (
             <div key={msg.id} className={clsx(
-              'px-6 py-3.5',
+              'px-6 py-4',
               msg.type === 'user' ? 'animate-message-user' : 'animate-message-ai'
             )}>
               {msg.type === 'user' ? (
-                /* User message - right aligned card */
+                /* User message - right aligned bubble */
                 <div className="flex justify-end">
-                  <div className="max-w-3xl">
-                    <div className="brand-surface rounded-2xl px-5 py-3">
+                  <div className="max-w-2xl">
+                    <div className="msg-user rounded-2xl rounded-br-md px-5 py-3 leading-relaxed text-[15px] text-white">
                       <MarkdownContent content={msg.content} isUser />
                     </div>
-                    <div className="mt-1.5 text-[11px] text-[#8E8E93] text-right">
+                    <div className="mt-1.5 text-[10px] tracking-wider text-muted-soft text-right uppercase">
                       {formatTime(msg.timestamp)}
                     </div>
                   </div>
                 </div>
               ) : (
-                /* AI message - left aligned with bubble */
-                <div className="flex space-x-4">
+                /* AI message - left aligned with bubble + integrated agent trace */
+                <div className="flex gap-3.5">
                   <div className="flex-shrink-0">
-                    <div className="w-7 h-7 rounded-full bg-[#007AFF]/10 text-[#007AFF] flex items-center justify-center">
-                      <CpuChipIcon className="w-3.5 h-3.5" />
+                    <div className="w-8 h-8 rounded-full accent-tile flex items-center justify-center">
+                      <CpuChipIcon className="w-4 h-4 text-accent" />
                     </div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    {msg.agentState && (
-                      <AgentTrace state={msg.agentState} />
-                    )}
-                    <div className="bg-white/80 backdrop-blur-sm rounded-2xl px-5 py-3 border border-[#D1D1D6]/40">
-                      <div className="text-base leading-[1.7] text-[#1c1c1e]">
+                    <div className="msg-ai rounded-2xl rounded-tl-md px-5 py-3.5">
+                      {msg.agentState && (
+                        <AgentTrace state={msg.agentState} />
+                      )}
+                      <div className="text-[15px] leading-[1.7] text-ink">
                         <MarkdownContent content={msg.content} />
                       </div>
                       <SourceReferences sources={msg.sources || []} />
                     </div>
-                    <div className="mt-1.5 text-[11px] text-[#8E8E93]">
+                    <div className="mt-1.5 ml-1 text-[10px] tracking-wider text-muted-soft uppercase">
                       {formatTime(msg.timestamp)}
                     </div>
                   </div>
@@ -285,35 +288,41 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
 
           {/* Streaming content */}
           {isStreaming && (
-            <div className="px-6 py-3.5">
-              <div className="flex space-x-4">
+            <div className="px-6 py-4">
+              <div className="flex gap-3.5">
                 <div className="flex-shrink-0">
-                  <div className="w-7 h-7 rounded-full bg-[#007AFF]/10 text-[#007AFF] flex items-center justify-center">
-                    <CpuChipIcon className="w-3.5 h-3.5" />
+                  <div className="w-8 h-8 rounded-full accent-tile flex items-center justify-center">
+                    <CpuChipIcon className="w-4 h-4 text-accent" />
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
-                  {processingStatus && (
-                    <div className="mb-2 flex items-center space-x-2 text-xs text-[#8E8E93]">
-                      <div className="w-3 h-3 border-2 border-[#007AFF] border-t-transparent rounded-full animate-spin" />
-                      <span>{processingStatus}</span>
-                    </div>
-                  )}
-                  {streamingAgentState && (
-                    <AgentTrace state={streamingAgentState} />
-                  )}
-                  <div className="bg-white/80 backdrop-blur-sm rounded-2xl px-5 py-3 border border-[#D1D1D6]/40">
-                    <div className="text-base leading-[1.7] text-[#1c1c1e]">
+                  <div className="msg-ai rounded-2xl rounded-tl-md px-5 py-3.5">
+                    {processingStatus && (
+                      <div className="mb-2.5 flex items-center gap-2 text-[11px] tracking-wider text-muted uppercase">
+                        <div
+                          className="w-2 h-2 rounded-full bg-accent animate-breathe"
+                          style={{ boxShadow: '0 0 8px rgba(0,122,255,0.4)' }}
+                        />
+                        <span>{processingStatus}</span>
+                      </div>
+                    )}
+                    {streamingAgentState && (
+                      <AgentTrace state={streamingAgentState} />
+                    )}
+                    <div className="text-[15px] leading-[1.7] text-ink">
                       {streamingContent ? (
                         <>
                           <MarkdownContent content={streamingContent} />
-                          <div className="inline-block w-2 h-4 bg-[#007AFF] ml-0.5 animate-pulse align-middle" />
+                          <span
+                            className="inline-block w-1.5 h-4 bg-accent ml-0.5 align-middle animate-breathe"
+                            style={{ borderRadius: 1 }}
+                          />
                         </>
                       ) : (
-                        <div className="flex space-x-1.5 py-2">
-                          <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" />
-                          <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                          <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                        <div className="flex items-center gap-1.5 py-2">
+                          <div className="w-1.5 h-1.5 bg-muted-soft rounded-full animate-breathe" />
+                          <div className="w-1.5 h-1.5 bg-muted-soft rounded-full animate-breathe" style={{ animationDelay: '0.3s' }} />
+                          <div className="w-1.5 h-1.5 bg-muted-soft rounded-full animate-breathe" style={{ animationDelay: '0.6s' }} />
                         </div>
                       )}
                     </div>
@@ -323,20 +332,22 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
             </div>
           )}
 
-          {/* Loading indicator */}
+          {/* Loading indicator (between messages, no stream yet) */}
           {isLoading && !isStreaming && (
-            <div className="px-6 py-3.5">
-              <div className="flex space-x-4">
+            <div className="px-6 py-4">
+              <div className="flex gap-3.5">
                 <div className="flex-shrink-0">
-                  <div className="w-7 h-7 rounded-full bg-[#007AFF]/10 text-[#007AFF] flex items-center justify-center">
-                    <CpuChipIcon className="w-3.5 h-3.5" />
+                  <div className="w-8 h-8 rounded-full accent-tile flex items-center justify-center">
+                    <CpuChipIcon className="w-4 h-4 text-accent" />
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex space-x-1.5 py-2">
-                    <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                    <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                  <div className="msg-ai rounded-2xl rounded-tl-md px-5 py-4">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 bg-muted-soft rounded-full animate-breathe" />
+                      <div className="w-1.5 h-1.5 bg-muted-soft rounded-full animate-breathe" style={{ animationDelay: '0.3s' }} />
+                      <div className="w-1.5 h-1.5 bg-muted-soft rounded-full animate-breathe" style={{ animationDelay: '0.6s' }} />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -348,13 +359,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
       </div>
 
       {/* Input Area */}
-      <div className="relative flex-shrink-0 bg-white/30 backdrop-blur-sm">
-        {/* 顶部色差过渡层：消息区背景与输入区背景的渐变衔接 */}
+      <div className="relative flex-shrink-0 surface-glass">
+        {/* 顶部色差过渡层 */}
         <div
           aria-hidden
-          className="pointer-events-none absolute -top-6 left-0 right-0 h-6 bg-gradient-to-b from-transparent to-white/30"
+          className="pointer-events-none absolute -top-8 left-0 right-0 h-8 bg-gradient-to-b from-transparent to-paper/40"
         />
-        <div className="max-w-6xl mx-auto px-6 py-4">
+        <div className="max-w-4xl mx-auto px-6 py-4">
           {/* Document picker */}
           <DocumentPicker
             selectedDocumentIds={selectedDocumentIds}
@@ -362,7 +373,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
           />
 
           {/* Input box */}
-          <div className="flex space-x-3 bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 px-4 py-3 shadow-[0_2px_10px_rgba(0,0,0,0.06)] transition-all duration-200 focus-within:border-blue-300/60 focus-within:shadow-[0_2px_20px_rgba(0,122,255,0.12)] focus-within:bg-white/85">
+          <div className="group flex items-end gap-2.5 surface-card rounded-2xl px-4 py-3 transition-all duration-200 focus-within:border-accent/40 focus-within:bg-white/85 focus-within:shadow-lift">
             <div className="flex-1 relative">
               <RichTextInput
                 value={message}
@@ -373,29 +384,32 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                     handleSendMessage()
                   }
                 }}
-                placeholder="输入您的问题，使用 @ 来引用特定文档..."
+                placeholder="向 AI 文库提问，使用 @ 引用特定文档…"
                 disabled={isLoading || isStreaming}
-                className="w-full resize-none rounded-xl border-0 bg-transparent px-0 py-0 pr-4 focus:ring-0 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full resize-none rounded-xl border-0 bg-transparent px-0 py-0.5 pr-2 text-[15px] text-ink placeholder:text-muted focus:ring-0 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
             {isLoading || isStreaming ? (
               <button
                 onClick={stopGeneration}
-                className="flex-shrink-0 bg-[#1c1c1e] text-white p-3 rounded-xl transition-colors active:scale-95 transition-transform duration-75"
+                className="flex-shrink-0 bg-ink hover:bg-ink-soft text-white p-2.5 rounded-xl transition-all active:scale-95 shadow-sm"
                 title="停止生成"
               >
-                <StopIcon className="w-5 h-5" />
+                <StopIcon className="w-4 h-4" />
               </button>
             ) : (
               <button
                 onClick={handleSendMessage}
                 disabled={!getRealUserInput(message).trim()}
-                className="flex-shrink-0 bg-[#007AFF] hover:bg-[#0066D6] disabled:bg-[#E5E5EA] text-white p-3 rounded-xl transition-colors disabled:cursor-not-allowed active:scale-95 transition-transform duration-75"
+                className="btn-primary flex-shrink-0 p-2.5 disabled:!shadow-none disabled:!transform-none"
               >
-                <PaperAirplaneIcon className="w-5 h-5" />
+                <PaperAirplaneIcon className="w-4 h-4" />
               </button>
             )}
           </div>
+          <p className="mt-2 text-center text-[10px] tracking-wider text-muted-soft uppercase">
+            Enter 发送 · Shift+Enter 换行
+          </p>
         </div>
       </div>
 

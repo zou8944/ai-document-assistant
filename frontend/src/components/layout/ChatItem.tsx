@@ -154,16 +154,19 @@ export const ChatItem: React.FC<ChatItemProps> = ({
             onDragEnd={onDragEnd}
             onClick={() => !isEditing && onSelect(chat.id)}
             className={clsx(
-              'group w-full flex items-center space-x-3 p-3 rounded-lg text-left transition-colors duration-200 cursor-pointer select-none relative z-10',
-              !showMenu && !isActive && 'hover:scale-[1.02] active:scale-[0.98]',
+              'group w-full flex items-center space-x-3 p-3 rounded-lg-editorial text-left transition-all duration-200 cursor-pointer select-none relative z-10',
+              !showMenu && !isActive && 'hover:bg-paper-warm/60 active:scale-[0.98]',
               isActive
-                ? 'text-white'
-                : 'text-[#1c1c1e] hover:bg-white/50',
+                ? 'text-accent-deep'
+                : 'text-ink',
               isDragging && 'opacity-50',
-              dragOverIndex === index && 'border-t-2 border-[#007AFF]'
+              dragOverIndex === index && 'border-t-2 border-accent'
             )}
           >
-            <ChatBubbleLeftRightIcon className="w-4 h-4 flex-shrink-0" />
+            <ChatBubbleLeftRightIcon className={clsx(
+              'w-4 h-4 flex-shrink-0',
+              isActive ? 'text-accent' : 'text-muted'
+            )} />
             <div className="flex-1 min-w-0">
               {isEditing ? (
                 <input
@@ -176,17 +179,22 @@ export const ChatItem: React.FC<ChatItemProps> = ({
                   className={clsx(
                     'w-full rounded px-1.5 py-0.5 outline-none font-medium text-current placeholder-current/60',
                     isActive
-                      ? 'bg-white/20 ring-1 ring-white/50 focus:ring-white'
-                      : 'bg-black/5 ring-1 ring-black/15 focus:ring-[#007AFF]'
+                      ? 'bg-white/60 ring-1 ring-accent/40 focus:ring-accent'
+                      : 'bg-black/5 ring-1 ring-black/15 focus:ring-accent'
                   )}
                   placeholder="输入聊天名称..."
                 />
               ) : (
-                <div className="font-medium truncate">{chat.name}</div>
+                <div className={clsx(
+                  'truncate leading-snug',
+                  isActive ? 'font-medium' : 'font-medium'
+                )}>
+                  {chat.name}
+                </div>
               )}
               <div className={clsx(
-                'text-xs truncate',
-                isActive ? 'text-white/80' : 'text-[#8E8E93]'
+                'text-[11px] truncate mt-0.5',
+                isActive ? 'text-accent-deep/70' : 'text-muted'
               )}>
                 {chat.messageCount > 0
                   ? `${chat.messageCount} 条消息`
@@ -203,30 +211,34 @@ export const ChatItem: React.FC<ChatItemProps> = ({
                   onClick={handleMenuToggle}
                   className={clsx(
                     'p-1 rounded-md transition-all duration-200 opacity-0 group-hover:opacity-100',
-                    isActive ? 'hover:bg-white/20' : 'hover:bg-gray-200/50',
+                    isActive ? 'hover:bg-accent/15' : 'hover:bg-paper-edge/60',
                     showMenu && 'opacity-100'
                   )}
                 >
-                  <EllipsisVerticalIcon className="w-4 h-4" />
+                  <EllipsisVerticalIcon className={clsx(
+                    'w-4 h-4',
+                    isActive ? 'text-accent-deep' : 'text-muted'
+                  )} />
                 </button>
 
                 {/* Dropdown menu rendered via portal to escape overflow:hidden of the grid wrapper */}
                 {showMenu && menuPos && createPortal(
                   <div
                     ref={dropdownRef}
-                    className="fixed z-[1000] bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[140px]"
+                    className="fixed z-[1000] modal-panel py-1 min-w-[160px] overflow-hidden"
                     style={{ top: menuPos.top, right: menuPos.right }}
                   >
                     <button
                       onClick={handleRenameClick}
-                      className="w-full px-3 py-2 text-left text-sm text-[#1c1c1e] hover:bg-gray-100 flex items-center space-x-2"
+                      className="w-full px-3 py-2 text-left text-sm text-ink hover:bg-paper-warm transition-colors flex items-center space-x-2"
                     >
-                      <PencilIcon className="w-4 h-4" />
+                      <PencilIcon className="w-4 h-4 text-muted" />
                       <span>修改对话名称</span>
                     </button>
+                    <div className="h-px bg-paper-edge mx-2" />
                     <button
                       onClick={handleDeleteClick}
-                      className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
+                      className="w-full px-3 py-2 text-left text-sm text-crimson hover:bg-crimson-soft/30 transition-colors flex items-center space-x-2"
                     >
                       <TrashIcon className="w-4 h-4" />
                       <span>删除对话</span>

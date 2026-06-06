@@ -105,24 +105,53 @@ export const App: React.FC = () => {
     return <StartupScreen message="正在检查配置..." />
   }
 
+  const {
+    activeSidebarSection,
+    activeChat,
+    chatSessions,
+  } = useAppStore()
+
+  const currentChat = chatSessions.find((c) => c.id === activeChat)
+  const sectionLabel: Record<string, string> = {
+    knowledge: '文库 · Library',
+    chat: '对话 · Conversation',
+    settings: '设置 · Settings',
+  }
+
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="flex flex-col h-screen surface-paper">
       {/* Title Bar with drag region */}
       <div
-        className="flex-shrink-0 h-12 bg-white/70 backdrop-blur-xl border-b border-white/30"
+        className="flex-shrink-0 h-14 surface-glass border-b border-paper-edge/60"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
-        <div className="flex items-center justify-between h-full">
-          {/* Left side - reserve space for system buttons (about 78px) */}
-          <div className="flex items-center space-x-3 pl-20">
-            <img src="/logo.png" alt="Logo" className="w-6 h-6 rounded-md object-cover" />
-            <h1 className="text-lg font-semibold text-[#1c1c1e]">
-              AI 文档助手
-            </h1>
+        <div className="flex items-center justify-between h-full px-5">
+          {/* Left side - brand mark + current section context */}
+          <div className="flex items-center gap-3 pl-16">
+            <div className="w-7 h-7 rounded-md overflow-hidden shadow-sm">
+              <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" />
+            </div>
+            <div className="flex items-baseline gap-2">
+              <h1 className="font-display text-xl font-medium tracking-tight text-ink leading-none">
+                AI 文库
+              </h1>
+              <span className="hidden sm:inline-block text-[10px] font-semibold tracking-[0.18em] uppercase text-muted">
+                {sectionLabel[activeSidebarSection] || ''}
+              </span>
+            </div>
           </div>
 
-          {/* Right side - reserved for future use */}
-          <div className="pr-6" />
+          {/* Right side - current chat breadcrumb (if any) */}
+          <div className="flex items-center gap-3 pr-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+            {currentChat && activeSidebarSection === 'chat' && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-sage animate-breathe" />
+                <span className="font-display italic text-muted-soft max-w-[28ch] truncate">
+                  {currentChat.name}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

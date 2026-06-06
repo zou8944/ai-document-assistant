@@ -1,6 +1,10 @@
 /**
- * Startup loading screen component
- * Shows loading animation while backend service is starting up
+ * Startup loading screen — Editorial Library aesthetic
+ *
+ * Replaces the generic "bouncing dots + spinner" pattern with a refined
+ * mark-and-breath composition. The serif wordmark fades in slowly;
+ * a single blue dot pulses in a long, calm rhythm. The status text is
+ * set in a small eyebrow caps treatment.
  */
 
 import React from 'react'
@@ -9,37 +13,63 @@ interface StartupScreenProps {
   message?: string
 }
 
-export const StartupScreen: React.FC<StartupScreenProps> = ({ 
-  message = '正在启动应用...' 
+export const StartupScreen: React.FC<StartupScreenProps> = ({
+  message = '正在启动应用…',
 }) => {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      {/* Logo and title */}
-      <div className="flex items-center space-x-4 mb-8">
-        <img src="/logo.png" alt="Logo" className="w-16 h-16 rounded-2xl shadow-lg object-cover" />
-        <h1 className="text-3xl font-bold text-gray-900">AI 文档助手</h1>
-      </div>
+    <div className="relative flex flex-col items-center justify-center min-h-screen overflow-hidden">
+      {/* Floating ambient orbs (drift gently in the background) */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-32 -left-32 w-96 h-96 rounded-full opacity-30 animate-drift"
+        style={{
+          background:
+            'radial-gradient(circle, rgba(255, 220, 160, 0.55), transparent 60%)',
+          filter: 'blur(40px)',
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -bottom-32 -right-24 w-[28rem] h-[28rem] rounded-full opacity-25 animate-drift"
+        style={{
+          background:
+            'radial-gradient(circle, rgba(170, 200, 255, 0.55), transparent 60%)',
+          filter: 'blur(50px)',
+          animationDelay: '1.5s',
+        }}
+      />
 
-      {/* Loading animation */}
-      <div className="mb-6">
-        <div className="flex space-x-2">
-          <div className="w-3 h-3 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-          <div className="w-3 h-3 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-          <div className="w-3 h-3 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+      {/* Mark — serif, large, fading in */}
+      <div className="reveal flex flex-col items-center gap-2">
+        <div className="flex items-baseline gap-3">
+          <span className="font-display text-5xl md:text-6xl font-medium tracking-tight text-ink">
+            AI
+          </span>
+          <span className="font-display text-5xl md:text-6xl italic text-muted">
+            ·
+          </span>
+          <span className="font-display text-5xl md:text-6xl font-medium tracking-tight text-ink">
+            文库
+          </span>
         </div>
-      </div>
-
-      {/* Status message */}
-      <div className="text-center">
-        <p className="text-gray-700 text-lg font-medium mb-2">{message}</p>
-        <p className="text-gray-500 text-sm">
-          请稍候，正在初始化应用...
+        <p className="font-display text-lg italic text-muted">
+          a reader for your documents
         </p>
       </div>
 
-      {/* Loading spinner */}
-      <div className="mt-8">
-        <div className="w-8 h-8 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin"></div>
+      {/* Breathing dot — replaces bouncing dots + spinner */}
+      <div className="mt-16 flex flex-col items-center gap-6 reveal" style={{ animationDelay: '180ms' }}>
+        <div
+          className="w-2.5 h-2.5 rounded-full animate-breathe"
+          style={{
+            background: 'linear-gradient(180deg, #4A9EFF, #007AFF)',
+            boxShadow: '0 0 24px rgba(0, 122, 255, 0.45)',
+          }}
+        />
+        <div className="flex flex-col items-center gap-1.5">
+          <p className="text-sm font-medium text-ink-soft">{message}</p>
+          <p className="section-label">initializing</p>
+        </div>
       </div>
     </div>
   )
