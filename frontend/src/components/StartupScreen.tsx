@@ -41,17 +41,9 @@ export const StartupScreen: React.FC<StartupScreenProps> = ({
 
       {/* Mark — serif, large, fading in */}
       <div className="reveal flex flex-col items-center gap-2">
-        <div className="flex items-baseline gap-3">
-          <span className="font-display text-5xl md:text-6xl font-medium tracking-tight text-ink">
-            AI
-          </span>
-          <span className="font-display text-5xl md:text-6xl italic text-muted">
-            ·
-          </span>
-          <span className="font-display text-5xl md:text-6xl font-medium tracking-tight text-ink">
-            文库
-          </span>
-        </div>
+        <h1 className="font-display text-5xl md:text-6xl font-medium tracking-tight text-ink">
+          AI 文档助手
+        </h1>
         <p className="font-display text-lg italic text-muted">
           a reader for your documents
         </p>

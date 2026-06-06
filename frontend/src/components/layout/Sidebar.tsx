@@ -251,7 +251,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
             'w-[18px] h-[18px] transition-colors',
             activeSidebarSection === 'knowledge' ? 'text-accent' : 'text-muted group-hover:text-ink-soft'
           )} />
-          <span className="font-display text-[17px] font-medium">文库</span>
+          <span className="font-display text-[17px] font-medium">知识库</span>
           {activeSidebarSection === 'knowledge' && (
             <span className="ml-auto text-[10px] font-semibold tracking-[0.16em] uppercase text-accent">
               active
@@ -264,7 +264,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
       <div className="flex-1 flex flex-col min-h-0">
         <div className="flex-shrink-0 px-4 pt-4 pb-2">
           <div className="flex items-center justify-between">
-            <h3 className="section-label">对话 · Chats</h3>
+            <h3 className="section-label">聊天 · Chats</h3>
             <button
               onClick={handleAddChat}
               className="p-1 rounded-md text-muted hover:text-ink hover:bg-paper-warm/60 transition-colors"
@@ -321,8 +321,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
           {chatSessions.length === 0 && (
             <div className="text-center text-muted text-sm py-10">
               <ChatBubbleLeftRightIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p className="font-display italic text-base">暂无对话</p>
-              <p className="text-xs mt-1.5 opacity-75">点击上方 + 创建第一条对话</p>
+              <p className="font-display italic text-base">暂无聊天记录</p>
+              <p className="text-xs mt-1.5 opacity-75">点击上方 + 按钮创建新对话</p>
             </div>
           )}
         </div>

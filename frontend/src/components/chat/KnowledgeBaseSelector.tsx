@@ -112,10 +112,10 @@ export const KnowledgeBaseSelector: React.FC<KnowledgeBaseSelectorProps> = ({
               <div>
                 <p className="section-label mb-1">Library</p>
                 <h3 className="font-display text-2xl text-ink">
-                  管理对话文库
+                  管理对话知识库
                 </h3>
                 <p className="text-sm text-muted mt-1.5">
-                  勾选要在当前对话中引用的文库
+                  勾选要在当前对话中引用的知识库
                 </p>
               </div>
               <button
@@ -140,8 +140,8 @@ export const KnowledgeBaseSelector: React.FC<KnowledgeBaseSelectorProps> = ({
                 <div className="w-12 h-12 mx-auto mb-3 rounded-full accent-tile flex items-center justify-center">
                   <BookOpenIcon className="w-5 h-5 text-accent" />
                 </div>
-                <p className="font-display italic text-ink-soft">暂无文库</p>
-                <p className="text-xs mt-1">请先在文库概览页创建一个</p>
+                <p className="font-display italic text-ink-soft">暂无知识库</p>
+                <p className="text-xs mt-1">请先在知识库概览页创建一个</p>
               </div>
             ) : (
               <div className="space-y-1.5">

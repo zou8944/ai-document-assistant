@@ -312,7 +312,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
             <div>
               <p className="section-label mb-1.5">Library</p>
               <h1 className="editorial-display text-4xl md:text-5xl text-ink">
-                文库概览
+                知识库概览
               </h1>
               <p className="mt-2 text-ink-soft text-sm max-w-md">
                 管理你的文档集合 — 把文件、网页、知识沉淀为可对话的档案。
@@ -324,7 +324,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
               className="btn-primary flex-shrink-0"
             >
               <PlusIcon className="w-4 h-4" />
-              <span>新建文库</span>
+              <span>添加知识库</span>
             </button>
           </div>
 
@@ -333,7 +333,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
             <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
             <input
               type="text"
-              placeholder="按名称或描述搜索文库…"
+              placeholder="搜索知识库…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="input-field pl-10"
@@ -377,14 +377,14 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                 <div className="w-16 h-16 mb-5 rounded-full accent-tile flex items-center justify-center">
                   <BookOpenIcon className="w-7 h-7 text-accent" />
                 </div>
-                <h3 className="font-display text-2xl italic text-ink mb-2">尚无文库</h3>
-                <p className="text-sm mb-5">创建第一个文库，开始与文档对话</p>
+                <h3 className="font-display text-2xl italic text-ink mb-2">暂无知识库</h3>
+                <p className="text-sm mb-5">创建您的第一个知识库来开始使用</p>
                 <button
                   onClick={() => setIsAddModalOpen(true)}
                   className="btn-primary"
                 >
                   <PlusIcon className="w-4 h-4" />
-                  <span>创建文库</span>
+                  <span>创建知识库</span>
                 </button>
               </>
             )}
@@ -524,8 +524,8 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
           <div className="modal-panel w-full max-w-md mx-4 animate-modal-panel" onClick={(e) => e.stopPropagation()}>
             <div className="px-6 pt-6 pb-4">
               <p className="section-label mb-1">Collection</p>
-              <h2 className="font-display text-2xl text-ink">编辑文库</h2>
-              <p className="text-sm text-muted mt-1">修改文库的名称和描述</p>
+              <h2 className="font-display text-2xl text-ink">编辑知识库</h2>
+              <p className="text-sm text-muted mt-1">修改知识库的名称和描述</p>
             </div>
             <div className="px-6 pb-2 space-y-4">
               <div>
@@ -540,7 +540,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                   }}
                   autoFocus
                   className="input-field"
-                  placeholder="文库名称"
+                  placeholder="知识库名称"
                 />
               </div>
               <div>
@@ -550,7 +550,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                   onChange={(e) => setEditDescription(e.target.value)}
                   rows={3}
                   className="input-field resize-none"
-                  placeholder="文库描述（可选）"
+                  placeholder="知识库描述（可选）"
                 />
               </div>
             </div>
@@ -604,7 +604,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                           {task.title || (task.task_type === 'ingest_urls' ? '网页抓取' : '文件上传')}
                         </div>
                         <div className="text-xs text-muted truncate italic">
-                          {collection?.name || '未知文库'}
+                          {collection?.name || '未知知识库'}
                         </div>
                       </div>
                     </div>

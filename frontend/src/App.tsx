@@ -113,9 +113,9 @@ export const App: React.FC = () => {
 
   const currentChat = chatSessions.find((c) => c.id === activeChat)
   const sectionLabel: Record<string, string> = {
-    knowledge: '文库 · Library',
-    chat: '对话 · Conversation',
-    settings: '设置 · Settings',
+    knowledge: '知识库',
+    chat: '聊天',
+    settings: '设置',
   }
 
   return (
@@ -133,7 +133,7 @@ export const App: React.FC = () => {
             </div>
             <div className="flex items-baseline gap-2">
               <h1 className="font-display text-xl font-medium tracking-tight text-ink leading-none">
-                AI 文库
+                AI 文档助手
               </h1>
               <span className="hidden sm:inline-block text-[10px] font-semibold tracking-[0.18em] uppercase text-muted">
                 {sectionLabel[activeSidebarSection] || ''}

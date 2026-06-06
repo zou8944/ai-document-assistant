@@ -191,8 +191,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
           <div className="w-16 h-16 mx-auto mb-4 rounded-full accent-tile flex items-center justify-center">
             <CpuChipIcon className="w-7 h-7 text-accent" />
           </div>
-          <p className="font-display text-lg italic text-ink-soft">请选择一条对话</p>
-          <p className="text-xs mt-1.5 text-muted">从左侧选一个 chat 开始，或创建新对话</p>
+          <p className="font-display text-lg italic text-ink-soft">请选择一个聊天会话</p>
         </div>
       </div>
     )
@@ -207,13 +206,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
       <div className="flex-shrink-0 px-6 py-3 border-b border-paper-edge/60 surface-glass">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="section-label text-muted-soft">Reading</span>
+            <span className="section-label text-muted-soft">知识库</span>
             {kbNames.length > 0 ? (
               <span className="font-display italic text-ink-soft truncate">
                 {kbNames.join(' · ')}
               </span>
             ) : (
-              <span className="font-display italic text-muted">未指定文库</span>
+              <span className="font-display italic text-muted">暂无</span>
             )}
           </div>
 
@@ -223,7 +222,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
               className="btn-ghost"
             >
               <PlusIcon className="w-3.5 h-3.5" />
-              <span>管理文库</span>
+              <span>管理知识库</span>
             </button>
           )}
         </div>
@@ -384,7 +383,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                     handleSendMessage()
                   }
                 }}
-                placeholder="向 AI 文库提问，使用 @ 引用特定文档…"
+                placeholder="输入您的问题，使用 @ 来引用特定文档…"
                 disabled={isLoading || isStreaming}
                 className="w-full resize-none rounded-xl border-0 bg-transparent px-0 py-0.5 pr-2 text-[15px] text-ink placeholder:text-muted focus:ring-0 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
               />
