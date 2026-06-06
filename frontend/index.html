@@ -1,76 +1,43 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/logo.png" />
     <link rel="apple-touch-icon" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#F7F5F0" />
     <title>AI Document Assistant</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <style>
       /* Prevent flash of unstyled content */
-      html, body { margin: 0; padding: 0; height: 100%; }
       body {
+        margin: 0;
         font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-        color: #1C1C1E;
-        background-color: #F7F5F0;
-        background-image:
-          radial-gradient(ellipse at top left, rgba(255, 245, 220, 0.4), transparent 50%),
-          radial-gradient(ellipse at bottom right, rgba(220, 230, 245, 0.3), transparent 50%);
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
+        background: #FFFFFF;
         overflow: hidden;
       }
-      #root { width: 100vw; height: 100vh; }
-
-      /* Editorial loading state shown before React mounts */
-      .pre-mount {
+      
+      #root {
+        width: 100vw;
+        height: 100vh;
+      }
+      
+      /* macOS-style loading indicator */
+      .loading {
         position: fixed;
-        inset: 0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 2rem;
-      }
-      .pre-mount .mark {
-        font-family: 'Cormorant Garamond', Georgia, serif;
-        font-size: 3rem;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 16px;
         font-weight: 500;
-        letter-spacing: -0.01em;
-        color: #1C1C1E;
-        opacity: 0;
-        animation: preFadeIn 700ms 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-      }
-      .pre-mount .dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 999px;
-        background: linear-gradient(180deg, #4A9EFF, #007AFF);
-        opacity: 0;
-        animation: prePulse 2.2s 800ms ease-in-out infinite;
-      }
-      @keyframes preFadeIn {
-        to { opacity: 1; }
-      }
-      @keyframes prePulse {
-        0%, 100% { opacity: 0.35; transform: scale(1); }
-        50% { opacity: 1; transform: scale(1.2); }
       }
     </style>
   </head>
   <body>
     <div id="root">
-      <div class="pre-mount" aria-hidden="true">
-        <div class="mark">AI 文档助手</div>
-        <div class="dot"></div>
-      </div>
+      <div class="loading">Loading AI Document Assistant...</div>
     </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

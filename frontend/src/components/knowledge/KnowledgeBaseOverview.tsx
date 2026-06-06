@@ -306,82 +306,80 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
   return (
     <div className={clsx('h-full flex flex-col', className)}>
       {/* Header */}
-      <div className="flex-shrink-0 px-8 py-7 border-b border-paper-edge/60 surface-glass">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-end justify-between mb-6 gap-6">
-            <div>
-              <p className="section-label mb-1.5">Library</p>
-              <h1 className="editorial-display text-4xl md:text-5xl text-ink">
-                知识库概览
-              </h1>
-              <p className="mt-2 text-ink-soft text-sm max-w-md">
-                管理你的文档集合 — 把文件、网页、知识沉淀为可对话的档案。
-              </p>
-            </div>
-
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="btn-primary flex-shrink-0"
-            >
-              <PlusIcon className="w-4 h-4" />
-              <span>添加知识库</span>
-            </button>
+      <div className="flex-shrink-0 p-6 bg-gradient-to-r from-white/90 to-white/70 backdrop-blur-sm border-b border-gray-200/50">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">知识库概览</h1>
+            <p className="text-gray-600 mt-1">管理您的文档和知识库</p>
           </div>
+          
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors shadow-md"
+          >
+            <PlusIcon className="w-4 h-4" />
+            <span>添加知识库</span>
+          </button>
+        </div>
 
-          {/* Search Bar */}
-          <div className="relative max-w-xl">
-            <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
-            <input
-              type="text"
-              placeholder="搜索知识库…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="input-field pl-10"
-            />
-          </div>
+        {/* Search Bar */}
+        <div className="relative">
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="搜索知识库..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-3 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          />
         </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-6xl mx-auto">
+      <div className="flex-1 overflow-y-auto p-6">
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 reveal-stagger">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="library-card p-5 space-y-3">
-                <div className="flex items-center space-x-2">
-                  <div className="w-5 h-5 rounded shimmer" />
-                  <div className="h-4 rounded shimmer w-3/5" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200/50 overflow-hidden">
+                <div className="p-4 pb-3 space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-5 h-5 rounded shimmer" />
+                    <div className="h-4 rounded shimmer w-3/5" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-3 rounded shimmer w-full" />
+                    <div className="h-3 rounded shimmer w-4/5" />
+                  </div>
+                  <div className="space-y-2 pt-1">
+                    <div className="h-3 rounded shimmer w-2/3" />
+                    <div className="h-3 rounded shimmer w-1/2" />
+                    <div className="h-3 rounded shimmer w-1/3" />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <div className="h-3 rounded shimmer w-full" />
-                  <div className="h-3 rounded shimmer w-4/5" />
-                </div>
-                <div className="pt-3 mt-1 border-t border-paper-edge/40 flex gap-3">
-                  <div className="h-3 rounded shimmer w-16" />
-                  <div className="h-3 rounded shimmer w-12" />
+                <div className="border-t border-gray-200/50 px-4 py-3 bg-gray-50/50 flex space-x-2">
+                  <div className="flex-1 h-8 rounded shimmer" />
+                  <div className="flex-1 h-8 rounded shimmer" />
+                  <div className="flex-1 h-8 rounded shimmer" />
                 </div>
               </div>
             ))}
           </div>
         ) : filteredCollections.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-72 text-muted">
+          <div className="flex flex-col items-center justify-center h-64 text-gray-500">
             {searchQuery ? (
               <>
-                <MagnifyingGlassIcon className="w-12 h-12 mb-4 opacity-50" />
-                <h3 className="font-display text-xl italic text-ink-soft mb-1.5">未找到匹配</h3>
-                <p className="text-sm">尝试不同的关键词</p>
+                <MagnifyingGlassIcon className="w-16 h-16 mb-4 opacity-50" />
+                <h3 className="text-lg font-medium mb-2">未找到匹配的知识库</h3>
+                <p className="text-center">尝试使用不同的关键词搜索</p>
               </>
             ) : (
               <>
-                <div className="w-16 h-16 mb-5 rounded-full accent-tile flex items-center justify-center">
-                  <BookOpenIcon className="w-7 h-7 text-accent" />
-                </div>
-                <h3 className="font-display text-2xl italic text-ink mb-2">暂无知识库</h3>
-                <p className="text-sm mb-5">创建您的第一个知识库来开始使用</p>
+                <BookOpenIcon className="w-16 h-16 mb-4 opacity-50" />
+                <h3 className="text-lg font-medium mb-2">暂无知识库</h3>
+                <p className="text-center mb-4">创建您的第一个知识库来开始使用</p>
                 <button
                   onClick={() => setIsAddModalOpen(true)}
-                  className="btn-primary"
+                  className="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
                 >
                   <PlusIcon className="w-4 h-4" />
                   <span>创建知识库</span>
@@ -390,125 +388,123 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 reveal-stagger">
-            {filteredCollections.map((collection) => (
-              <div key={collection.id} className="library-card group p-5 flex flex-col">
-                {/* Header */}
-                <div className="flex items-start justify-between gap-2 mb-2.5">
-                  <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                    <div className="w-9 h-9 flex-shrink-0 rounded-md accent-tile flex items-center justify-center">
-                      <BookOpenIcon className="w-4 h-4 text-accent" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredCollections.map((collection, index) => (
+              <div
+                key={collection.id}
+                className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200/50 overflow-hidden hover:-translate-y-px hover:shadow-lg hover:border-gray-300/50 transition-all duration-200 animate-card-in"
+                style={{ animationDelay: `${index * 50}ms` }}
+              >
+                {/* Card Header */}
+                <div className="p-4 pb-3">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center space-x-2 min-w-0">
+                      <BookOpenIcon className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                      <h3 className="font-semibold text-gray-900 truncate">{collection.name}</h3>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-display text-[20px] font-medium leading-tight text-ink truncate">
-                        {collection.name}
-                      </h3>
-                      <p className="section-label mt-0.5 text-muted-soft">collection</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center flex-shrink-0">
-                    <div className="relative" ref={menuOpenId === collection.id ? menuRef : undefined}>
-                      <button
-                        onClick={(e) => handleToggleMenu(e, collection.id)}
-                        className="p-1.5 rounded-md text-muted hover:text-ink hover:bg-paper-warm/60 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                        title="更多操作"
-                      >
-                        <EllipsisVerticalIcon className="w-4 h-4" />
-                      </button>
-                      {menuOpenId === collection.id && (
-                        <div className="absolute right-0 mt-1 w-32 modal-panel py-1 z-50 overflow-hidden">
-                          <button
-                            onClick={() => handleStartEdit(collection)}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink hover:bg-paper-warm transition-colors"
-                          >
-                            <PencilIcon className="w-3.5 h-3.5 text-muted" />
-                            编辑
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Description */}
-                <p className="text-sm text-ink-soft line-clamp-2 mb-4 leading-relaxed min-h-[2.5rem]">
-                  {collection.description || <span className="italic text-muted-soft">未添加描述</span>}
-                </p>
-
-                {/* Metadata row */}
-                <div className="mt-auto pt-3 border-t border-paper-edge/40 flex items-center justify-between gap-3 text-xs text-muted">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="flex items-center gap-1.5 flex-shrink-0">
-                      <DocumentIcon className="w-3 h-3" />
-                      <span className="font-medium text-ink-soft tabular-nums">{collection.document_count}</span>
-                      <span>文档</span>
-                    </span>
-                    <span className="flex items-center gap-1.5 min-w-0">
-                      <CalendarIcon className="w-3 h-3 flex-shrink-0" />
-                      <span className="truncate">{formatDate(collection.created_at)}</span>
-                    </span>
-                  </div>
-                  {(() => {
-                    const tasks = getCollectionTasks(collection.id)
-                    if (tasks.length === 0) {
-                      return (
-                        <span className="flex items-center gap-1.5 text-sage flex-shrink-0">
-                          <span className="w-1.5 h-1.5 rounded-full bg-sage" />
-                          <span>就绪</span>
-                        </span>
-                      )
-                    }
-                    return (
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {tasks.map(task => {
-                          const progress = typeof task.progress === 'number' ? task.progress : 0
-                          const color = task.status === 'failed' ? '#C73E1D' : task.status === 'pending' ? '#8E8E93' : '#007AFF'
-                          return (
-                            <div key={task.task_id} className="flex items-center gap-1" title={task.title || (task.task_type === 'ingest_urls' ? '网页抓取' : '文件上传')}>
-                              <CircularProgress progress={progress} size={14} color={color} />
-                              <span className="text-[10px] tabular-nums">{progress}%</span>
-                            </div>
-                          )
-                        })}
+                    <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
+                      {/* More actions menu */}
+                      <div className="relative" ref={menuOpenId === collection.id ? menuRef : undefined}>
+                        <button
+                          onClick={(e) => handleToggleMenu(e, collection.id)}
+                          className="p-1 hover:bg-gray-100 rounded-md transition-colors text-gray-400 hover:text-gray-600"
+                          title="更多操作"
+                        >
+                          <EllipsisVerticalIcon className="w-4 h-4" />
+                        </button>
+                        {menuOpenId === collection.id && (
+                          <div className="absolute right-0 mt-1 w-32 bg-white rounded-lg shadow-lg border border-gray-200/50 py-1 z-50">
+                            <button
+                              onClick={() => handleStartEdit(collection)}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                            >
+                              <PencilIcon className="w-3.5 h-3.5" />
+                              编辑
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    )
-                  })()}
+                    </div>
+                  </div>
+                  
+                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                    {collection.description || '暂无描述'}
+                  </p>
+
+                  {/* Metadata */}
+                  <div className="space-y-2 text-xs text-gray-500">
+                    <div className="flex items-center space-x-2">
+                      <CalendarIcon className="w-3 h-3" />
+                      <span>创建于 {formatDate(collection.created_at)}</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <DocumentIcon className="w-3 h-3" />
+                      <span>{collection.document_count} 个文档</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-3 h-3 rounded-full bg-green-400" />
+                        <span>知识库</span>
+                      </div>
+                      {(() => {
+                        const tasks = getCollectionTasks(collection.id)
+                        if (tasks.length === 0) return null
+                        return (
+                          <div className="flex items-center gap-2">
+                            {tasks.map(task => {
+                              const progress = typeof task.progress === 'number' ? task.progress : 0
+                              const color = task.status === 'failed' ? '#ef4444' : task.status === 'pending' ? '#9ca3af' : '#3b82f6'
+                              return (
+                                <div key={task.task_id} className="flex items-center gap-1" title={task.title || (task.task_type === 'ingest_urls' ? '网页抓取' : '文件上传')}>
+                                  <CircularProgress progress={progress} size={16} color={color} />
+                                  <span className="text-[10px] text-gray-500">{progress}%</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  </div>
                 </div>
 
-                {/* Actions — primary chat, secondary management */}
-                <div className="mt-4 flex items-center gap-2">
-                  <button
-                    onClick={() => handleChatClick(collection.id)}
-                    className="btn-primary flex-1 !py-2"
-                  >
-                    <ChatBubbleLeftRightIcon className="w-3.5 h-3.5" />
-                    <span>开始对话</span>
-                  </button>
+                {/* Action Buttons */}
+                <div className="border-t border-gray-200/50 px-4 py-3 bg-gray-50/50 flex space-x-2">
                   <button
                     onClick={() => handleManageClick(collection.id)}
-                    className="btn-secondary !p-2.5"
-                    title="管理文档"
+                    className="flex-1 flex items-center justify-center space-x-1 py-2 px-3 bg-white hover:bg-gray-50 border border-gray-200 rounded-md transition-colors text-sm"
                   >
-                    <CogIcon className="w-3.5 h-3.5" />
+                    <CogIcon className="w-3 h-3" />
+                    <span>管理</span>
                   </button>
+
+                  <button
+                    onClick={() => handleChatClick(collection.id)}
+                    className="flex-1 flex items-center justify-center space-x-1 py-2 px-3 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors text-sm"
+                  >
+                    <ChatBubbleLeftRightIcon className="w-3 h-3" />
+                    <span>聊天</span>
+                  </button>
+
                   <button
                     onClick={() => handleReindex(collection.id)}
                     disabled={!collection.needs_reindex || reindexingId === collection.id}
                     className={clsx(
-                      'btn-secondary !p-2.5',
-                      !collection.needs_reindex && '!opacity-40 !cursor-not-allowed hover:!bg-white/70 hover:!transform-none',
-                      reindexingId === collection.id && '!opacity-60'
+                      'flex items-center justify-center space-x-1 py-2 px-3 border rounded-md transition-colors text-sm',
+                      collection.needs_reindex && reindexingId !== collection.id
+                        ? 'bg-white hover:bg-amber-50 border-amber-300 text-amber-700'
+                        : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
                     )}
                     title={collection.needs_reindex ? '向量化参数已变更，点击重新索引' : '当前索引参数已是最新'}
                   >
-                    <ArrowPathIcon className={clsx('w-3.5 h-3.5', reindexingId === collection.id && 'animate-spin')} />
+                    <ArrowPathIcon className={clsx('w-3 h-3', reindexingId === collection.id && 'animate-spin')} />
+                    <span>{reindexingId === collection.id ? '索引中' : '重新索引'}</span>
                   </button>
                 </div>
               </div>
             ))}
           </div>
         )}
-        </div>
       </div>
 
       {/* Add Knowledge Base Modal */}
@@ -520,16 +516,15 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
 
       {/* Edit Collection Modal */}
       {editingCollection && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop animate-modal-backdrop" onClick={handleCancelEdit}>
-          <div className="modal-panel w-full max-w-md mx-4 animate-modal-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="px-6 pt-6 pb-4">
-              <p className="section-label mb-1">Collection</p>
-              <h2 className="font-display text-2xl text-ink">编辑知识库</h2>
-              <p className="text-sm text-muted mt-1">修改知识库的名称和描述</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 animate-fade-in">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">编辑知识库</h2>
+              <p className="text-sm text-gray-500 mt-1">修改知识库的名称和描述</p>
             </div>
-            <div className="px-6 pb-2 space-y-4">
+            <div className="px-6 py-4 space-y-4">
               <div>
-                <label className="block section-label mb-1.5">名称</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">名称</label>
                 <input
                   type="text"
                   value={editName}
@@ -539,34 +534,34 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                     if (e.key === 'Escape') handleCancelEdit()
                   }}
                   autoFocus
-                  className="input-field"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                   placeholder="知识库名称"
                 />
               </div>
               <div>
-                <label className="block section-label mb-1.5">描述</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">描述</label>
                 <textarea
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
                   rows={3}
-                  className="input-field resize-none"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
                   placeholder="知识库描述（可选）"
                 />
               </div>
             </div>
-            <div className="px-6 py-4 mt-2 border-t border-paper-edge/60 flex justify-end gap-2">
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
               <button
                 onClick={handleCancelEdit}
-                className="btn-ghost"
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
               >
                 取消
               </button>
               <button
                 onClick={handleConfirmEdit}
                 disabled={savingEdit || !editName.trim()}
-                className="btn-primary"
+                className="px-4 py-2 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors disabled:opacity-50"
               >
-                {savingEdit ? '保存中…' : '保存'}
+                {savingEdit ? '保存中...' : '保存'}
               </button>
             </div>
           </div>
@@ -575,35 +570,34 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
 
       {/* Restart Tasks Modal */}
       {showRestartModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop animate-modal-backdrop" onClick={handleDismissRestart}>
-          <div className="modal-panel w-full max-w-md mx-4 animate-modal-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="px-6 pt-6 pb-4">
-              <p className="section-label mb-1">Tasks</p>
-              <h2 className="font-display text-2xl text-ink">发现未完成任务</h2>
-              <p className="text-sm text-muted mt-1.5">
-                有 <span className="text-accent font-medium tabular-nums">{pendingRestartTasks.length}</span> 个任务需要继续处理，是否立即重启？
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 animate-fade-in">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">发现未完成任务</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                有 {pendingRestartTasks.length} 个任务需要继续处理，是否立即重启？
               </p>
             </div>
-            <div className="px-6 pb-2 max-h-60 overflow-y-auto">
-              <div className="space-y-1.5">
+            <div className="px-6 py-4 max-h-60 overflow-y-auto">
+              <div className="space-y-2">
                 {pendingRestartTasks.map(task => {
                   const collection = collections.find(c => c.id === task.collection_id)
                   return (
                     <div
                       key={task.task_id}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-paper-warm/50 border border-paper-edge/60"
+                      className="flex items-center gap-3 p-2 rounded-lg bg-gray-50 border border-gray-100"
                     >
                       <div className={clsx(
-                        'w-2 h-2 rounded-full flex-shrink-0',
-                        task.status === 'processing' && 'bg-rust animate-pulse',
-                        task.status === 'pending' && 'bg-muted',
-                        task.status === 'failed' && 'bg-crimson'
+                        'w-2.5 h-2.5 rounded-full flex-shrink-0',
+                        task.status === 'processing' && 'bg-yellow-500 animate-pulse',
+                        task.status === 'pending' && 'bg-gray-400',
+                        task.status === 'failed' && 'bg-red-500'
                       )} />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-ink truncate">
+                        <div className="text-sm font-medium text-gray-800 truncate">
                           {task.title || (task.task_type === 'ingest_urls' ? '网页抓取' : '文件上传')}
                         </div>
-                        <div className="text-xs text-muted truncate italic">
+                        <div className="text-xs text-gray-500 truncate">
                           {collection?.name || '未知知识库'}
                         </div>
                       </div>
@@ -612,19 +606,19 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                 })}
               </div>
             </div>
-            <div className="px-6 py-4 mt-2 border-t border-paper-edge/60 flex justify-end gap-2">
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
               <button
                 onClick={handleDismissRestart}
-                className="btn-ghost"
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
               >
                 稍后
               </button>
               <button
                 onClick={handleRestartAll}
                 disabled={restarting}
-                className="btn-primary"
+                className="px-4 py-2 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors disabled:opacity-50"
               >
-                {restarting ? '重启中…' : '重启所有'}
+                {restarting ? '重启中...' : '重启所有'}
               </button>
             </div>
           </div>

@@ -4,7 +4,6 @@
 
 import React, { useState } from 'react'
 import { XMarkIcon, BookOpenIcon } from '@heroicons/react/24/outline'
-import clsx from 'clsx'
 import { useAPIClient, extractData, Collection } from '../../services/apiClient'
 
 interface KnowledgeBaseSelectorProps {
@@ -98,141 +97,105 @@ export const KnowledgeBaseSelector: React.FC<KnowledgeBaseSelectorProps> = ({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-        {/* Backdrop — glass */}
+        {/* Backdrop */}
         <div
-          className="fixed inset-0 modal-backdrop animate-modal-backdrop"
+          className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity backdrop-blur-sm"
           onClick={handleClose}
-          aria-hidden="true"
         />
 
+        {/* Modal positioning helper */}
+        <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">
+          &#8203;
+        </span>
+
         {/* Modal panel */}
-        <div className="relative inline-block modal-panel w-full max-w-lg mx-4 my-8 text-left overflow-hidden animate-modal-panel">
-          <div className="px-6 pt-6 pb-2">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="section-label mb-1">Library</p>
-                <h3 className="font-display text-2xl text-ink">
-                  管理对话知识库
-                </h3>
-                <p className="text-sm text-muted mt-1.5">
-                  勾选要在当前对话中引用的知识库
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleClose}
-                className="btn-ghost flex-shrink-0 -mt-1"
-                aria-label="关闭"
-              >
-                <XMarkIcon className="w-4 h-4" />
-              </button>
-            </div>
+        <div className="relative inline-block transform rounded-lg bg-white px-4 pt-5 pb-4 text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6 sm:align-middle">
+          <div className="absolute top-0 right-0 pt-4 pr-4">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              <span className="sr-only">关闭</span>
+              <XMarkIcon className="h-6 w-6" />
+            </button>
           </div>
 
-          <div className="px-6 pt-4 pb-2 max-h-80 overflow-y-auto">
-            {loading ? (
-              <div className="text-center text-muted py-12">
-                <div className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-breathe" />
-                <p className="text-sm mt-3">加载中…</p>
-              </div>
-            ) : availableKnowledgeBases.length === 0 ? (
-              <div className="text-center text-muted py-12">
-                <div className="w-12 h-12 mx-auto mb-3 rounded-full accent-tile flex items-center justify-center">
-                  <BookOpenIcon className="w-5 h-5 text-accent" />
-                </div>
-                <p className="font-display italic text-ink-soft">暂无知识库</p>
-                <p className="text-xs mt-1">请先在知识库概览页创建一个</p>
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                {availableKnowledgeBases.map((kb) => {
-                  const isSelected = selectedIds.includes(kb.id)
-                  return (
-                    <label
-                      key={kb.id}
-                      className={clsx(
-                        'flex items-start gap-3 p-3 rounded-lg-editorial cursor-pointer transition-all',
-                        isSelected
-                          ? 'accent-tile shadow-sm'
-                          : 'hover:bg-paper-warm/60 border border-transparent hover:border-paper-edge/60'
-                      )}
-                    >
-                      <div className="flex-shrink-0 mt-0.5">
+          <div className="sm:flex sm:items-start">
+            <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
+              <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">
+                管理对话知识库
+              </h3>
+
+              <div className="max-h-64 overflow-y-auto">
+                {loading ? (
+                  <div className="text-center text-gray-500 py-8">
+                    <p>加载中...</p>
+                  </div>
+                ) : availableKnowledgeBases.length === 0 ? (
+                  <div className="text-center text-gray-500 py-8">
+                    <BookOpenIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p>暂无知识库</p>
+                    <p className="text-sm mt-1">
+                      请先创建知识库
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {availableKnowledgeBases.map((kb) => (
+                      <label
+                        key={kb.id}
+                        className={`flex items-start space-x-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors ${
+                          selectedIds.includes(kb.id) ? 'bg-blue-50 ring-1 ring-blue-200' : ''
+                        }`}
+                      >
                         <input
                           type="checkbox"
-                          checked={isSelected}
+                          checked={selectedIds.includes(kb.id)}
                           onChange={() => handleToggleSelection(kb.id)}
-                          className="sr-only"
+                          className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                         />
-                        <div className={clsx(
-                          'w-4 h-4 rounded border-2 flex items-center justify-center transition-all',
-                          isSelected
-                            ? 'bg-accent border-accent'
-                            : 'border-paper-edge bg-white'
-                        )}>
-                          {isSelected && (
-                            <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
-                              <polyline points="2,6.5 5,9 10,3" />
-                            </svg>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2">
+                            <BookOpenIcon className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                            <span className="font-medium text-gray-900">{kb.name}</span>
+                          </div>
+                          {kb.description && (
+                            <p className="text-sm text-gray-500 mt-1">{kb.description}</p>
                           )}
+                          <div className="flex items-center space-x-4 mt-1 text-xs text-gray-400">
+                            <span>{kb.documentCount} 个文档</span>
+                            <span>
+                              {new Date(kb.createdAt).toLocaleDateString('zh-CN')}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <BookOpenIcon className={clsx(
-                            'w-3.5 h-3.5 flex-shrink-0',
-                            isSelected ? 'text-accent' : 'text-muted'
-                          )} />
-                          <span className={clsx(
-                            'font-display text-[17px] truncate',
-                            isSelected ? 'text-accent-deep font-medium' : 'text-ink'
-                          )}>{kb.name}</span>
-                        </div>
-                        {kb.description && (
-                          <p className={clsx(
-                            'text-sm mt-0.5 line-clamp-1',
-                            isSelected ? 'text-accent-deep/80' : 'text-ink-soft'
-                          )}>{kb.description}</p>
-                        )}
-                        <div className={clsx(
-                          'flex items-center gap-3 mt-1 text-[11px] tracking-wide',
-                          isSelected ? 'text-accent-deep/70' : 'text-muted'
-                        )}>
-                          <span className="tabular-nums">{kb.documentCount} 文档</span>
-                          <span>·</span>
-                          <span>{new Date(kb.createdAt).toLocaleDateString('zh-CN')}</span>
-                        </div>
-                      </div>
-                    </label>
-                  )
-                })}
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          {!loading && availableKnowledgeBases.length > 0 && (
-            <div className="px-6 py-4 mt-2 border-t border-paper-edge/60 flex items-center justify-between gap-3">
-              <span className="text-xs text-muted">
-                已选 <span className="text-accent font-medium tabular-nums">{selectedIds.length}</span> / {availableKnowledgeBases.length}
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  className="btn-ghost"
-                >
-                  取消
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirm}
-                  className="btn-primary"
-                >
-                  确认
-                </button>
-              </div>
+              {!loading && availableKnowledgeBases.length > 0 && (
+                <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse space-y-3 sm:space-y-0 sm:space-x-3 sm:space-x-reverse">
+                  <button
+                    type="button"
+                    onClick={handleConfirm}
+                    className="w-full inline-flex justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm"
+                  >
+                    确认 ({selectedIds.length} 个已选择)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:mt-0 sm:w-auto sm:text-sm"
+                  >
+                    取消
+                  </button>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
