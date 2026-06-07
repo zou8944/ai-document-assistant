@@ -52,22 +52,22 @@ export const AgentTrace: React.FC<AgentTraceProps> = ({ state }) => {
         className={clsx(
           'w-full flex items-center justify-between px-4 py-2.5 rounded-2xl border transition-colors',
           expanded
-            ? 'border-[#D1D1D6] bg-transparent cursor-pointer hover:bg-white/40'
-            : 'border-[#D1D1D6] bg-white/40 cursor-pointer hover:bg-white/60'
+            ? 'border-warm-line bg-transparent cursor-pointer hover:bg-white/40'
+            : 'border-warm-line bg-white/40 cursor-pointer hover:bg-white/60'
         )}
       >
         <div className="flex items-center space-x-2">
-          <SparklesIcon className="w-4 h-4 text-[#8E8E93]" />
-          <span className="text-[13px] font-medium text-[#1c1c1e]">思考过程</span>
+          <SparklesIcon className="w-4 h-4 text-muted" />
+          <span className="text-meta-md font-medium text-ink">思考过程</span>
           {!expanded && blockCount > 0 && (
-            <span className="text-[12px] text-[#8E8E93]">{blockCount} 个步骤</span>
+            <span className="text-meta-sm text-muted">{blockCount} 个步骤</span>
           )}
           {isRunning && (
-            <span className="w-1.5 h-1.5 rounded-full bg-[#8E8E93] animate-pulse" />
+            <span className="w-1.5 h-1.5 rounded-full bg-muted animate-pulse" />
           )}
         </div>
         <div className={clsx('transition-transform duration-200', expanded && 'rotate-180')}>
-          <ChevronDownIcon className="w-4 h-4 text-[#AEAEB2]" />
+          <ChevronDownIcon className="w-4 h-4 text-faint" />
         </div>
       </button>
 
@@ -84,7 +84,7 @@ export const AgentTrace: React.FC<AgentTraceProps> = ({ state }) => {
             </div>
           ))}
           {totalTime !== undefined && !isRunning && (
-            <div className="text-[11px] text-[#AEAEB2] tabular-nums px-1">
+            <div className="text-meta-xs text-faint tabular-nums px-1">
               总耗时 {totalTime >= 1000 ? `${(totalTime / 1000).toFixed(1)}s` : `${totalTime}ms`}
               {state.timings && state.timings.iteration_count > 1 && (
                 <span> · {state.timings.iteration_count} 轮</span>

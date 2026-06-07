@@ -19,7 +19,7 @@ export const SourceReferences: React.FC<SourceReferencesProps> = ({ sources }) =
     <div className="mt-4 pt-3 border-t border-warm-border">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center space-x-1 text-[11px] text-muted hover:text-ink transition-colors"
+        className="flex items-center space-x-1 text-meta-xs text-muted hover:text-ink transition-colors"
       >
         <span>参考来源 ({sources.length})</span>
         {isExpanded ? (
@@ -43,19 +43,19 @@ export const SourceReferences: React.FC<SourceReferencesProps> = ({ sources }) =
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-ink truncate">{source.document_name}</div>
                   {source.document_uri && (
-                    <div className="text-[11px] text-accent truncate mt-0.5">
+                    <div className="text-meta-xs text-accent truncate mt-0.5">
                       {source.document_uri}
                     </div>
                   )}
                 </div>
                 {source.relevance_score && (
-                  <span className="text-[10px] bg-[#FAFAF8] text-muted px-2 py-0.5 rounded-full ml-2 flex-shrink-0 border border-warm-border">
+                  <span className="text-meta-xs bg-soft-tint text-muted px-2 py-0.5 rounded-full ml-2 flex-shrink-0 border border-warm-border">
                     {(source.relevance_score * 100).toFixed(0)}%
                   </span>
                 )}
               </div>
               {source.content_preview && (
-                <div className="text-[11px] text-muted leading-relaxed line-clamp-3">
+                <div className="text-meta-xs text-muted leading-relaxed line-clamp-3">
                   {source.content_preview.substring(0, 200)}...
                 </div>
               )}

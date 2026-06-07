@@ -243,6 +243,37 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
     setDragOverIndex(null)
   }
 
+  // Keyboard reorder: move the chat one slot up or down and persist the new order.
+  // Reuses the same persistence path as drag-and-drop so server state stays in sync.
+  const persistReorder = async (ids: string[]) => {
+    try {
+      await apiClient.reorderChats(ids)
+    } catch (error) {
+      console.error('排序保存失败:', error)
+      toast.error('排序保存失败: ' + (error as Error).message)
+    }
+  }
+
+  const handleMoveUp = (fromIndex: number) => {
+    if (fromIndex <= 0) return
+    reorderChatSessions(fromIndex, fromIndex - 1)
+    const ids = useAppStore.getState().chatSessions
+      .map((c) => c.id)
+      .filter((_, i) => i !== fromIndex)
+    ids.splice(fromIndex - 1, 0, useAppStore.getState().chatSessions[fromIndex].id)
+    void persistReorder(ids)
+  }
+
+  const handleMoveDown = (fromIndex: number) => {
+    if (fromIndex >= chatSessions.length - 1) return
+    reorderChatSessions(fromIndex, fromIndex + 1)
+    const ids = useAppStore.getState().chatSessions
+      .map((c) => c.id)
+      .filter((_, i) => i !== fromIndex)
+    ids.splice(fromIndex + 1, 0, useAppStore.getState().chatSessions[fromIndex].id)
+    void persistReorder(ids)
+  }
+
   return (
     <div className={clsx('flex flex-col h-full bg-white/60 backdrop-blur-xl border-r border-white/20', className)}>
       {/* Knowledge Base Section - Fixed at top */}
@@ -252,8 +283,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
           className={clsx(
             'w-full flex items-center space-x-3 p-3 rounded-xl transition-all duration-200',
             activeSidebarSection === 'knowledge'
-              ? 'brand-surface shadow-md shadow-[#007AFF]/20'
-              : 'text-[#1c1c1e] hover:bg-white/50'
+              ? 'brand-surface shadow-md shadow-accent/20'
+              : 'text-ink hover:bg-white/50'
           )}
         >
           <BookOpenIcon className="w-5 h-5" />
@@ -265,15 +296,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
       <div className="flex-1 flex flex-col min-h-0">
         <div className="flex-shrink-0 p-4 pb-2 border-b border-white/40">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-[#8E8E93] uppercase tracking-wide">
+            <h3 className="text-sm font-medium text-muted uppercase tracking-wide">
               聊天
             </h3>
             <button
               onClick={handleAddChat}
-              className="p-1 rounded-lg hover:bg-white/50 transition-colors"
-              title="新建聊天"
+              aria-label="新建聊天"
+              className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 rounded-lg hover:bg-white/50 text-muted hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
             >
-              <PlusIcon className="w-4 h-4 text-[#8E8E93]" />
+              <PlusIcon className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -288,7 +319,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
             <div
               aria-hidden
               className={clsx(
-                'pointer-events-none absolute left-4 right-4 brand-surface rounded-lg shadow-md shadow-[#007AFF]/20',
+                'pointer-events-none absolute left-4 right-4 brand-surface rounded-lg shadow-md shadow-accent/20',
                 indicatorAnimated && 'transition-[transform,height,opacity] duration-300 ease-out'
               )}
               style={{
@@ -315,13 +346,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
               onDragOver={handleDragOver}
               onDrop={handleDrop}
               onDragEnd={handleDragEnd}
+              totalCount={chatSessions.length}
+              onMoveUp={handleMoveUp}
+              onMoveDown={handleMoveDown}
               isDragging={dragIndex === index}
               dragOverIndex={dragOverIndex}
             />
           ))}
           
           {chatSessions.length === 0 && (
-            <div className="text-center text-[#8E8E93] text-sm py-8">
+            <div className="text-center text-muted text-sm py-8">
               <ChatBubbleLeftRightIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
               <p>暂无聊天记录</p>
               <p className="text-xs mt-1 opacity-75">点击上方 + 按钮创建新对话</p>
@@ -337,8 +371,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
           className={clsx(
             'w-full flex items-center space-x-3 p-3 rounded-xl transition-all duration-200',
             activeSidebarSection === 'settings'
-              ? 'brand-surface shadow-md shadow-[#007AFF]/20'
-              : 'text-[#1c1c1e] hover:bg-white/50'
+              ? 'brand-surface shadow-md shadow-accent/20'
+              : 'text-ink hover:bg-white/50'
           )}
         >
           <Cog6ToothIcon className="w-5 h-5" />

@@ -5,7 +5,7 @@
  * and clear visual hierarchy inside.
  */
 
-import React, { useState, useCallback, useEffect, useRef } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import {
   ChevronDownIcon,
   CheckCircleIcon,
@@ -36,66 +36,14 @@ export const Collapsible: React.FC<{ expanded: boolean; children: React.ReactNod
   expanded,
   children,
 }) => {
-  const ref = useRef<HTMLDivElement>(null)
-  const prevExpanded = useRef(expanded)
-  const rafRef = useRef<number>()
-
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-
-    if (rafRef.current) cancelAnimationFrame(rafRef.current)
-
-    if (expanded && !prevExpanded.current) {
-      // Expanding
-      el.style.overflow = 'hidden'
-      el.style.maxHeight = '0px'
-      el.style.opacity = '0'
-      // Force reflow
-      void el.scrollHeight
-      rafRef.current = requestAnimationFrame(() => {
-        el.style.maxHeight = el.scrollHeight + 'px'
-        el.style.opacity = '1'
-        const timer = setTimeout(() => {
-          el.style.maxHeight = 'none'
-          el.style.overflow = ''
-        }, 250)
-        // Store cleanup reference
-        ;(el as any)._cleanupTimer = timer
-      })
-    } else if (!expanded && prevExpanded.current) {
-      // Collapsing
-      if ((el as any)._cleanupTimer) clearTimeout((el as any)._cleanupTimer)
-      el.style.maxHeight = el.scrollHeight + 'px'
-      el.style.overflow = 'hidden'
-      void el.scrollHeight
-      rafRef.current = requestAnimationFrame(() => {
-        el.style.maxHeight = '0px'
-        el.style.opacity = '0'
-      })
-    } else if (expanded) {
-      el.style.maxHeight = 'none'
-      el.style.opacity = '1'
-      el.style.overflow = ''
-    } else {
-      el.style.maxHeight = '0px'
-      el.style.opacity = '0'
-      el.style.overflow = 'hidden'
-    }
-
-    prevExpanded.current = expanded
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current)
-    }
-  }, [expanded])
-
   return (
     <div
-      ref={ref}
-      className="transition-all duration-250 ease-in-out"
-      style={{ maxHeight: 0, opacity: 0, overflow: 'hidden' }}
+      className={clsx(
+        'grid transition-[grid-template-rows] duration-200 ease-out',
+        expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+      )}
     >
-      {children}
+      <div className="overflow-hidden">{children}</div>
     </div>
   )
 }
@@ -115,28 +63,28 @@ const ThinkingBlock: React.FC<{ step: AgentStep; isRunning: boolean }> = ({ step
 
   return (
     <div
-      className="rounded-xl border border-[#D1D1D6] cursor-pointer overflow-hidden"
+      className="rounded-xl border border-warm-line cursor-pointer overflow-hidden"
       onClick={() => setExpanded((v) => !v)}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2">
         <div className="flex items-center space-x-2">
-          <SparklesIcon className="w-4 h-4 text-[#8E8E93]" />
-          <span className="text-[12px] font-medium text-[#1c1c1e]">思考过程</span>
+          <SparklesIcon className="w-4 h-4 text-muted" />
+          <span className="text-meta-sm font-medium text-ink">思考过程</span>
           {isRunning && (
-            <span className="w-1.5 h-1.5 rounded-full bg-[#8E8E93] animate-pulse" />
+            <span className="w-1.5 h-1.5 rounded-full bg-muted animate-pulse" />
           )}
         </div>
         <div className="flex items-center space-x-1">
           {step.thinkingMs !== undefined && !isRunning && (
-            <span className="text-[10px] text-[#AEAEB2] tabular-nums">
+            <span className="text-meta-xs text-faint tabular-nums">
               {step.thinkingMs >= 1000
                 ? `${(step.thinkingMs / 1000).toFixed(1)}s`
                 : `${step.thinkingMs}ms`}
             </span>
           )}
           <div className={clsx('transition-transform duration-200', expanded && 'rotate-180')}>
-            <ChevronDownIcon className="w-3.5 h-3.5 text-[#AEAEB2]" />
+            <ChevronDownIcon className="w-3.5 h-3.5 text-faint" />
           </div>
         </div>
       </div>
@@ -144,7 +92,7 @@ const ThinkingBlock: React.FC<{ step: AgentStep; isRunning: boolean }> = ({ step
       {/* Body */}
       <Collapsible expanded={expanded}>
         <div className="px-3 pb-2 pt-0 ml-6">
-          <p className="text-[12px] text-[#3A3A3C] leading-[1.5] whitespace-pre-wrap">
+          <p className="text-meta-sm text-inverse leading-[1.5] whitespace-pre-wrap">
             {step.text}
           </p>
         </div>
@@ -177,7 +125,7 @@ const ToolBlock: React.FC<{ step: AgentStep }> = ({ step }) => {
     <div
       className={clsx(
         'rounded-2xl border',
-        isError ? 'border-red-200/50' : 'border-[#D1D1D6]'
+        isError ? 'border-red-200/50' : 'border-warm-line'
       )}
     >
       {/* Clickable header area */}
@@ -195,17 +143,17 @@ const ToolBlock: React.FC<{ step: AgentStep }> = ({ step }) => {
             {isError ? (
               <XCircleIcon className="w-5 h-5 text-red-400" />
             ) : isDone ? (
-              <CheckCircleIcon className="w-5 h-5 text-[#34C759]" />
+              <CheckCircleIcon className="w-5 h-5 text-apple-green" />
             ) : isRunning ? (
-              <span className="block w-5 h-5 border-2 border-[#007AFF] border-t-transparent rounded-full animate-spin" />
+              <span className="block w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
             ) : (
-              <CheckCircleIcon className="w-5 h-5 text-[#C7C7CC]" />
+              <CheckCircleIcon className="w-5 h-5 text-subtle" />
             )}
           </div>
 
           {/* Title */}
           <div className="flex-1 min-w-0">
-            <span className="text-[13px] text-[#1c1c1e]">
+            <span className="text-meta-md text-ink">
               {renderToolTitle(step)}
             </span>
           </div>
@@ -213,7 +161,7 @@ const ToolBlock: React.FC<{ step: AgentStep }> = ({ step }) => {
           {/* Time + chevron */}
           <div className="flex items-center space-x-1.5 flex-shrink-0 ml-3">
             {step.toolMs !== undefined && !isRunning && (
-              <span className="text-[11px] text-[#AEAEB2] tabular-nums">
+              <span className="text-meta-xs text-faint tabular-nums">
                 {step.toolMs >= 1000
                   ? `${(step.toolMs / 1000).toFixed(1)}s`
                   : `${step.toolMs}ms`}
@@ -221,7 +169,7 @@ const ToolBlock: React.FC<{ step: AgentStep }> = ({ step }) => {
             )}
             {hasDetails && (
               <div className={clsx('transition-transform duration-200', expanded && 'rotate-180')}>
-                <ChevronDownIcon className="w-4 h-4 text-[#C7C7CC]" />
+                <ChevronDownIcon className="w-4 h-4 text-subtle" />
               </div>
             )}
           </div>
@@ -233,12 +181,12 @@ const ToolBlock: React.FC<{ step: AgentStep }> = ({ step }) => {
       <Collapsible expanded={expanded}>
         <div className="px-4 pb-3 ml-7 space-y-2">
           {summary && !isRunning && (
-            <div className="text-[12px] text-[#636366]">{summary}</div>
+            <div className="text-meta-sm text-inverse">{summary}</div>
           )}
 
           {step.toolPreview && (
-            <div className="rounded-xl bg-white/50 backdrop-blur-sm border border-[#D1D1D6] p-3">
-              <pre className="text-[11px] text-[#3A3A3C] overflow-x-auto whitespace-pre-wrap break-all leading-relaxed font-mono">
+            <div className="rounded-xl bg-white/50 backdrop-blur-sm border border-warm-line p-3">
+              <pre className="text-meta-xs text-inverse overflow-x-auto whitespace-pre-wrap break-all leading-relaxed font-mono">
                 {step.toolPreview.length > 500
                   ? step.toolPreview.slice(0, 500) + '...'
                   : step.toolPreview}
@@ -250,7 +198,7 @@ const ToolBlock: React.FC<{ step: AgentStep }> = ({ step }) => {
             <div>
               <button
                 onClick={toggleRawExpanded}
-                className="flex items-center space-x-1 text-[11px] text-[#AEAEB2] hover:text-[#007AFF] transition-colors rounded-lg px-2 py-1 hover:bg-white/50"
+                className="flex items-center space-x-1 text-meta-xs text-faint hover:text-accent transition-colors rounded-lg px-2 py-1 hover:bg-white/50"
               >
                 <CodeBracketIcon className="w-3.5 h-3.5" />
                 <span>原始数据</span>
@@ -262,17 +210,17 @@ const ToolBlock: React.FC<{ step: AgentStep }> = ({ step }) => {
               <Collapsible expanded={rawExpanded}>
                 <div className="mt-2 space-y-2">
                   {step.toolInput && Object.keys(step.toolInput).length > 0 && (
-                    <div className="rounded-xl bg-white/50 backdrop-blur-sm border border-[#D1D1D6] p-3">
-                      <div className="text-[10px] text-[#8E8E93] mb-1.5 font-semibold tracking-wide">输入</div>
-                      <pre className="text-[10px] text-[#3A3A3C] overflow-x-auto whitespace-pre-wrap break-all leading-relaxed font-mono">
+                    <div className="rounded-xl bg-white/50 backdrop-blur-sm border border-warm-line p-3">
+                      <div className="text-meta-xs text-muted mb-1.5 font-semibold tracking-wide">输入</div>
+                      <pre className="text-meta-xs text-inverse overflow-x-auto whitespace-pre-wrap break-all leading-relaxed font-mono">
                         {JSON.stringify(step.toolInput, null, 2)}
                       </pre>
                     </div>
                   )}
                   {step.toolPreview && (
-                    <div className="rounded-xl bg-white/50 backdrop-blur-sm border border-[#D1D1D6] p-3">
-                      <div className="text-[10px] text-[#8E8E93] mb-1.5 font-semibold tracking-wide">输出</div>
-                      <pre className="text-[10px] text-[#3A3A3C] overflow-x-auto whitespace-pre-wrap break-all leading-relaxed font-mono">
+                    <div className="rounded-xl bg-white/50 backdrop-blur-sm border border-warm-line p-3">
+                      <div className="text-meta-xs text-muted mb-1.5 font-semibold tracking-wide">输出</div>
+                      <pre className="text-meta-xs text-inverse overflow-x-auto whitespace-pre-wrap break-all leading-relaxed font-mono">
                         {step.toolPreview}
                       </pre>
                     </div>
@@ -292,11 +240,11 @@ const ToolBlock: React.FC<{ step: AgentStep }> = ({ step }) => {
 /* ================================================================ */
 
 const CompactBlock: React.FC<{ step: AgentStep }> = ({ step }) => (
-  <div className="rounded-2xl border border-[#D1D1D6] px-4 py-2">
-    <span className="text-[11px] text-[#8E8E93]">
+  <div className="rounded-2xl border border-warm-line px-4 py-2">
+    <span className="text-meta-xs text-muted">
       压缩上下文
       {step.beforeTokens !== undefined && (
-        <span className="text-[#C7C7CC]">
+        <span className="text-subtle">
           {' '}(~{step.beforeTokens} &rarr; ~{step.afterTokens} tokens)
         </span>
       )}

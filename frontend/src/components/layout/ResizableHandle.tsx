@@ -1,5 +1,10 @@
 /**
  * Resizable handle component for sidebar width adjustment
+ *
+ * - Mouse drag for primary interaction
+ * - Arrow ← / → keyboard support (when focused); Home/End jump to min/max
+ * - role="separator" + aria-valuenow/min/max for assistive tech
+ * - Wider invisible hit area so users can grab it without pixel precision
  */
 
 import React, { useState, useRef, useEffect } from 'react'
@@ -7,12 +12,22 @@ import clsx from 'clsx'
 
 interface ResizableHandleProps {
   onResize: (deltaX: number) => void
+  onKeyboardResize?: (direction: -1 | 1) => void
+  currentWidth?: number
+  minWidth?: number
+  maxWidth?: number
   className?: string
 }
 
-export const ResizableHandle: React.FC<ResizableHandleProps> = ({ 
-  onResize, 
-  className 
+const KEYBOARD_STEP = 16
+
+export const ResizableHandle: React.FC<ResizableHandleProps> = ({
+  onResize,
+  onKeyboardResize,
+  currentWidth,
+  minWidth = 200,
+  maxWidth = 480,
+  className,
 }) => {
   const [isResizing, setIsResizing] = useState(false)
   const startXRef = useRef<number>(0)
@@ -57,27 +72,58 @@ export const ResizableHandle: React.FC<ResizableHandleProps> = ({
     startXRef.current = e.clientX
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!onKeyboardResize) return
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault()
+      onKeyboardResize(-1)
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault()
+      onKeyboardResize(1)
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      const width = currentWidth ?? minWidth
+      const steps = Math.ceil((width - minWidth) / KEYBOARD_STEP)
+      for (let i = 0; i < steps; i++) onKeyboardResize(-1)
+    } else if (e.key === 'End') {
+      e.preventDefault()
+      const width = currentWidth ?? maxWidth
+      const steps = Math.ceil((maxWidth - width) / KEYBOARD_STEP)
+      for (let i = 0; i < steps; i++) onKeyboardResize(1)
+    }
+  }
+
   return (
     <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="侧边栏宽度调节"
+      aria-valuenow={currentWidth}
+      aria-valuemin={minWidth}
+      aria-valuemax={maxWidth}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
       className={clsx(
-        'group relative z-20 w-1 bg-gray-200/40 hover:bg-[#007AFF]/40 transition-all duration-200 cursor-col-resize',
+        'group relative z-20 w-1 bg-gray-200/40 hover:bg-accent/40 transition-all duration-200 cursor-col-resize',
         'flex items-center justify-center',
-        isResizing && 'bg-[#007AFF]',
+        'focus-visible:outline-none focus-visible:bg-accent/60 focus-visible:w-1.5',
+        isResizing && 'bg-accent',
         className
       )}
       onMouseDown={handleMouseDown}
     >
-      {/* Visual indicator */}
-      <div 
+      {/* Visual indicator — persistent on hover */}
+      <div
+        aria-hidden
         className={clsx(
           'absolute inset-y-0 w-3 -left-1 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity',
           isResizing && 'opacity-100'
         )}
       >
-        <div className="w-0.5 h-8 bg-[#8E8E93] rounded-full" />
+        <div className="w-0.5 h-8 bg-muted rounded-full" />
       </div>
-      
-      {/* Invisible wider hit area */}
+
+      {/* Wider invisible hit area for easier grabbing */}
       <div className="absolute inset-y-0 -left-2 -right-2 cursor-col-resize" />
     </div>
   )

@@ -9,6 +9,9 @@ import {
   PaperAirplaneIcon,
   StopIcon,
   CpuChipIcon,
+  ClipboardIcon,
+  ArrowPathIcon,
+  CheckIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { useAppStore } from '../../store/appStore'
@@ -40,6 +43,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
   const [message, setMessage] = useState('')
   const [showKnowledgeBaseSelector, setShowKnowledgeBaseSelector] = useState(false)
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([])
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const wasNearBottomRef = useRef(true)
@@ -158,6 +162,24 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
     setSelectedDocumentIds(documentIds)
   }
 
+  const handleCopyMessage = async (messageId: string, content: string) => {
+    try {
+      await navigator.clipboard.writeText(content)
+      setCopiedMessageId(messageId)
+      setTimeout(() => setCopiedMessageId(null), 2000)
+    } catch (error) {
+      toast.error('复制失败: ' + (error as Error).message)
+    }
+  }
+
+  // TODO: wire to regenerate API — find the last user message before this AI message
+  // and re-send it. The backend needs a regenerate endpoint or we re-use sendMessage
+  // with the previous user query. No regenerate function currently exists in
+  // services/apiClient.ts or store/appStore.ts.
+  const handleRegenerateMessage = (_messageId: string) => {
+    // intentionally a no-op until the regenerate flow is wired
+  }
+
   const handleRichTextChange = (value: string, _mentions: DocumentMention[], mentionedDocIds: string[]) => {
     setMessage(value)
 
@@ -187,7 +209,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
 
   if (!currentChat) {
     return (
-      <div className="flex items-center justify-center h-full text-[#8E8E93]">
+      <div className="flex items-center justify-center h-full text-muted">
         <div className="text-center">
           <CpuChipIcon className="w-16 h-16 mx-auto mb-4 opacity-50" />
           <p>请选择一个聊天会话</p>
@@ -204,10 +226,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
       {/* Header */}
       <div className="flex-shrink-0 px-6 py-3 border-b border-white/40 bg-white/30 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-2 text-sm text-[#8E8E93]">
+          <div className="flex items-center space-x-2 text-sm text-muted">
             <span>知识库:</span>
             {kbNames.length > 0 ? (
-              <span className="text-[#1c1c1e] font-medium">
+              <span className="text-ink font-medium">
                 {kbNames.join(' + ')}
               </span>
             ) : (
@@ -218,7 +240,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
           {!isBoundChat && (
             <button
               onClick={() => setShowKnowledgeBaseSelector(true)}
-              className="flex items-center space-x-1 text-sm text-[#8E8E93] hover:text-[#007AFF] transition-colors"
+              className="flex items-center space-x-1 text-sm text-muted hover:text-accent transition-colors"
             >
               <PlusIcon className="w-4 h-4" />
               <span>管理知识库</span>
@@ -234,9 +256,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
           {isLoadingOlder && (
             <div className="px-6 py-3 flex justify-center">
               <div className="flex space-x-1.5">
-                <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" />
-                <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" />
+                <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
               </div>
             </div>
           )}
@@ -252,16 +274,16 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                     <div className="brand-surface rounded-2xl px-5 py-3">
                       <MarkdownContent content={msg.content} isUser />
                     </div>
-                    <div className="mt-1.5 text-[11px] text-[#8E8E93] text-right">
+                    <div className="mt-1.5 text-meta-xs text-muted text-right">
                       {formatTime(msg.timestamp)}
                     </div>
                   </div>
                 </div>
               ) : (
                 /* AI message - left aligned with bubble */
-                <div className="flex space-x-4">
+                <div className="flex space-x-4 group">
                   <div className="flex-shrink-0">
-                    <div className="w-7 h-7 rounded-full bg-[#007AFF]/10 text-[#007AFF] flex items-center justify-center">
+                    <div className="w-7 h-7 rounded-full bg-accent/10 text-accent flex items-center justify-center">
                       <CpuChipIcon className="w-3.5 h-3.5" />
                     </div>
                   </div>
@@ -269,14 +291,36 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                     {msg.agentState && (
                       <AgentTrace state={msg.agentState} />
                     )}
-                    <div className="bg-white/80 backdrop-blur-sm rounded-2xl px-5 py-3 border border-[#D1D1D6]/40">
-                      <div className="text-base leading-[1.7] text-[#1c1c1e]">
+                    <div className="bg-white/80 backdrop-blur-sm rounded-2xl px-5 py-3 border border-warm-line/40">
+                      <div className="text-base leading-[1.7] text-ink">
                         <MarkdownContent content={msg.content} />
                       </div>
                       <SourceReferences sources={msg.sources || []} />
                     </div>
-                    <div className="mt-1.5 text-[11px] text-[#8E8E93]">
-                      {formatTime(msg.timestamp)}
+                    <div className="mt-1.5 flex items-center justify-between">
+                      <div className="text-meta-xs text-muted">
+                        {formatTime(msg.timestamp)}
+                      </div>
+                      <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <button
+                          onClick={() => handleCopyMessage(msg.id, msg.content)}
+                          className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 rounded-lg text-muted hover:text-ink hover:bg-white/60 transition-colors focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                          aria-label="复制消息"
+                        >
+                          {copiedMessageId === msg.id ? (
+                            <CheckIcon className="w-4 h-4 text-apple-green" />
+                          ) : (
+                            <ClipboardIcon className="w-4 h-4" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleRegenerateMessage(msg.id)}
+                          className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 rounded-lg text-muted hover:text-ink hover:bg-white/60 transition-colors focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                          aria-label="重新生成"
+                        >
+                          <ArrowPathIcon className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -289,32 +333,32 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
             <div className="px-6 py-3.5">
               <div className="flex space-x-4">
                 <div className="flex-shrink-0">
-                  <div className="w-7 h-7 rounded-full bg-[#007AFF]/10 text-[#007AFF] flex items-center justify-center">
+                  <div className="w-7 h-7 rounded-full bg-accent/10 text-accent flex items-center justify-center">
                     <CpuChipIcon className="w-3.5 h-3.5" />
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
                   {processingStatus && (
-                    <div className="mb-2 flex items-center space-x-2 text-xs text-[#8E8E93]">
-                      <div className="w-3 h-3 border-2 border-[#007AFF] border-t-transparent rounded-full animate-spin" />
+                    <div className="mb-2 flex items-center space-x-2 text-xs text-muted">
+                      <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
                       <span>{processingStatus}</span>
                     </div>
                   )}
                   {streamingAgentState && (
                     <AgentTrace state={streamingAgentState} />
                   )}
-                  <div className="bg-white/80 backdrop-blur-sm rounded-2xl px-5 py-3 border border-[#D1D1D6]/40">
-                    <div className="text-base leading-[1.7] text-[#1c1c1e]">
+                  <div className="bg-white/80 backdrop-blur-sm rounded-2xl px-5 py-3 border border-warm-line/40">
+                    <div className="text-base leading-[1.7] text-ink">
                       {streamingContent ? (
                         <>
                           <MarkdownContent content={streamingContent} />
-                          <div className="inline-block w-2 h-4 bg-[#007AFF] ml-0.5 animate-pulse align-middle" />
+                          <div className="inline-block w-2 h-4 bg-accent ml-0.5 animate-pulse align-middle" />
                         </>
                       ) : (
                         <div className="flex space-x-1.5 py-2">
-                          <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" />
-                          <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                          <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                          <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" />
+                          <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                          <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                         </div>
                       )}
                     </div>
@@ -329,15 +373,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
             <div className="px-6 py-3.5">
               <div className="flex space-x-4">
                 <div className="flex-shrink-0">
-                  <div className="w-7 h-7 rounded-full bg-[#007AFF]/10 text-[#007AFF] flex items-center justify-center">
+                  <div className="w-7 h-7 rounded-full bg-accent/10 text-accent flex items-center justify-center">
                     <CpuChipIcon className="w-3.5 h-3.5" />
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex space-x-1.5 py-2">
-                    <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                    <div className="w-2 h-2 bg-[#D1D1D6] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                    <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" />
+                    <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                    <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                   </div>
                 </div>
               </div>
@@ -369,6 +413,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                 value={message}
                 onChange={handleRichTextChange}
                 onKeyDown={(e) => {
+                  // IME composition: CJK users press Enter to confirm a candidate.
+                  // Without this guard the half-typed word is sent prematurely.
+                  if (e.nativeEvent.isComposing) return
                   if (e.key === 'Enter' && !e.shiftKey && !isLoading && !isStreaming) {
                     e.preventDefault()
                     handleSendMessage()
@@ -382,8 +429,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
             {isLoading || isStreaming ? (
               <button
                 onClick={stopGeneration}
-                className="flex-shrink-0 bg-[#1c1c1e] text-white p-3 rounded-xl transition-colors active:scale-95 transition-transform duration-75"
-                title="停止生成"
+                className="flex-shrink-0 bg-ink text-white p-3 rounded-xl transition-colors active:scale-95 transition-transform duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                aria-label="停止生成"
               >
                 <StopIcon className="w-5 h-5" />
               </button>
@@ -391,7 +438,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
               <button
                 onClick={handleSendMessage}
                 disabled={!getRealUserInput(message).trim()}
-                className="flex-shrink-0 bg-[#007AFF] hover:bg-[#0066D6] disabled:bg-[#E5E5EA] text-white p-3 rounded-xl transition-colors disabled:cursor-not-allowed active:scale-95 transition-transform duration-75"
+                className="flex-shrink-0 bg-accent hover:bg-accent-hover disabled:bg-warm-border text-white p-3 rounded-xl transition-colors disabled:cursor-not-allowed active:scale-95 transition-transform duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                aria-label="发送消息"
               >
                 <PaperAirplaneIcon className="w-5 h-5" />
               </button>
