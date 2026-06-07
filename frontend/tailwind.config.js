@@ -29,6 +29,21 @@ export default {
         'warm-line': '#D1D1D6',
         'border-soft': 'rgba(255,255,255,0.4)',
         'border-softer': 'rgba(255,255,255,0.2)',
+        // Tertiary text ladder (extends ink/muted)
+        faint: '#AEAEB2',
+        subtle: '#C7C7CC',
+        inverse: '#3A3A3C',
+        // Apple system colors (semantic, used for status)
+        'apple-green': '#34C759',
+        'apple-red': '#FF3B30',
+        'apple-orange': '#FF9500',
+        'apple-yellow': '#FFCC00',
+        // Meta text sizes (centralized decision for 10/11/12px usage)
+        'meta-xs': '0.6875rem',   // 11px
+        'meta-sm': '0.75rem',     // 12px
+        'meta-md': '0.8125rem',   // 13px
+        // Soft surface tints
+        'soft-tint': '#FAFAF8',
         // macOS system colors (kept for backward compatibility)
         'macos-blue': '#007AFF',
         'macos-gray': {
