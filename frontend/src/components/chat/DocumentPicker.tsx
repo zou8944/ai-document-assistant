@@ -125,7 +125,7 @@ export const DocumentPicker: React.FC<DocumentPickerProps> = ({
             {hasMoreDocuments && (
               <button
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="inline-flex items-center space-x-1 text-xs text-gray-500 hover:text-gray-700 self-start"
+                className="inline-flex items-center space-x-1 text-xs text-ink/50 hover:text-ink/80 self-start"
               >
                 <span>{isExpanded ? '收起' : `+${selectedDocuments.length - 2}个`}</span>
                 {isExpanded ? (
@@ -156,12 +156,12 @@ export const DocumentPicker: React.FC<DocumentPickerProps> = ({
           {/* 文档列表 */}
           <div className="max-h-48 overflow-y-auto">
             {loading ? (
-              <div className="p-4 text-center text-gray-500">
+              <div className="p-4 text-center text-ink/50">
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto mb-2"></div>
                 <p className="text-sm">加载中...</p>
               </div>
             ) : filteredDocuments.length === 0 ? (
-              <div className="p-4 text-center text-gray-500">
+              <div className="p-4 text-center text-ink/50">
                 <DocumentIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">{searchTerm ? '未找到匹配的文档' : '暂无可用文档'}</p>
               </div>
@@ -183,8 +183,8 @@ export const DocumentPicker: React.FC<DocumentPickerProps> = ({
                     />
                     <DocumentIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-gray-900 truncate">{doc.name}</div>
-                      <div className="text-xs text-gray-500 truncate">{doc.uri}</div>
+                      <div className="text-sm font-medium text-ink truncate">{doc.name}</div>
+                      <div className="text-xs text-ink/50 truncate">{doc.uri}</div>
                     </div>
                   </button>
                 ))}

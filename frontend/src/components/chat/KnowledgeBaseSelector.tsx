@@ -114,7 +114,7 @@ export const KnowledgeBaseSelector: React.FC<KnowledgeBaseSelectorProps> = ({
             <button
               type="button"
               onClick={handleClose}
-              className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="rounded-lg bg-white text-gray-400 hover:text-ink/50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               <span className="sr-only">关闭</span>
               <XMarkIcon className="h-6 w-6" />
@@ -123,17 +123,17 @@ export const KnowledgeBaseSelector: React.FC<KnowledgeBaseSelectorProps> = ({
 
           <div className="sm:flex sm:items-start">
             <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
-              <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">
+              <h3 className="text-lg font-medium leading-6 text-ink mb-4">
                 管理对话知识库
               </h3>
 
               <div className="max-h-64 overflow-y-auto">
                 {loading ? (
-                  <div className="text-center text-gray-500 py-8">
+                  <div className="text-center text-ink/50 py-8">
                     <p>加载中...</p>
                   </div>
                 ) : availableKnowledgeBases.length === 0 ? (
-                  <div className="text-center text-gray-500 py-8">
+                  <div className="text-center text-ink/50 py-8">
                     <BookOpenIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
                     <p>暂无知识库</p>
                     <p className="text-sm mt-1">
@@ -158,10 +158,10 @@ export const KnowledgeBaseSelector: React.FC<KnowledgeBaseSelectorProps> = ({
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center space-x-2">
                             <BookOpenIcon className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                            <span className="font-medium text-gray-900">{kb.name}</span>
+                            <span className="font-medium text-ink">{kb.name}</span>
                           </div>
                           {kb.description && (
-                            <p className="text-sm text-gray-500 mt-1">{kb.description}</p>
+                            <p className="text-sm text-ink/50 mt-1">{kb.description}</p>
                           )}
                           <div className="flex items-center space-x-4 mt-1 text-xs text-gray-400">
                             <span>{kb.documentCount} 个文档</span>
@@ -181,14 +181,14 @@ export const KnowledgeBaseSelector: React.FC<KnowledgeBaseSelectorProps> = ({
                   <button
                     type="button"
                     onClick={handleConfirm}
-                    className="w-full inline-flex justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm"
+                    className="w-full inline-flex justify-center rounded-lg border border-transparent bg-accent-hover px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-accent-active focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm"
                   >
                     确认 ({selectedIds.length} 个已选择)
                   </button>
                   <button
                     type="button"
                     onClick={handleClose}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:mt-0 sm:w-auto sm:text-sm"
+                    className="mt-3 w-full inline-flex justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-base font-medium text-ink/80 shadow-sm hover:text-ink/50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:mt-0 sm:w-auto sm:text-sm"
                   >
                     取消
                   </button>

@@ -71,14 +71,14 @@ export const ReadmePanel: React.FC<ReadmePanelProps> = ({
       <div
         ref={containerRef}
         className="prose prose-sm max-w-none
-          prose-headings:text-gray-900 prose-headings:font-semibold
+          prose-headings:text-ink prose-headings:font-semibold
           prose-h1:text-2xl prose-h1:mb-6 prose-h1:pb-3 prose-h1:border-b prose-h1:border-gray-200
           prose-h2:text-xl prose-h2:mt-8 prose-h2:mb-4
           prose-h3:text-lg prose-h3:mt-6 prose-h3:mb-3
-          prose-p:text-gray-700 prose-p:leading-relaxed
+          prose-p:text-ink/80 prose-p:leading-relaxed
           prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline
-          prose-strong:text-gray-900
-          prose-ul:text-gray-700 prose-ul:my-3
+          prose-strong:text-ink
+          prose-ul:text-ink/80 prose-ul:my-3
           prose-li:my-1.5
           [&_a[data-doc-link]]:cursor-pointer
           [&_a[data-doc-link]]:text-blue-600

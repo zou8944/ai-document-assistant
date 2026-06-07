@@ -94,11 +94,11 @@ export const DocReader: React.FC<DocReaderProps> = ({ doc, previewUrl, collectio
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Top bar */}
-      <div className="flex-shrink-0 flex items-center gap-3 px-4 py-3 border-b border-gray-200/50 bg-white/80 backdrop-blur-sm">
-        <h3 className="text-sm font-semibold text-gray-900 truncate flex-1">
+      <div className="flex-shrink-0 flex items-center gap-3 px-4 py-3 border-b border-white/40 bg-white/80 backdrop-blur-sm">
+        <h3 className="text-sm font-semibold text-ink truncate flex-1">
           {doc.name}
           {doc.nameTranslated && (
-            <span className="text-gray-500 font-normal"> ({doc.nameTranslated})</span>
+            <span className="text-ink/50 font-normal"> ({doc.nameTranslated})</span>
           )}
         </h3>
 
@@ -107,10 +107,10 @@ export const DocReader: React.FC<DocReaderProps> = ({ doc, previewUrl, collectio
           <button
             onClick={() => setViewMode('html')}
             className={clsx(
-              'flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
+              'flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
               viewMode === 'html'
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
+                ? 'bg-white text-ink shadow-sm'
+                : 'text-ink/50 hover:text-ink/80'
             )}
             title="HTML 预览"
           >
@@ -120,10 +120,10 @@ export const DocReader: React.FC<DocReaderProps> = ({ doc, previewUrl, collectio
           <button
             onClick={() => setViewMode('markdown')}
             className={clsx(
-              'flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
+              'flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
               viewMode === 'markdown'
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
+                ? 'bg-white text-ink shadow-sm'
+                : 'text-ink/50 hover:text-ink/80'
             )}
             title="Markdown 原文"
           >
@@ -157,7 +157,7 @@ export const DocReader: React.FC<DocReaderProps> = ({ doc, previewUrl, collectio
         ) : (
           <div className="w-full h-full overflow-auto bg-white">
             {loading ? (
-              <div className="flex items-center justify-center h-full text-sm text-gray-500">
+              <div className="flex items-center justify-center h-full text-sm text-ink/50">
                 加载 Markdown 内容...
               </div>
             ) : error ? (
@@ -173,18 +173,18 @@ export const DocReader: React.FC<DocReaderProps> = ({ doc, previewUrl, collectio
                 <div
                   ref={containerRef}
                   className="prose prose-sm max-w-none
-                    prose-headings:text-gray-900 prose-headings:font-semibold
+                    prose-headings:text-ink prose-headings:font-semibold
                     prose-h1:text-2xl prose-h1:mb-4 prose-h1:pb-2 prose-h1:border-b prose-h1:border-gray-200
                     prose-h2:text-xl prose-h2:mt-6 prose-h2:mb-3
                     prose-h3:text-lg prose-h3:mt-4 prose-h3:mb-2
-                    prose-p:text-gray-800 prose-p:leading-relaxed
+                    prose-p:text-ink/90 prose-p:leading-relaxed
                     prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline
-                    prose-strong:text-gray-900
-                    prose-ul:text-gray-800 prose-ul:my-3
+                    prose-strong:text-ink
+                    prose-ul:text-ink/90 prose-ul:my-3
                     prose-li:my-1
                     prose-img:rounded-lg prose-img:shadow-sm
-                    prose-blockquote:border-l-4 prose-blockquote:border-gray-300 prose-blockquote:pl-4 prose-blockquote:py-2 prose-blockquote:bg-gray-50 prose-blockquote:text-gray-700 prose-blockquote:italic
-                    prose-code:bg-gray-100 prose-code:text-gray-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:font-mono
+                    prose-blockquote:border-l-4 prose-blockquote:border-gray-300 prose-blockquote:pl-4 prose-blockquote:py-2 prose-blockquote:bg-gray-50 prose-blockquote:text-ink/80 prose-blockquote:italic
+                    prose-code:bg-gray-100 prose-code:text-ink/90 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:font-mono
                     prose-pre:bg-gray-900 prose-pre:text-gray-100 prose-pre:p-4 prose-pre:rounded-lg prose-pre:overflow-x-auto prose-pre:text-sm"
                   dangerouslySetInnerHTML={{ __html: html }}
                   onClick={handleClick}

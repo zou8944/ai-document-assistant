@@ -306,16 +306,16 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
   return (
     <div className={clsx('h-full flex flex-col', className)}>
       {/* Header */}
-      <div className="flex-shrink-0 p-6 bg-gradient-to-r from-white/90 to-white/70 backdrop-blur-sm border-b border-gray-200/50">
+      <div className="flex-shrink-0 p-6 bg-gradient-to-r from-white/90 to-white/70 backdrop-blur-sm border-b border-white/40">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">知识库概览</h1>
-            <p className="text-gray-600 mt-1">管理您的文档和知识库</p>
+            <h1 className="text-2xl font-bold text-ink">知识库概览</h1>
+            <p className="text-ink/65 mt-1">管理您的文档和知识库</p>
           </div>
           
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors shadow-md"
+            className="flex items-center space-x-2 bg-accent hover:bg-accent-hover text-white px-4 py-2 rounded-lg transition-colors shadow-md"
           >
             <PlusIcon className="w-4 h-4" />
             <span>添加知识库</span>
@@ -340,7 +340,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200/50 overflow-hidden">
+              <div key={i} className="bg-white/80 backdrop-blur-sm rounded-xl border border-white/40 overflow-hidden">
                 <div className="p-4 pb-3 space-y-3">
                   <div className="flex items-center space-x-2">
                     <div className="w-5 h-5 rounded shimmer" />
@@ -356,7 +356,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                     <div className="h-3 rounded shimmer w-1/3" />
                   </div>
                 </div>
-                <div className="border-t border-gray-200/50 px-4 py-3 bg-gray-50/50 flex space-x-2">
+                <div className="border-t border-white/40 px-4 py-3 bg-gray-50/50 flex space-x-2">
                   <div className="flex-1 h-8 rounded shimmer" />
                   <div className="flex-1 h-8 rounded shimmer" />
                   <div className="flex-1 h-8 rounded shimmer" />
@@ -365,7 +365,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
             ))}
           </div>
         ) : filteredCollections.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+          <div className="flex flex-col items-center justify-center h-64 text-ink/50">
             {searchQuery ? (
               <>
                 <MagnifyingGlassIcon className="w-16 h-16 mb-4 opacity-50" />
@@ -379,7 +379,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                 <p className="text-center mb-4">创建您的第一个知识库来开始使用</p>
                 <button
                   onClick={() => setIsAddModalOpen(true)}
-                  className="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
+                  className="flex items-center space-x-2 bg-accent hover:bg-accent-hover text-white px-4 py-2 rounded-lg transition-colors"
                 >
                   <PlusIcon className="w-4 h-4" />
                   <span>创建知识库</span>
@@ -392,7 +392,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
             {filteredCollections.map((collection, index) => (
               <div
                 key={collection.id}
-                className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200/50 overflow-hidden hover:-translate-y-px hover:shadow-lg hover:border-gray-300/50 transition-all duration-200 animate-card-in"
+                className="bg-white/80 backdrop-blur-sm rounded-xl border border-white/40 overflow-hidden hover:-translate-y-px hover:shadow-lg hover:border-gray-300/50 transition-all duration-200 animate-card-in"
                 style={{ animationDelay: `${index * 50}ms` }}
               >
                 {/* Card Header */}
@@ -400,23 +400,23 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center space-x-2 min-w-0">
                       <BookOpenIcon className="w-5 h-5 text-blue-500 flex-shrink-0" />
-                      <h3 className="font-semibold text-gray-900 truncate">{collection.name}</h3>
+                      <h3 className="font-semibold text-ink truncate">{collection.name}</h3>
                     </div>
                     <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
                       {/* More actions menu */}
                       <div className="relative" ref={menuOpenId === collection.id ? menuRef : undefined}>
                         <button
                           onClick={(e) => handleToggleMenu(e, collection.id)}
-                          className="p-1 hover:bg-gray-100 rounded-md transition-colors text-gray-400 hover:text-gray-600"
+                          className="p-1 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-ink/65"
                           title="更多操作"
                         >
                           <EllipsisVerticalIcon className="w-4 h-4" />
                         </button>
                         {menuOpenId === collection.id && (
-                          <div className="absolute right-0 mt-1 w-32 bg-white rounded-lg shadow-lg border border-gray-200/50 py-1 z-50">
+                          <div className="absolute right-0 mt-1 w-32 bg-white rounded-lg shadow-lg border border-white/40 py-1 z-50">
                             <button
                               onClick={() => handleStartEdit(collection)}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink/80 hover:bg-gray-50 transition-colors"
                             >
                               <PencilIcon className="w-3.5 h-3.5" />
                               编辑
@@ -427,12 +427,12 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                     </div>
                   </div>
                   
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                  <p className="text-sm text-ink/65 mb-3 line-clamp-2">
                     {collection.description || '暂无描述'}
                   </p>
 
                   {/* Metadata */}
-                  <div className="space-y-2 text-xs text-gray-500">
+                  <div className="space-y-2 text-xs text-ink/50">
                     <div className="flex items-center space-x-2">
                       <CalendarIcon className="w-3 h-3" />
                       <span>创建于 {formatDate(collection.created_at)}</span>
@@ -457,7 +457,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                               return (
                                 <div key={task.task_id} className="flex items-center gap-1" title={task.title || (task.task_type === 'ingest_urls' ? '网页抓取' : '文件上传')}>
                                   <CircularProgress progress={progress} size={16} color={color} />
-                                  <span className="text-[10px] text-gray-500">{progress}%</span>
+                                  <span className="text-[10px] text-ink/50">{progress}%</span>
                                 </div>
                               )
                             })}
@@ -469,10 +469,10 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                 </div>
 
                 {/* Action Buttons */}
-                <div className="border-t border-gray-200/50 px-4 py-3 bg-gray-50/50 flex space-x-2">
+                <div className="border-t border-white/40 px-4 py-3 bg-gray-50/50 flex space-x-2">
                   <button
                     onClick={() => handleManageClick(collection.id)}
-                    className="flex-1 flex items-center justify-center space-x-1 py-2 px-3 bg-white hover:bg-gray-50 border border-gray-200 rounded-md transition-colors text-sm"
+                    className="flex-1 flex items-center justify-center space-x-1 py-2 px-3 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition-colors text-sm"
                   >
                     <CogIcon className="w-3 h-3" />
                     <span>管理</span>
@@ -480,7 +480,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
 
                   <button
                     onClick={() => handleChatClick(collection.id)}
-                    className="flex-1 flex items-center justify-center space-x-1 py-2 px-3 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors text-sm"
+                    className="flex-1 flex items-center justify-center space-x-1 py-2 px-3 bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors text-sm"
                   >
                     <ChatBubbleLeftRightIcon className="w-3 h-3" />
                     <span>聊天</span>
@@ -490,7 +490,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                     onClick={() => handleReindex(collection.id)}
                     disabled={!collection.needs_reindex || reindexingId === collection.id}
                     className={clsx(
-                      'flex items-center justify-center space-x-1 py-2 px-3 border rounded-md transition-colors text-sm',
+                      'flex items-center justify-center space-x-1 py-2 px-3 border rounded-lg transition-colors text-sm',
                       collection.needs_reindex && reindexingId !== collection.id
                         ? 'bg-white hover:bg-amber-50 border-amber-300 text-amber-700'
                         : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
@@ -519,12 +519,12 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 animate-fade-in">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">编辑知识库</h2>
-              <p className="text-sm text-gray-500 mt-1">修改知识库的名称和描述</p>
+              <h2 className="text-lg font-semibold text-ink">编辑知识库</h2>
+              <p className="text-sm text-ink/50 mt-1">修改知识库的名称和描述</p>
             </div>
             <div className="px-6 py-4 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">名称</label>
+                <label className="block text-sm font-medium text-ink/80 mb-1">名称</label>
                 <input
                   type="text"
                   value={editName}
@@ -539,7 +539,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">描述</label>
+                <label className="block text-sm font-medium text-ink/80 mb-1">描述</label>
                 <textarea
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
@@ -552,14 +552,14 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
             <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
               <button
                 onClick={handleCancelEdit}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+                className="px-4 py-2 text-sm text-ink/65 hover:text-ink/90 transition-colors"
               >
                 取消
               </button>
               <button
                 onClick={handleConfirmEdit}
                 disabled={savingEdit || !editName.trim()}
-                className="px-4 py-2 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-sm bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors disabled:opacity-50"
               >
                 {savingEdit ? '保存中...' : '保存'}
               </button>
@@ -573,8 +573,8 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 animate-fade-in">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">发现未完成任务</h2>
-              <p className="text-sm text-gray-500 mt-1">
+              <h2 className="text-lg font-semibold text-ink">发现未完成任务</h2>
+              <p className="text-sm text-ink/50 mt-1">
                 有 {pendingRestartTasks.length} 个任务需要继续处理，是否立即重启？
               </p>
             </div>
@@ -594,10 +594,10 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                         task.status === 'failed' && 'bg-red-500'
                       )} />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-800 truncate">
+                        <div className="text-sm font-medium text-ink/90 truncate">
                           {task.title || (task.task_type === 'ingest_urls' ? '网页抓取' : '文件上传')}
                         </div>
-                        <div className="text-xs text-gray-500 truncate">
+                        <div className="text-xs text-ink/50 truncate">
                           {collection?.name || '未知知识库'}
                         </div>
                       </div>
@@ -609,14 +609,14 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
             <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
               <button
                 onClick={handleDismissRestart}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+                className="px-4 py-2 text-sm text-ink/65 hover:text-ink/90 transition-colors"
               >
                 稍后
               </button>
               <button
                 onClick={handleRestartAll}
                 disabled={restarting}
-                className="px-4 py-2 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-sm bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors disabled:opacity-50"
               >
                 {restarting ? '重启中...' : '重启所有'}
               </button>

@@ -237,7 +237,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
   return (
     <div className={clsx('flex flex-col h-full bg-white/60 backdrop-blur-xl border-r border-white/20', className)}>
       {/* Knowledge Base Section - Fixed at top */}
-      <div className="flex-shrink-0 p-4 border-b border-gray-200/40">
+      <div className="flex-shrink-0 p-4 border-b border-white/40">
         <button
           onClick={() => handleSectionClick('knowledge')}
           className={clsx(
@@ -254,14 +254,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
 
       {/* Chat Section - Scrollable middle area */}
       <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex-shrink-0 p-4 pb-2 border-b border-gray-200/40">
+        <div className="flex-shrink-0 p-4 pb-2 border-b border-white/40">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium text-[#8E8E93] uppercase tracking-wide">
               聊天
             </h3>
             <button
               onClick={handleAddChat}
-              className="p-1 rounded-md hover:bg-white/50 transition-colors"
+              className="p-1 rounded-lg hover:bg-white/50 transition-colors"
               title="新建聊天"
             >
               <PlusIcon className="w-4 h-4 text-[#8E8E93]" />
@@ -322,7 +322,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
       </div>
 
       {/* Settings Section - Fixed at bottom */}
-      <div className="flex-shrink-0 p-4 border-t border-gray-200/40">
+      <div className="flex-shrink-0 p-4 border-t border-white/40">
         <button
           onClick={() => handleSectionClick('settings')}
           className={clsx(

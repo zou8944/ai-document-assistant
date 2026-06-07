@@ -254,10 +254,10 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
             alt="Logo"
             className="w-16 h-16 rounded-2xl shadow-lg object-cover mx-auto mb-4"
           />
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+          <h1 className="text-2xl font-bold text-ink mb-2">
             欢迎使用 AI 文档助手
           </h1>
-          <p className="text-gray-600">
+          <p className="text-ink/65">
             请配置以下三个 AI 服务以启用全部功能
           </p>
         </div>
@@ -270,20 +270,20 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
             return (
               <div
                 key={group.id}
-                className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200/50 shadow-sm overflow-hidden"
+                className="bg-white/80 backdrop-blur-sm rounded-xl border border-white/40 shadow-sm overflow-hidden"
               >
-                <div className={`px-5 py-3 bg-gradient-to-r ${colors.headerBg} border-b border-gray-200/50`}>
+                <div className={`px-5 py-3 bg-gradient-to-r ${colors.headerBg} border-b border-white/40`}>
                   <div className="flex items-center space-x-2">
                     <Icon className={`w-5 h-5 ${colors.icon}`} />
-                    <h2 className="text-base font-semibold text-gray-900">{group.title}</h2>
+                    <h2 className="text-base font-semibold text-ink">{group.title}</h2>
                   </div>
-                  <p className="text-xs text-gray-600 mt-0.5">{group.subtitle}</p>
+                  <p className="text-xs text-ink/65 mt-0.5">{group.subtitle}</p>
                 </div>
 
                 <div className="p-5 grid grid-cols-2 gap-4">
                   {group.fields.map((field) => (
                     <div key={field.key} className={field.key.endsWith('API_KEY') || field.key.endsWith('BASE_URL') ? 'col-span-2' : ''}>
-                      <label className="flex items-center space-x-1 text-xs font-medium text-gray-700 mb-1.5">
+                      <label className="flex items-center space-x-1 text-xs font-medium text-ink/80 mb-1.5">
                         <span>{field.label}</span>
                         {field.required && <span className="text-red-500">*</span>}
                       </label>
@@ -312,7 +312,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
                           <button
                             type="button"
                             onClick={() => toggleShow(field.key)}
-                            className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                            className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-ink/65"
                           >
                             {showKeys[field.key] ? (
                               <EyeSlashIcon className="h-4 w-4" />
@@ -350,7 +350,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
           <button
             onClick={handleSave}
             disabled={!canSubmit || isSaving}
-            className="px-8 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 text-sm font-medium"
+            className="px-8 py-2.5 bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 text-sm font-medium"
           >
             {isSaving ? (
               <>
@@ -367,7 +367,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
         </div>
 
         {/* Footer hint */}
-        <p className="text-center text-xs text-gray-500 mt-4">
+        <p className="text-center text-xs text-ink/50 mt-4">
           密钥将加密存储在本地数据库中，不会上传至任何外部服务
         </p>
       </div>

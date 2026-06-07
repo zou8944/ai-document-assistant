@@ -36,7 +36,7 @@ export const SourceReferences: React.FC<SourceReferencesProps> = ({ sources }) =
           {sources.map((source, index) => (
             <div
               key={`${source.document_id}-${source.chunk_index}`}
-              className="text-xs rounded-md p-2.5 bg-white border border-warm-border hover:shadow-sm hover:border-gray-300 transition-all duration-150"
+              className="text-xs rounded-lg p-2.5 bg-white border border-warm-border hover:shadow-sm hover:border-gray-300 transition-all duration-150"
               style={{ transitionDelay: `${index * 30}ms` }}
             >
               <div className="flex items-center justify-between mb-1">

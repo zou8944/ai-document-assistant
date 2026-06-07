@@ -70,7 +70,7 @@ const getTaskBgClass = (task: APITask, isSelected: boolean): string => {
   if (task.status === 'success') return 'bg-green-50/40 border-green-200/60 hover:bg-green-50/60'
   if (task.status === 'failed') return 'bg-red-50/40 border-red-200/60 hover:bg-red-50/60'
   if (task.status === 'stopped') return 'bg-blue-50/40 border-blue-200/60 hover:bg-blue-50/60'
-  return 'bg-gray-50/40 border-gray-200/60 hover:bg-gray-50/60'
+  return 'bg-gray-50/40 border-white/40 hover:bg-gray-50/60'
 }
 
 export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = ({
@@ -878,7 +878,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       <div className="flex-1 min-w-0">
         <div className={clsx(
           'text-sm truncate',
-          selectedDocId === doc.id ? 'font-medium text-blue-700' : 'text-gray-800'
+          selectedDocId === doc.id ? 'font-medium text-blue-700' : 'text-ink/90'
         )}>
           {isBilingual && displayLanguage === 'zh' && doc.nameTranslated
             ? doc.nameTranslated
@@ -910,13 +910,13 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   if (!currentKb) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-center text-gray-500">
+        <div className="text-center text-ink/50">
           <DocumentIcon className="w-16 h-16 mx-auto mb-4 opacity-50" />
           <p>找不到知识库</p>
           <div className="mt-4">
             <button
               onClick={() => setActiveKnowledgeBase(null)}
-              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
+              className="bg-accent hover:bg-accent-hover text-white px-4 py-2 rounded-lg transition-colors"
             >
               返回列表
             </button>
@@ -929,16 +929,16 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   return (
     <div className={clsx('h-full flex flex-col overflow-hidden', className)}>
       {/* Header */}
-      <div className="relative z-50 flex-shrink-0 px-6 py-4 bg-gradient-to-r from-white/90 to-white/70 backdrop-blur-sm border-b border-gray-200/50">
+      <div className="relative z-50 flex-shrink-0 px-6 py-4 bg-gradient-to-r from-white/90 to-white/70 backdrop-blur-sm border-b border-white/40">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setActiveKnowledgeBase(null)}
               className="p-2 hover:bg-gray-100/50 rounded-lg transition-colors"
             >
-              <ChevronLeftIcon className="w-5 h-5 text-gray-600" />
+              <ChevronLeftIcon className="w-5 h-5 text-ink/65" />
             </button>
-            <h1 className="text-xl font-bold text-gray-900">{currentKb.name}</h1>
+            <h1 className="text-xl font-bold text-ink">{currentKb.name}</h1>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -953,29 +953,29 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
               {importCollapsed ? <ChevronRightIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
               导入与任务
               {tasks.filter(t => t.status === 'processing').length > 0 && (
-                <span className="ml-1 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                <span className="ml-1 w-2 h-2 bg-accent rounded-full animate-pulse" />
               )}
             </button>
             <div className="relative z-50" ref={actionsMenuRef}>
               <button
                 onClick={() => setShowActionsMenu(!showActionsMenu)}
-                className="p-2 hover:bg-gray-100/50 rounded-lg transition-colors text-gray-500"
+                className="p-2 hover:bg-gray-100/50 rounded-lg transition-colors text-ink/50"
                 title="更多操作"
               >
                 <EllipsisVerticalIcon className="w-5 h-5" />
               </button>
               {showActionsMenu && (
-                <div className="absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200/50 py-1 z-50">
+                <div className="absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-white/40 py-1 z-50">
                   <button
                     onClick={handleRecategorize}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-ink/80 hover:bg-gray-50 transition-colors"
                   >
                     <ArrowPathIcon className="w-4 h-4" />
                     重新分类
                   </button>
                   <button
                     onClick={handleRegenerateReadme}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-ink/80 hover:bg-gray-50 transition-colors"
                   >
                     <DocumentIcon className="w-4 h-4" />
                     重新生成 README
@@ -1003,7 +1003,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
 
         {/* Import & Task Panel */}
         {!importCollapsed && (
-          <div className="mt-4 pt-4 border-t border-gray-200/50">
+          <div className="mt-4 pt-4 border-t border-white/40">
             {/* Import Buttons */}
             <div className="flex gap-4 mb-4">
               <button
@@ -1012,7 +1012,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                 className="flex-1 flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-lg transition-colors disabled:opacity-50"
               >
                 <GlobeAltIcon className="w-5 h-5 text-gray-400" />
-                <span className="text-sm text-gray-700">网页 URL</span>
+                <span className="text-sm text-ink/80">网页 URL</span>
               </button>
               <button
                 onClick={() => setShowFileUpload(true)}
@@ -1020,16 +1020,16 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                 className="flex-1 flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-lg transition-colors disabled:opacity-50"
               >
                 <DocumentIcon className="w-5 h-5 text-gray-400" />
-                <span className="text-sm text-gray-700">本地文件</span>
+                <span className="text-sm text-ink/80">本地文件</span>
               </button>
             </div>
 
             {/* Task List */}
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-700">任务列表</h3>
+              <h3 className="text-sm font-semibold text-ink/80">任务列表</h3>
               <button
                 onClick={loadTasks}
-                className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded border border-gray-300"
+                className="text-xs text-ink/50 hover:text-ink/80 px-2 py-1 rounded border border-gray-300"
               >
                 刷新
               </button>
@@ -1054,10 +1054,10 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                           task.status === 'processing' && 'bg-yellow-500 animate-pulse',
                           task.status === 'success' && 'bg-green-500',
                           task.status === 'failed' && 'bg-red-500',
-                          task.status === 'stopped' && 'bg-blue-500',
+                          task.status === 'stopped' && 'bg-accent',
                           task.status === 'pending' && 'bg-gray-400',
                         )} />
-                        <span className="text-sm font-medium text-gray-800 truncate">
+                        <span className="text-sm font-medium text-ink/90 truncate">
                           {task.title || (task.task_type === 'ingest_urls' ? '网页抓取' : '文件上传')}
                         </span>
                         {task.status === 'processing' && task.progress !== undefined && (
@@ -1071,7 +1071,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                           </span>
                         )}
                       </div>
-                      <div className="grid grid-cols-10 gap-2 text-xs text-gray-500 mt-1">
+                      <div className="grid grid-cols-10 gap-2 text-xs text-ink/50 mt-1">
                         <span className="col-span-1 truncate" title={`创建: ${new Date(task.created_at).toLocaleString()}`}>
                           创建: {new Date(task.created_at).toLocaleString()}
                         </span>
@@ -1102,7 +1102,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                       {task.status === 'processing' && (
                         <button
                           onClick={() => handleStopTask(task.task_id)}
-                          className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                          className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           title="停止（当前操作完成后停止）"
                         >
                           <StopIcon className="w-4 h-4" />
@@ -1111,7 +1111,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                       {(task.status === 'success' || task.status === 'failed' || task.status === 'stopped') && !tasks.some(t => t.status === 'processing') && (
                         <button
                           onClick={() => handleRestartTask(task.task_id)}
-                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                           title={task.status === 'success' ? '重新运行' : '重跑'}
                         >
                           {task.status === 'success' ? <ArrowPathIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4" />}
@@ -1120,7 +1120,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                       {(task.status === 'success' || task.status === 'failed' || task.status === 'stopped') && (
                         <button
                           onClick={() => handleDeleteTask(task.task_id)}
-                          className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                          className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           title="删除任务"
                         >
                           <TrashIcon className="w-4 h-4" />
@@ -1136,7 +1136,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
             {selectedTaskId && (
               <div className={clsx('mt-3 flex flex-col', logsExpanded && 'h-[50vh]')}>
                 <div className="flex items-center justify-between mb-2 flex-shrink-0">
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs text-ink/50">
                     {(() => {
                       const t = tasks.find(task => task.task_id === selectedTaskId)
                       return t ? (t.title || (t.task_type === 'ingest_urls' ? '网页抓取' : '文件上传')) : '任务'
@@ -1157,7 +1157,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                     </button>
                     <button
                       onClick={() => { setSelectedTaskId(null); setTaskLogs([]); setIsStreaming(false); setLogsExpanded(false); apiClient.cancelRequests() }}
-                      className="text-xs text-gray-400 hover:text-gray-600 px-2 py-0.5 rounded hover:bg-gray-100 transition-colors"
+                      className="text-xs text-gray-400 hover:text-ink/65 px-2 py-0.5 rounded hover:bg-gray-100 transition-colors"
                     >
                       关闭
                     </button>
@@ -1166,7 +1166,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                 <textarea
                   ref={logTextAreaRef}
                   className={clsx(
-                    'w-full p-2 text-xs font-mono bg-gray-50 border border-gray-200 rounded-md resize-none',
+                    'w-full p-2 text-xs font-mono bg-gray-50 border border-gray-200 rounded-lg resize-none',
                     logsExpanded ? 'flex-1 min-h-0' : 'h-24'
                   )}
                   value={taskLogs.join('\n')}
@@ -1180,7 +1180,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       </div>
 
       {/* Search Bar */}
-      <div className="flex-shrink-0 px-6 py-3 border-b border-gray-200/50 bg-white/60 backdrop-blur-sm">
+      <div className="flex-shrink-0 px-6 py-3 border-b border-white/40 bg-white/60 backdrop-blur-sm">
         <div className="relative">
           <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
@@ -1206,18 +1206,18 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
         {/* Left: Accordion Sidebar */}
         <div
           ref={sidebarRef}
-          className="flex-shrink-0 border-r border-gray-200/50 bg-white/50 backdrop-blur-sm flex flex-col overflow-hidden"
+          className="flex-shrink-0 border-r border-white/40 bg-white/50 backdrop-blur-sm flex flex-col overflow-hidden"
           style={{ width: docListSidebarWidth }}
         >
           {/* Sidebar header */}
           <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200/30 flex-shrink-0">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">文档</span>
+            <span className="text-xs font-semibold text-ink/50 uppercase tracking-wider">文档</span>
           </div>
 
           {/* Sidebar content */}
           <div className="flex-1 overflow-y-auto py-1">
             {loadingDocuments && documents.length === 0 && (
-              <div className="flex items-center justify-center py-8 text-gray-500">
+              <div className="flex items-center justify-center py-8 text-ink/50">
                 <div className="text-sm">加载中...</div>
               </div>
             )}
@@ -1229,7 +1229,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                 'w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors',
                 selectedDocId === null && !searchQuery
                   ? 'bg-blue-50/80 text-blue-600 font-medium'
-                  : 'text-gray-700 hover:bg-gray-50/80'
+                  : 'text-ink/80 hover:bg-gray-50/80'
               )}
             >
               <span className="flex items-center gap-2">
@@ -1238,7 +1238,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
               </span>
               <span className={clsx(
                 'text-xs px-1.5 py-0.5 rounded-full',
-                selectedDocId === null && !searchQuery ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'
+                selectedDocId === null && !searchQuery ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-ink/50'
               )}>
                 {readmeDocCount}
               </span>
@@ -1251,8 +1251,8 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                 className={clsx(
                   'w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors',
                   selectedDocId !== null && !selectedDocCategory
-                    ? 'text-gray-700 hover:bg-gray-50/80'
-                    : 'text-gray-700 hover:bg-gray-50/80'
+                    ? 'text-ink/80 hover:bg-gray-50/80'
+                    : 'text-ink/80 hover:bg-gray-50/80'
                 )}
               >
                 <span className="flex items-center gap-2">
@@ -1263,7 +1263,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                   )}
                   <span>所有文档</span>
                 </span>
-                <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 text-ink/50">
                   {searchResults !== null
                     ? (searchGroupedDocs?.get('all')?.length ?? 0)
                     : documents.length}
@@ -1303,7 +1303,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                       'w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors',
                       isHighlighted && !searchQuery
                         ? 'bg-blue-50/30 text-blue-600'
-                        : 'text-gray-700 hover:bg-gray-50/80'
+                        : 'text-ink/80 hover:bg-gray-50/80'
                     )}
                   >
                     <span className="flex items-center gap-2 min-w-0">
@@ -1316,7 +1316,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                     </span>
                     <span className={clsx(
                       'text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 ml-2',
-                      isHighlighted && !searchQuery ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'
+                      isHighlighted && !searchQuery ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-ink/50'
                     )}>
                       {docs.length}
                     </span>
@@ -1347,10 +1347,10 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
 
           {/* Language toggle for bilingual collections */}
           {isBilingual && (
-            <div className="px-4 py-3 border-t border-gray-200/50 flex-shrink-0">
+            <div className="px-4 py-3 border-t border-white/40 flex-shrink-0">
               <button
                 onClick={() => setDisplayLanguage(displayLanguage === 'source' ? 'zh' : 'source')}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-ink/65 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <span>{displayLanguage === 'source' ? 'English' : '中文'}</span>
                 <svg className="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1364,7 +1364,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
 
         {/* Left drag handle */}
         <div
-          className="w-1 flex-shrink-0 hover:bg-blue-400/50 active:bg-blue-500/60 transition-colors cursor-col-resize"
+          className="w-1 flex-shrink-0 hover:bg-blue-400/50 active:bg-accent/60 transition-colors cursor-col-resize"
           onMouseDown={handleLeftDragStart}
           title="拖动调整宽度"
         />
@@ -1435,16 +1435,16 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
             onClick={e => e.stopPropagation()}
           >
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">重新分类文档</h3>
+              <h3 className="text-lg font-semibold text-ink">重新分类文档</h3>
             </div>
             <div className="px-6 py-4 space-y-4">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-ink/65">
                 选择分类方式后，系统将重新对知识库
-                <span className="font-semibold text-gray-900">&nbsp;"{currentKb.name}"&nbsp;</span>
+                <span className="font-semibold text-ink">&nbsp;"{currentKb.name}"&nbsp;</span>
                 中的所有文档进行分类。
               </p>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-ink/80 mb-2">
                   分类方式
                 </label>
                 <div className="flex gap-3">
@@ -1457,7 +1457,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                       onChange={(e) => setRecategorizeMode(e.target.value)}
                       className="w-4 h-4 text-macos-blue"
                     />
-                    <span className="text-sm text-gray-700">AI 智能分类</span>
+                    <span className="text-sm text-ink/80">AI 智能分类</span>
                   </label>
                   <label className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors">
                     <input
@@ -1468,7 +1468,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                       onChange={(e) => setRecategorizeMode(e.target.value)}
                       className="w-4 h-4 text-macos-blue"
                     />
-                    <span className="text-sm text-gray-700">按路径前缀分类</span>
+                    <span className="text-sm text-ink/80">按路径前缀分类</span>
                   </label>
                 </div>
               </div>
@@ -1476,13 +1476,13 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
             <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
               <button
                 onClick={() => setRecategorizeModalOpen(false)}
-                className="px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm text-ink/80 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
               >
                 取消
               </button>
               <button
                 onClick={handleConfirmRecategorize}
-                className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm text-white bg-accent-hover hover:bg-accent-active rounded-lg transition-colors"
               >
                 确认重新分类
               </button>
@@ -1501,17 +1501,17 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
             onClick={e => e.stopPropagation()}
           >
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">清空知识库</h3>
+              <h3 className="text-lg font-semibold text-ink">清空知识库</h3>
             </div>
             <div className="px-6 py-4 space-y-4">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-ink/65">
                 此操作将删除知识库
-                <span className="font-semibold text-gray-900">&nbsp;"{currentKb.name}"&nbsp;</span>
+                <span className="font-semibold text-ink">&nbsp;"{currentKb.name}"&nbsp;</span>
                 中的所有文档、向量和任务数据，但保留知识库本身。
                 此操作<span className="text-red-600 font-semibold">无法撤销</span>。
               </p>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-ink/80 mb-1">
                   请输入知识库名称以确认：
                 </label>
                 <input
@@ -1527,7 +1527,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
             <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
               <button
                 onClick={() => { setClearModalOpen(false); setConfirmName('') }}
-                className="px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm text-ink/80 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
               >
                 取消
               </button>
@@ -1553,19 +1553,19 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
             onClick={e => e.stopPropagation()}
           >
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">删除知识库</h3>
+              <h3 className="text-lg font-semibold text-ink">删除知识库</h3>
             </div>
             <div className="px-6 py-4 space-y-4">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-ink/65">
                 此操作将
                 <span className="text-red-600 font-semibold">永久删除</span>
                 知识库
-                <span className="font-semibold text-gray-900">&nbsp;"{currentKb.name}"&nbsp;</span>
+                <span className="font-semibold text-ink">&nbsp;"{currentKb.name}"&nbsp;</span>
                 及其所有文档、向量和任务数据。
                 此操作<span className="text-red-600 font-semibold">无法撤销</span>。
               </p>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-ink/80 mb-1">
                   请输入知识库名称以确认：
                 </label>
                 <input
@@ -1581,7 +1581,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
             <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
               <button
                 onClick={() => { setDeleteModalOpen(false); setConfirmName('') }}
-                className="px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm text-ink/80 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
               >
                 取消
               </button>
@@ -1607,10 +1607,10 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
             onClick={e => e.stopPropagation()}
           >
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">删除任务</h3>
+              <h3 className="text-lg font-semibold text-ink">删除任务</h3>
             </div>
             <div className="px-6 py-4 space-y-4">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-ink/65">
                 确定要删除该任务吗？任务记录及其日志将被
                 <span className="text-red-600 font-semibold">永久删除</span>。
               </p>
@@ -1622,14 +1622,14 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                   className="mt-0.5 h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
                 />
                 <div className="flex-1">
-                  <span className="text-sm text-gray-700">同时清理该任务下载的文档、向量和缓存</span>
+                  <span className="text-sm text-ink/80">同时清理该任务下载的文档、向量和缓存</span>
                 </div>
               </label>
             </div>
             <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
               <button
                 onClick={() => { setDeleteTaskModalOpen(false); setTaskToDeleteId(null); setCleanupDocsChecked(false) }}
-                className="px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm text-ink/80 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
               >
                 取消
               </button>

@@ -87,8 +87,8 @@ export const DocChatPanel: React.FC<DocChatPanelProps> = ({ chatId, documentId }
               <div className={clsx(
                 'flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center',
                 msg.type === 'user'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-200 text-gray-600'
+                  ? 'bg-accent text-white'
+                  : 'bg-gray-200 text-ink/65'
               )}>
                 {msg.type === 'user' ? (
                   <UserIcon className="w-3 h-3" />
@@ -106,8 +106,8 @@ export const DocChatPanel: React.FC<DocChatPanelProps> = ({ chatId, documentId }
                   className={clsx(
                     'px-3 py-2 rounded-xl text-xs',
                     msg.type === 'user'
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-white/80 backdrop-blur-sm border border-gray-200/50 text-gray-900'
+                      ? 'bg-accent text-white'
+                      : 'bg-white/80 backdrop-blur-sm border border-white/40 text-ink'
                   )}
                 >
                   <MarkdownContent content={msg.content} isUser={msg.type === 'user'} />
@@ -128,7 +128,7 @@ export const DocChatPanel: React.FC<DocChatPanelProps> = ({ chatId, documentId }
         {isStreaming && (
           <div className="flex justify-start">
             <div className="flex max-w-[90%] space-x-2">
-              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center">
+              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gray-200 text-ink/65 flex items-center justify-center">
                 <CpuChipIcon className="w-3 h-3" />
               </div>
               <div className="flex-1 min-w-0">
@@ -141,11 +141,11 @@ export const DocChatPanel: React.FC<DocChatPanelProps> = ({ chatId, documentId }
                 {streamingAgentState && (
                   <AgentTrace state={streamingAgentState} />
                 )}
-                <div className="px-3 py-2 rounded-xl bg-white/80 backdrop-blur-sm border border-gray-200/50 text-gray-900 text-xs">
+                <div className="px-3 py-2 rounded-xl bg-white/80 backdrop-blur-sm border border-white/40 text-ink text-xs">
                   {streamingContent ? (
                     <>
                       <MarkdownContent content={streamingContent} />
-                      <div className="mt-2 w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+                      <div className="mt-2 w-1.5 h-1.5 bg-accent rounded-full animate-pulse" />
                     </>
                   ) : (
                     <div className="flex space-x-1">
@@ -164,10 +164,10 @@ export const DocChatPanel: React.FC<DocChatPanelProps> = ({ chatId, documentId }
       </div>
 
       {/* Input Area */}
-      <div className="flex-shrink-0 p-3 border-t border-gray-200/50 bg-white/50 backdrop-blur-sm">
+      <div className="flex-shrink-0 p-3 border-t border-white/40 bg-white/50 backdrop-blur-sm">
         {hasNoDocument ? (
           <div className="text-center py-2">
-            <p className="text-xs text-gray-500">当前没有选中文档</p>
+            <p className="text-xs text-ink/50">当前没有选中文档</p>
             <p className="text-[10px] text-gray-400 mt-0.5">请先选择一篇文档以开始对话</p>
           </div>
         ) : (
@@ -194,7 +194,7 @@ export const DocChatPanel: React.FC<DocChatPanelProps> = ({ chatId, documentId }
               <button
                 onClick={handleSend}
                 disabled={!input.trim()}
-                className="flex-shrink-0 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white p-2 rounded-lg transition-colors disabled:cursor-not-allowed"
+                className="flex-shrink-0 bg-accent hover:bg-accent-hover disabled:bg-gray-300 text-white p-2 rounded-lg transition-colors disabled:cursor-not-allowed"
               >
                 <PaperAirplaneIcon className="w-4 h-4" />
               </button>

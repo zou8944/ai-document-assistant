@@ -138,7 +138,7 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, isUse
           if (inline) {
             return (
               <code
-                className="bg-[#E9E9EB] text-[#1c1c1e] px-1.5 py-0.5 rounded-md text-[13px] font-mono border border-[#D1D1D6]"
+                className="bg-[#E9E9EB] text-[#1c1c1e] px-1.5 py-0.5 rounded-lg text-[13px] font-mono border border-[#D1D1D6]"
                 {...props}
               >
                 {children}

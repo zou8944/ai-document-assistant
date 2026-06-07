@@ -135,7 +135,7 @@ const SECTIONS: SectionDef[] = [
 const colorMap: Record<string, { bg: string; text: string; ring: string }> = {
   blue: { bg: 'from-blue-50 to-blue-50/50', text: 'text-blue-500', ring: 'focus:ring-blue-500' },
   purple: { bg: 'from-purple-50 to-purple-50/50', text: 'text-purple-500', ring: 'focus:ring-purple-500' },
-  gray: { bg: 'from-gray-50 to-gray-50/50', text: 'text-gray-500', ring: 'focus:ring-gray-500' },
+  gray: { bg: 'from-gray-50 to-gray-50/50', text: 'text-ink/50', ring: 'focus:ring-gray-500' },
 }
 
 // Collect all fields across sections for save iteration
@@ -255,8 +255,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
         <div className="flex items-center space-x-3">
           <Cog6ToothIcon className="w-8 h-8 text-blue-500" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">设置</h1>
-            <p className="text-gray-600 mt-1">配置您的 AI 文档助手</p>
+            <h1 className="text-2xl font-bold text-ink">设置</h1>
+            <p className="text-ink/65 mt-1">配置您的 AI 文档助手</p>
           </div>
         </div>
 
@@ -274,7 +274,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
                     'w-full flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left',
                     activeSection === section.id
                       ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      : 'text-ink/65 hover:bg-gray-50 hover:text-ink'
                   )}
                 >
                   <Icon className={clsx('w-4 h-4', activeSection === section.id ? colors.text : '')} />
@@ -290,23 +290,23 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
               const Icon = section.icon
               const colors = colorMap[section.color]
               return (
-                <div key={section.id} className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200/50 overflow-hidden">
-                  <div className={clsx('px-6 py-4 bg-gradient-to-r border-b border-gray-200/50', colors.bg)}>
+                <div key={section.id} className="bg-white/80 backdrop-blur-sm rounded-xl border border-white/40 overflow-hidden">
+                  <div className={clsx('px-6 py-4 bg-gradient-to-r border-b border-white/40', colors.bg)}>
                     <div className="flex items-center space-x-2">
                       <Icon className={clsx('w-5 h-5', colors.text)} />
-                      <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
+                      <h2 className="text-lg font-semibold text-ink">{section.title}</h2>
                     </div>
-                    <p className="text-sm text-gray-600 mt-1">{section.subtitle}</p>
+                    <p className="text-sm text-ink/65 mt-1">{section.subtitle}</p>
                   </div>
 
                   <div className="p-6 space-y-4">
                     {section.subsections.map((sub) => (
                       <div key={sub.title} className="bg-gray-50/60 rounded-lg border border-gray-200/70 p-4">
-                        <h3 className="text-sm font-semibold text-gray-800 mb-3">{sub.title}</h3>
+                        <h3 className="text-sm font-semibold text-ink/90 mb-3">{sub.title}</h3>
                         <div className="space-y-4">
                           {sub.fields.map((field) => (
                             <div key={field.key}>
-                              <label className="flex items-center space-x-2 text-sm font-medium text-gray-700 mb-1.5">
+                              <label className="flex items-center space-x-2 text-sm font-medium text-ink/80 mb-1.5">
                                 <span>{field.label}</span>
                               </label>
 
@@ -332,7 +332,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
                                   <button
                                     type="button"
                                     onClick={() => toggleShow(field.key)}
-                                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-ink/65"
                                   >
                                     {showKeys[field.key] ? <EyeSlashIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
                                   </button>
@@ -348,7 +348,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
                                 />
                               )}
 
-                              <p className="text-xs text-gray-500 mt-1">{field.description}</p>
+                              <p className="text-xs text-ink/50 mt-1">{field.description}</p>
                             </div>
                           ))}
                         </div>
@@ -372,18 +372,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
             )}
 
             {/* Action buttons */}
-            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200/50">
+            <div className="flex justify-end space-x-3 pt-4 border-t border-white/40">
               <button
                 onClick={handleReset}
                 disabled={!isModified || isSaving}
-                className="px-4 py-2 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 border border-gray-300 bg-white hover:bg-gray-50 text-ink/80 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 重置
               </button>
               <button
                 onClick={handleSave}
                 disabled={!isModified || isSaving}
-                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
               >
                 {isSaving ? (
                   <>

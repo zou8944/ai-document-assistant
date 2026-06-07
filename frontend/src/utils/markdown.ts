@@ -28,11 +28,11 @@ function escapeHtml(text: string): string {
 function processInline(text: string, baseUrl?: string): string {
   // Inline code: ``code`` (double backtick first to avoid partial match)
   text = text.replace(/``([^`]+)``/g, (_, code) => {
-    return `<code class="bg-gray-100 text-gray-800 px-1 py-0.5 rounded text-sm font-mono">${escapeHtml(code)}</code>`
+    return `<code class="bg-gray-100 text-ink/90 px-1 py-0.5 rounded text-sm font-mono">${escapeHtml(code)}</code>`
   })
   // Inline code: `code`
   text = text.replace(/`([^`]+)`/g, (_, code) => {
-    return `<code class="bg-gray-100 text-gray-800 px-1 py-0.5 rounded text-sm font-mono">${escapeHtml(code)}</code>`
+    return `<code class="bg-gray-100 text-ink/90 px-1 py-0.5 rounded text-sm font-mono">${escapeHtml(code)}</code>`
   })
 
   // Images: ![alt](url)
@@ -70,7 +70,7 @@ function renderTable(lines: string[], baseUrl?: string): string {
 
   html += '<thead class="bg-gray-50"><tr>'
   headerCells.forEach(cell => {
-    html += `<th class="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-900">${cell}</th>`
+    html += `<th class="border border-gray-300 px-3 py-2 text-left font-semibold text-ink">${cell}</th>`
   })
   html += '</tr></thead>'
 
@@ -79,7 +79,7 @@ function renderTable(lines: string[], baseUrl?: string): string {
     bodyRows.forEach(cells => {
       html += '<tr class="border-b border-gray-200">'
       cells.forEach(cell => {
-        html += `<td class="border border-gray-300 px-3 py-2 text-gray-800">${cell}</td>`
+        html += `<td class="border border-gray-300 px-3 py-2 text-ink/90">${cell}</td>`
       })
       html += '</tr>'
     })

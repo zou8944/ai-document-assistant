@@ -105,7 +105,7 @@ export const AddKnowledgeBaseModal: React.FC<AddKnowledgeBaseModalProps> = ({
               type="button"
               onClick={handleClose}
               disabled={isSubmitting}
-              className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="rounded-lg bg-white text-gray-400 hover:text-ink/50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               <span className="sr-only">关闭</span>
               <XMarkIcon className="h-6 w-6" />
@@ -114,13 +114,13 @@ export const AddKnowledgeBaseModal: React.FC<AddKnowledgeBaseModalProps> = ({
 
           <div className="sm:flex sm:items-start">
             <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
-              <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">
+              <h3 className="text-lg font-medium leading-6 text-ink mb-4">
                 创建新知识库
               </h3>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="name" className="block text-sm font-medium text-ink/80">
                     知识库名称 *
                   </label>
                   <input
@@ -128,7 +128,7 @@ export const AddKnowledgeBaseModal: React.FC<AddKnowledgeBaseModalProps> = ({
                     id="name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     placeholder="请输入知识库名称"
                     required
                     disabled={isSubmitting}
@@ -136,7 +136,7 @@ export const AddKnowledgeBaseModal: React.FC<AddKnowledgeBaseModalProps> = ({
                 </div>
 
                 <div>
-                  <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="description" className="block text-sm font-medium text-ink/80">
                     描述
                   </label>
                   <textarea
@@ -144,7 +144,7 @@ export const AddKnowledgeBaseModal: React.FC<AddKnowledgeBaseModalProps> = ({
                     rows={3}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     placeholder="请输入知识库描述（可选）"
                     disabled={isSubmitting}
                   />
@@ -154,7 +154,7 @@ export const AddKnowledgeBaseModal: React.FC<AddKnowledgeBaseModalProps> = ({
                   <button
                     type="submit"
                     disabled={!name.trim() || isSubmitting}
-                    className="w-full inline-flex justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed sm:ml-3 sm:w-auto sm:text-sm"
+                    className="w-full inline-flex justify-center rounded-lg border border-transparent bg-accent-hover px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-accent-active focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed sm:ml-3 sm:w-auto sm:text-sm"
                   >
                     {isSubmitting ? '创建中...' : '创建知识库'}
                   </button>
@@ -162,7 +162,7 @@ export const AddKnowledgeBaseModal: React.FC<AddKnowledgeBaseModalProps> = ({
                     type="button"
                     onClick={handleClose}
                     disabled={isSubmitting}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed sm:mt-0 sm:w-auto sm:text-sm"
+                    className="mt-3 w-full inline-flex justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-base font-medium text-ink/80 shadow-sm hover:text-ink/50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed sm:mt-0 sm:w-auto sm:text-sm"
                   >
                     取消
                   </button>

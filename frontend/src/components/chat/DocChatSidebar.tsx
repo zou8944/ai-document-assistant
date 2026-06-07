@@ -52,7 +52,7 @@ export const DocChatSidebar: React.FC<DocChatSidebarProps> = ({
       {!isOpen && (
         <button
           onClick={onToggle}
-          className="absolute bottom-6 right-6 z-40 w-12 h-12 bg-blue-500 hover:bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center transition-colors"
+          className="absolute bottom-6 right-6 z-40 w-12 h-12 bg-accent hover:bg-accent-hover text-white rounded-full shadow-lg flex items-center justify-center transition-colors"
           title="打开聊天"
         >
           <ChatBubbleLeftRightIcon className="w-6 h-6" />
@@ -64,7 +64,7 @@ export const DocChatSidebar: React.FC<DocChatSidebarProps> = ({
         <>
           {/* Resize handle */}
           <div
-            className="w-1 flex-shrink-0 hover:bg-blue-400/50 active:bg-blue-500/60 transition-colors cursor-col-resize"
+            className="w-1 flex-shrink-0 hover:bg-blue-400/50 active:bg-accent/60 transition-colors cursor-col-resize"
             onMouseDown={handleDragStart}
             title="拖动调整宽度"
           />
@@ -72,22 +72,22 @@ export const DocChatSidebar: React.FC<DocChatSidebarProps> = ({
           {/* Chat panel container */}
           <div
             className={clsx(
-              'flex-shrink-0 border-l border-gray-200/50 bg-white/60 backdrop-blur-sm flex flex-col overflow-hidden'
+              'flex-shrink-0 border-l border-white/40 bg-white/60 backdrop-blur-sm flex flex-col overflow-hidden'
             )}
             style={{ width }}
           >
             {/* Header */}
-            <div className="flex-shrink-0 flex items-center justify-between px-3 py-2 border-b border-gray-200/50 bg-white/40">
+            <div className="flex-shrink-0 flex items-center justify-between px-3 py-2 border-b border-white/40 bg-white/40">
               <div className="flex items-center gap-2">
                 <ChatBubbleLeftRightIcon className="w-4 h-4 text-blue-500" />
-                <span className="text-sm font-medium text-gray-700">文档问答</span>
+                <span className="text-sm font-medium text-ink/80">文档问答</span>
               </div>
               <button
                 onClick={onToggle}
                 className="p-1 hover:bg-gray-100 rounded transition-colors"
                 title="收起"
               >
-                <ChevronRightIcon className="w-4 h-4 text-gray-500" />
+                <ChevronRightIcon className="w-4 h-4 text-ink/50" />
               </button>
             </div>
 

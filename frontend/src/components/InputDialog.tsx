@@ -295,7 +295,7 @@ export const UrlInputDialog: React.FC<UrlInputDialogProps> = ({
                 type="submit"
                 className={clsx(
                   'px-6 py-2 text-sm font-medium text-white rounded-lg',
-                  'bg-macos-blue hover:bg-blue-600',
+                  'bg-macos-blue hover:bg-accent-hover',
                   'disabled:bg-macos-gray-300 disabled:cursor-not-allowed',
                   'transition-colors duration-200',
                   'focus:outline-none focus:ring-2 focus:ring-macos-blue focus:ring-offset-2'

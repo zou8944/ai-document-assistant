@@ -16,12 +16,19 @@ export default {
       colors: {
         paper: '#F7F5F0',
         'paper-dark': '#EDEAE3',
+        // Design-guide tokens (Apple Liquid Glass + macOS HIG)
+        // Text ladder: ink (primary), with /opacity modifiers for hierarchy
         ink: '#1c1c1e',
         muted: '#8E8E93',
+        // Brand accent ladder
         accent: '#007AFF',
         'accent-hover': '#0066D6',
+        'accent-active': '#0050A3',
+        // Border ladder
         'warm-border': '#E5E5EA',
         'warm-line': '#D1D1D6',
+        'border-soft': 'rgba(255,255,255,0.4)',
+        'border-softer': 'rgba(255,255,255,0.2)',
         // macOS system colors (kept for backward compatibility)
         'macos-blue': '#007AFF',
         'macos-gray': {

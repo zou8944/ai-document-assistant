@@ -201,7 +201,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
   return (
     <div className={clsx('h-full flex flex-col', className)}>
       {/* Header */}
-      <div className="flex-shrink-0 px-6 py-3 border-b border-gray-200/40 bg-white/30 backdrop-blur-sm">
+      <div className="flex-shrink-0 px-6 py-3 border-b border-white/40 bg-white/30 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-2 text-sm text-[#8E8E93]">
             <span>知识库:</span>

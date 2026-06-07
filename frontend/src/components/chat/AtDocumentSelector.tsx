@@ -152,12 +152,12 @@ export const AtDocumentSelector: React.FC<AtDocumentSelectorProps> = ({
       {/* 文档列表 */}
       <div ref={listRef} className="max-h-48 overflow-y-auto">
         {loading ? (
-          <div className="p-4 text-center text-gray-500">
+          <div className="p-4 text-center text-ink/50">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto mb-2"></div>
             <p className="text-sm">加载中...</p>
           </div>
         ) : filteredDocuments.length === 0 ? (
-          <div className="p-4 text-center text-gray-500">
+          <div className="p-4 text-center text-ink/50">
             <DocumentIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
             <p className="text-sm">{searchTerm ? `未找到包含 "${searchTerm}" 的文档` : '暂无可用文档'}</p>
           </div>
@@ -171,13 +171,13 @@ export const AtDocumentSelector: React.FC<AtDocumentSelectorProps> = ({
                 className={`w-full px-3 py-2 text-left flex items-center space-x-2 transition-colors ${
                   index === selectedIndex
                     ? 'bg-blue-100 text-blue-900'
-                    : 'hover:bg-gray-50 text-gray-900'
+                    : 'hover:bg-gray-50 text-ink'
                 }`}
               >
                 <DocumentIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate">{doc.name}</div>
-                  <div className="text-xs text-gray-500 truncate">{doc.uri}</div>
+                  <div className="text-xs text-ink/50 truncate">{doc.uri}</div>
                 </div>
               </button>
             ))}
@@ -188,7 +188,7 @@ export const AtDocumentSelector: React.FC<AtDocumentSelectorProps> = ({
       {/* 提示信息 */}
       {filteredDocuments.length > 0 && (
         <div className="px-3 py-2 bg-gray-50 border-t border-gray-200">
-          <div className="text-xs text-gray-500">
+          <div className="text-xs text-ink/50">
             使用 ↑↓ 导航，Enter 选择，Esc 取消
           </div>
         </div>

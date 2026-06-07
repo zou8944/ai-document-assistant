@@ -202,7 +202,7 @@ export const ChatItem: React.FC<ChatItemProps> = ({
                   ref={buttonRef}
                   onClick={handleMenuToggle}
                   className={clsx(
-                    'p-1 rounded-md transition-all duration-200 opacity-0 group-hover:opacity-100',
+                    'p-1 rounded-lg transition-all duration-200 opacity-0 group-hover:opacity-100',
                     isActive ? 'hover:bg-white/20' : 'hover:bg-gray-200/50',
                     showMenu && 'opacity-100'
                   )}
