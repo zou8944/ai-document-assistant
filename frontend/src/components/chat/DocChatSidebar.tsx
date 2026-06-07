@@ -52,7 +52,8 @@ export const DocChatSidebar: React.FC<DocChatSidebarProps> = ({
       {!isOpen && (
         <button
           onClick={onToggle}
-          className="absolute bottom-6 right-6 z-40 w-12 h-12 bg-accent hover:bg-accent-hover text-white rounded-full shadow-lg flex items-center justify-center transition-colors"
+          aria-label="打开聊天"
+          className="absolute bottom-6 right-6 z-40 w-12 h-12 bg-accent hover:bg-accent-hover text-white rounded-full shadow-lg flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
           title="打开聊天"
         >
           <ChatBubbleLeftRightIcon className="w-6 h-6" />
@@ -84,7 +85,8 @@ export const DocChatSidebar: React.FC<DocChatSidebarProps> = ({
               </div>
               <button
                 onClick={onToggle}
-                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                aria-label="关闭侧边栏"
+                className="p-2 inline-flex items-center justify-center min-h-[44px] min-w-[44px] hover:bg-gray-100 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                 title="收起"
               >
                 <ChevronRightIcon className="w-4 h-4 text-ink/50" />

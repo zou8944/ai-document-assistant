@@ -317,7 +317,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
           
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center space-x-2 bg-accent hover:bg-accent-hover text-white px-4 py-2 rounded-lg transition-colors shadow-md"
+            className="flex items-center space-x-2 bg-accent hover:bg-accent-hover text-white px-4 py-2 rounded-lg transition-colors shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
           >
             <PlusIcon className="w-4 h-4" />
             <span>添加知识库</span>
@@ -408,17 +408,29 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                       {/* More actions menu */}
                       <div className="relative" ref={menuOpenId === collection.id ? menuRef : undefined}>
                         <button
+                          id={`kebab-menu-button-${collection.id}`}
                           onClick={(e) => handleToggleMenu(e, collection.id)}
-                          className="p-1 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-ink/65"
+                          aria-label="知识库操作菜单"
+                          aria-haspopup="menu"
+                          aria-expanded={menuOpenId === collection.id}
+                          aria-controls={menuOpenId === collection.id ? `kebab-menu-${collection.id}` : undefined}
+                          className="p-2 inline-flex items-center justify-center min-h-[44px] min-w-[44px] hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-ink/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                           title="更多操作"
                         >
                           <EllipsisVerticalIcon className="w-4 h-4" />
                         </button>
                         {menuOpenId === collection.id && (
-                          <div className="absolute right-0 mt-1 w-32 bg-white rounded-lg shadow-lg border border-white/40 py-1 z-50">
+                          <div
+                            id={`kebab-menu-${collection.id}`}
+                            role="menu"
+                            aria-label="知识库操作"
+                            className="absolute right-0 mt-1 w-32 bg-white rounded-lg shadow-lg border border-white/40 py-1 z-50"
+                          >
                             <button
+                              role="menuitem"
+                              tabIndex={-1}
                               onClick={() => handleStartEdit(collection)}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink/80 hover:bg-gray-50 transition-colors"
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink/80 hover:bg-gray-50 transition-colors focus-visible:outline-none focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
                             >
                               <PencilIcon className="w-3.5 h-3.5" />
                               编辑
@@ -474,7 +486,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                 <div className="border-t border-white/40 px-4 py-3 bg-gray-50/50 flex space-x-2">
                   <button
                     onClick={() => handleManageClick(collection.id)}
-                    className="flex-1 flex items-center justify-center space-x-1 py-2 px-3 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition-colors text-sm"
+                    className="flex-1 flex items-center justify-center space-x-1 py-2 px-3 min-h-[44px] bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition-colors text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                   >
                     <CogIcon className="w-3 h-3" />
                     <span>管理</span>
@@ -482,7 +494,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
 
                   <button
                     onClick={() => handleChatClick(collection.id)}
-                    className="flex-1 flex items-center justify-center space-x-1 py-2 px-3 bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors text-sm"
+                    className="flex-1 flex items-center justify-center space-x-1 py-2 px-3 min-h-[44px] bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                   >
                     <ChatBubbleLeftRightIcon className="w-3 h-3" />
                     <span>聊天</span>
@@ -492,7 +504,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                     onClick={() => handleReindex(collection.id)}
                     disabled={!collection.needs_reindex || reindexingId === collection.id}
                     className={clsx(
-                      'flex items-center justify-center space-x-1 py-2 px-3 border rounded-lg transition-colors text-sm',
+                      'flex items-center justify-center space-x-1 py-2 px-3 min-h-[44px] border rounded-lg transition-colors text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
                       collection.needs_reindex && reindexingId !== collection.id
                         ? 'bg-white hover:bg-amber-50 border-amber-300 text-amber-700'
                         : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'

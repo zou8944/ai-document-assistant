@@ -78,7 +78,7 @@ const ToastCard: React.FC<{ toast: Toast }> = ({ toast }) => {
         type="button"
         onClick={() => remove(toast.id)}
         aria-label="关闭通知"
-        className="absolute top-2 right-2 p-1 rounded text-ink/50 hover:text-ink hover:bg-white/50 transition-colors"
+        className="absolute top-2 right-2 inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 rounded text-ink/50 hover:text-ink hover:bg-white/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
       >
         <XMarkIcon className="w-4 h-4" />
       </button>

@@ -185,9 +185,10 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                 {!isProcessing && (
                   <button
                     onClick={() => removeFile(index)}
-                    className="p-1 hover:bg-red-100 rounded transition-colors"
+                    aria-label="移除文件"
+                    className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 hover:bg-red-100 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                   >
-                    <XMarkIcon className="w-4 h-4 text-macos-gray-400 hover:text-red-500" />
+                    <XMarkIcon className="w-4 h-4 text-muted hover:text-red-500" />
                   </button>
                 )}
               </div>

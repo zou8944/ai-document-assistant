@@ -128,7 +128,7 @@ export const Modal: React.FC<ModalProps> = ({
                 type="button"
                 onClick={onClose}
                 aria-label="关闭"
-                className="p-1 rounded-lg text-ink/50 hover:bg-white/50 hover:text-ink transition-colors flex-shrink-0"
+                className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 rounded-lg text-ink/50 hover:bg-white/50 hover:text-ink transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
               >
                 <XMarkIcon className="w-5 h-5" />
               </button>

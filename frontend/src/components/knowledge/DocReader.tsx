@@ -2,7 +2,7 @@
  * Document reader panel - shows a document in HTML (iframe) or Markdown view
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowTopRightOnSquareIcon, DocumentTextIcon, CodeBracketIcon } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { useAPIClient, extractData } from '../../services/apiClient'
@@ -30,6 +30,7 @@ export const DocReader: React.FC<DocReaderProps> = ({ doc, previewUrl, collectio
   const [error, setError] = useState<string | null>(null)
   const apiClient = useAPIClient()
   const containerRef = useRef<HTMLDivElement>(null)
+  const savedScrollTop = useRef(0)
 
   const loadMarkdown = useCallback(async () => {
     setLoading(true)
@@ -50,6 +51,18 @@ export const DocReader: React.FC<DocReaderProps> = ({ doc, previewUrl, collectio
     setMarkdownContent(null)
     setError(null)
   }, [doc.id])
+
+  // Save scroll position before viewMode changes
+  useEffect(() => {
+    savedScrollTop.current = containerRef.current?.scrollTop ?? 0
+  }, [viewMode])
+
+  // Restore scroll position after new view renders
+  useLayoutEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = savedScrollTop.current
+    }
+  }, [viewMode, markdownContent])
 
   useEffect(() => {
     if (viewMode === 'markdown') {
@@ -103,11 +116,18 @@ export const DocReader: React.FC<DocReaderProps> = ({ doc, previewUrl, collectio
         </h3>
 
         {/* View mode toggle */}
-        <div className="flex items-center bg-gray-100 rounded-lg p-0.5 flex-shrink-0">
+        <div
+          role="group"
+          aria-label="视图模式"
+          className="flex items-center bg-gray-100 rounded-lg p-0.5 flex-shrink-0"
+        >
           <button
             onClick={() => setViewMode('html')}
+            aria-label="HTML 视图"
+            aria-pressed={viewMode === 'html'}
             className={clsx(
-              'flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
+              'inline-flex items-center justify-center gap-1 px-2.5 py-1 min-h-[44px] min-w-[44px] rounded-lg text-xs font-medium transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
               viewMode === 'html'
                 ? 'bg-white text-ink shadow-sm'
                 : 'text-ink/50 hover:text-ink/80'
@@ -119,8 +139,11 @@ export const DocReader: React.FC<DocReaderProps> = ({ doc, previewUrl, collectio
           </button>
           <button
             onClick={() => setViewMode('markdown')}
+            aria-label="Markdown 视图"
+            aria-pressed={viewMode === 'markdown'}
             className={clsx(
-              'flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors',
+              'inline-flex items-center justify-center gap-1 px-2.5 py-1 min-h-[44px] min-w-[44px] rounded-lg text-xs font-medium transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
               viewMode === 'markdown'
                 ? 'bg-white text-ink shadow-sm'
                 : 'text-ink/50 hover:text-ink/80'
@@ -157,7 +180,11 @@ export const DocReader: React.FC<DocReaderProps> = ({ doc, previewUrl, collectio
         ) : (
           <div className="w-full h-full overflow-auto bg-white">
             {loading ? (
-              <div className="flex items-center justify-center h-full text-sm text-ink/50">
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex items-center justify-center h-full text-sm text-ink/50"
+              >
                 加载 Markdown 内容...
               </div>
             ) : error ? (
