@@ -6,6 +6,7 @@ import React, { useState } from 'react'
 import { BookOpenIcon } from '@heroicons/react/24/outline'
 import { useAPIClient, extractData, Collection } from '../../services/apiClient'
 import Modal from '../common/Modal'
+import { toast } from '../../hooks/useToast'
 
 interface KnowledgeBaseSelectorProps {
   isOpen: boolean
@@ -48,7 +49,7 @@ export const KnowledgeBaseSelector: React.FC<KnowledgeBaseSelectorProps> = ({
         console.error('加载知识库失败:', error)
         if (!cancelled) {
           setCollections([])
-          alert('加载知识库失败: ' + (error as Error).message)
+          toast.error('加载知识库失败: ' + (error as Error).message)
         }
       } finally {
         if (!cancelled) {

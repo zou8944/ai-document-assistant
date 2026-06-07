@@ -29,6 +29,7 @@ import ReadmePanel from './ReadmePanel'
 import DocReader from './DocReader'
 import DocChatSidebar from '../chat/DocChatSidebar'
 import Modal from '../common/Modal'
+import { toast } from '../../hooks/useToast'
 import {
   parseCategories,
   findCategoryForPath,
@@ -425,7 +426,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       loadTasks()
     } catch (error) {
       console.error('导入失败:', error)
-      alert('导入失败: ' + (error as Error).message)
+      toast.error('导入失败: ' + (error as Error).message)
     }
   }
 
@@ -443,7 +444,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       loadTasks()
     } catch (error) {
       console.error('文件导入失败:', error)
-      alert('文件导入失败: ' + (error as Error).message)
+      toast.error('文件导入失败: ' + (error as Error).message)
     }
   }
 
@@ -461,7 +462,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       window.URL.revokeObjectURL(url)
     } catch (error) {
       console.error('下载失败:', error)
-      alert('下载失败: ' + (error as Error).message)
+      toast.error('下载失败: ' + (error as Error).message)
     }
   }
 
@@ -474,7 +475,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
         loadDocuments()
       } catch (error) {
         console.error('删除失败:', error)
-        alert('删除失败: ' + (error as Error).message)
+        toast.error('删除失败: ' + (error as Error).message)
       }
     }
   }
@@ -508,7 +509,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       }, 5000)
     } catch (error) {
       console.error('停止任务失败:', error)
-      alert('停止任务失败: ' + (error as Error).message)
+      toast.error('停止任务失败: ' + (error as Error).message)
     }
   }
 
@@ -523,7 +524,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       streamTaskProgress(taskId)
     } catch (error) {
       console.error('重跑任务失败:', error)
-      alert('重跑任务失败: ' + (error as Error).message)
+      toast.error('重跑任务失败: ' + (error as Error).message)
     }
   }
 
@@ -548,7 +549,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       setCleanupDocsChecked(false)
     } catch (error) {
       console.error('删除任务失败:', error)
-      alert('删除任务失败: ' + (error as Error).message)
+      toast.error('删除任务失败: ' + (error as Error).message)
     }
   }
 
@@ -562,7 +563,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const handleConfirmClear = async () => {
     if (!currentKb) return
     if (confirmName !== currentKb.name) {
-      alert('输入的名称与知识库名称不匹配')
+      toast.error('输入的名称与知识库名称不匹配')
       return
     }
     try {
@@ -574,7 +575,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       loadTasks()
     } catch (error) {
       console.error('清空知识库失败:', error)
-      alert('清空知识库失败: ' + (error as Error).message)
+      toast.error('清空知识库失败: ' + (error as Error).message)
     }
   }
 
@@ -606,7 +607,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       loadTasks()
     } catch (error) {
       console.error('重新分类失败:', error)
-      alert('重新分类失败: ' + (error as Error).message)
+      toast.error('重新分类失败: ' + (error as Error).message)
     }
   }
 
@@ -624,14 +625,14 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       loadTasks()
     } catch (error) {
       console.error('重新生成 README 失败:', error)
-      alert('重新生成 README 失败: ' + (error as Error).message)
+      toast.error('重新生成 README 失败: ' + (error as Error).message)
     }
   }
 
   const handleConfirmDelete = async () => {
     if (!currentKb) return
     if (confirmName !== currentKb.name) {
-      alert('输入的名称与知识库名称不匹配')
+      toast.error('输入的名称与知识库名称不匹配')
       return
     }
     try {
@@ -642,7 +643,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       setActiveKnowledgeBase(null)
     } catch (error) {
       console.error('删除知识库失败:', error)
-      alert('删除知识库失败: ' + (error as Error).message)
+      toast.error('删除知识库失败: ' + (error as Error).message)
     }
   }
 

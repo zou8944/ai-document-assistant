@@ -11,6 +11,7 @@ import {
   SSEEvent,
 } from '../services/apiClient'
 import { AgentMessageState } from '../types/agent'
+import { toast } from './useToast'
 
 export interface Message {
   id: string
@@ -282,7 +283,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
         streamingMessageIdRef.current = null
         streamingAgentStateRef.current = null
         setProcessingStatus(null)
-        alert(
+        toast.error(
           '生成回复失败: ' + (event.data?.message || event.data?.detail || '未知错误')
         )
         break
@@ -557,7 +558,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
     streamingMessageIdRef.current = null
     streamingAgentStateRef.current = null
     setProcessingStatus(null)
-    alert('生成回复失败: ' + error.message)
+    toast.error('生成回复失败: ' + error.message)
   }, [])
 
   const stopGeneration = useCallback(() => {
@@ -633,7 +634,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
       console.error('发送消息失败:', error)
       setIsLoading(false)
       setIsStreaming(false)
-      alert('发送消息失败: ' + (error as Error).message)
+      toast.error('发送消息失败: ' + (error as Error).message)
     }
   }, [chatId, isLoading, apiClient, handleStreamEvent, handleStreamError])
 

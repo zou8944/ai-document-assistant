@@ -6,6 +6,7 @@ import React, { useState } from 'react'
 import { useAppStore } from '../../store/appStore'
 import { useAPIClient, extractData } from '../../services/apiClient'
 import Modal from '../common/Modal'
+import { toast } from '../../hooks/useToast'
 
 interface AddKnowledgeBaseModalProps {
   isOpen: boolean
@@ -60,7 +61,7 @@ export const AddKnowledgeBaseModal: React.FC<AddKnowledgeBaseModalProps> = ({
       onClose()
     } catch (error) {
       console.error('创建知识库失败:', error)
-      alert('创建知识库失败: ' + (error as Error).message)
+      toast.error('创建知识库失败: ' + (error as Error).message)
     } finally {
       setIsSubmitting(false)
     }

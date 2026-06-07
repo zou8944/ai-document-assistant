@@ -21,6 +21,7 @@ import { useAPIClient, extractData, Collection, Task } from '../../services/apiC
 import AddKnowledgeBaseModal from './AddKnowledgeBaseModal'
 import CircularProgress from './CircularProgress'
 import Modal from '../common/Modal'
+import { toast } from '../../hooks/useToast'
 
 interface KnowledgeBaseOverviewProps {
   className?: string
@@ -130,7 +131,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
       await loadActiveTasks()
     } catch (error) {
       console.error('重启任务失败:', error)
-      alert('重启任务失败: ' + (error as Error).message)
+      toast.error('重启任务失败: ' + (error as Error).message)
     } finally {
       setRestarting(false)
     }
@@ -196,7 +197,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
       await loadCollections()
     } catch (error) {
       console.error('触发重新索引失败:', error)
-      alert('触发重新索引失败: ' + (error as Error).message)
+      toast.error('触发重新索引失败: ' + (error as Error).message)
     } finally {
       setReindexingId(null)
     }
@@ -230,7 +231,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
       setActiveSidebarSection('chat')
     } catch (error) {
       console.error('创建聊天失败:', error)
-      alert('创建聊天失败: ' + (error as Error).message)
+      toast.error('创建聊天失败: ' + (error as Error).message)
     }
   }
 
@@ -273,7 +274,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
       setEditingCollection(null)
     } catch (err) {
       console.error('Edit failed:', err)
-      alert('编辑失败: ' + (err as Error).message)
+      toast.error('编辑失败: ' + (err as Error).message)
     } finally {
       setSavingEdit(false)
     }

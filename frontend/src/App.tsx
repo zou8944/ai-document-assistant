@@ -9,6 +9,8 @@ import SetupWizard from './components/settings/SetupWizard'
 import useStartup from './hooks/useStartup'
 import { useAPIClient, extractData } from './services/apiClient'
 import { useAppStore } from './store/appStore'
+import { ToastContainer } from './components/common/ToastContainer'
+import { ErrorBoundary } from './components/common/ErrorBoundary'
 
 export const App: React.FC = () => {
   const { isLoading, isReady, error, message } = useStartup()
@@ -89,48 +91,64 @@ export const App: React.FC = () => {
   // Show startup screen while loading
   if (isLoading || !isReady) {
     return (
-      <StartupScreen
-        message={error ? `${message} - ${error}` : message}
-      />
+      <ErrorBoundary>
+        <StartupScreen
+          message={error ? `${message} - ${error}` : message}
+        />
+        <ToastContainer />
+      </ErrorBoundary>
     )
   }
 
   // Show setup wizard if config is incomplete
   if (configChecked && !configComplete) {
-    return <SetupWizard onComplete={handleSetupComplete} />
+    return (
+      <ErrorBoundary>
+        <SetupWizard onComplete={handleSetupComplete} />
+        <ToastContainer />
+      </ErrorBoundary>
+    )
   }
 
   // Still checking config
   if (!configChecked) {
-    return <StartupScreen message="正在检查配置..." />
+    return (
+      <ErrorBoundary>
+        <StartupScreen message="正在检查配置..." />
+        <ToastContainer />
+      </ErrorBoundary>
+    )
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      {/* Title Bar with drag region */}
-      <div
-        className="flex-shrink-0 h-12 bg-white/70 backdrop-blur-xl border-b border-white/30"
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-      >
-        <div className="flex items-center justify-between h-full">
-          {/* Left side - reserve space for system buttons (about 78px) */}
-          <div className="flex items-center space-x-3 pl-20">
-            <img src="/logo.png" alt="Logo" className="w-6 h-6 rounded-lg object-cover" />
-            <h1 className="text-lg font-semibold text-[#1c1c1e]">
-              AI 文档助手
-            </h1>
-          </div>
+    <ErrorBoundary>
+      <div className="flex flex-col h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        {/* Title Bar with drag region */}
+        <div
+          className="flex-shrink-0 h-12 bg-white/70 backdrop-blur-xl border-b border-white/30"
+          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        >
+          <div className="flex items-center justify-between h-full">
+            {/* Left side - reserve space for system buttons (about 78px) */}
+            <div className="flex items-center space-x-3 pl-20">
+              <img src="/logo.png" alt="Logo" className="w-6 h-6 rounded-lg object-cover" />
+              <h1 className="text-lg font-semibold text-[#1c1c1e]">
+                AI 文档助手
+              </h1>
+            </div>
 
-          {/* Right side - reserved for future use */}
-          <div className="pr-6" />
+            {/* Right side - reserved for future use */}
+            <div className="pr-6" />
+          </div>
+        </div>
+
+        {/* Main Layout */}
+        <div className="flex-1 min-h-0">
+          <MainLayout />
         </div>
       </div>
-
-      {/* Main Layout */}
-      <div className="flex-1 min-h-0">
-        <MainLayout />
-      </div>
-    </div>
+      <ToastContainer />
+    </ErrorBoundary>
   )
 }
 

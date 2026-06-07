@@ -3,7 +3,7 @@
  */
 
 import React, { useCallback, useLayoutEffect, useRef, useState } from 'react'
-import { 
+import {
   BookOpenIcon,
   ChatBubbleLeftRightIcon,
   Cog6ToothIcon,
@@ -14,6 +14,8 @@ import { useAppStore } from '../../store/appStore'
 import { SidebarSection } from '../../types/app'
 import ChatItem from './ChatItem'
 import { useAPIClient, extractData, CreateChatRequest } from '../../services/apiClient'
+import { useToast } from '../../hooks/useToast'
+import ConfirmDialog from '../common/ConfirmDialog'
 
 interface SidebarProps {
   className?: string
@@ -37,6 +39,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
   const [exitingIds, setExitingIds] = useState<Set<string>>(() => new Set())
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const toast = useToast()
 
   // 选中指示器：跟随 activeChat 平滑滑动
   const listRef = useRef<HTMLDivElement>(null)
@@ -117,7 +121,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
       setActiveSidebarSection('chat')
     } catch (error) {
       console.error('创建聊天失败:', error)
-      alert('创建聊天失败: ' + (error as Error).message)
+      toast.error('创建聊天失败: ' + (error as Error).message)
     }
   }
 
@@ -139,14 +143,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
       updateChatSession(chatId, { name: newName })
     } catch (error) {
       console.error('重命名失败:', error)
-      alert('重命名失败: ' + (error as Error).message)
+      toast.error('重命名失败: ' + (error as Error).message)
     }
   }
 
-  const handleChatDelete = async (chatId: string) => {
-    if (!window.confirm('确定要删除这个聊天吗？这个操作无法撤销。')) {
-      return
-    }
+  const handleChatDelete = (chatId: string) => {
+    // Open confirm dialog; actual delete runs in performDeleteChat below
+    setPendingDeleteId(chatId)
+  }
+
+  const performDeleteChat = async () => {
+    const chatId = pendingDeleteId
+    if (!chatId) return
+    setPendingDeleteId(null)
     const isActiveBeingDeleted = activeChat === chatId
     try {
       await apiClient.deleteChat(chatId)
@@ -181,7 +190,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
         setIndicatorOpacity(1)
       }
       console.error('删除聊天失败:', error)
-      alert('删除聊天失败: ' + (error as Error).message)
+      toast.error('删除聊天失败: ' + (error as Error).message)
     }
   }
 
@@ -224,7 +233,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
       } catch (reloadError) {
         console.error('重新拉取列表也失败:', reloadError)
       }
-      alert('排序保存失败: ' + (error as Error).message)
+      toast.error('排序保存失败: ' + (error as Error).message)
     }
     // 状态清理交给 handleDragEnd，保证拖到任意位置（含原位 / 列表外 / Esc 取消）都能复位
   }
@@ -336,6 +345,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
           <span className="font-medium">设置</span>
         </button>
       </div>
+
+      {/* Delete chat confirmation */}
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        onClose={() => setPendingDeleteId(null)}
+        onConfirm={performDeleteChat}
+        title="删除聊天"
+        message="确定要删除这个聊天吗？这个操作无法撤销。"
+        confirmLabel="删除"
+        destructive
+      />
     </div>
   )
 }

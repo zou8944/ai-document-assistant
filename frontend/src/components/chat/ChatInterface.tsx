@@ -3,6 +3,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react'
+import { toast } from '../../hooks/useToast'
 import {
   PlusIcon,
   PaperAirplaneIcon,
@@ -149,7 +150,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
       console.log('Knowledge bases updated successfully:', selectedKbIds)
     } catch (error) {
       console.error('Failed to update knowledge bases:', error)
-      alert('更新知识库失败: ' + (error as Error).message)
+      toast.error('更新知识库失败: ' + (error as Error).message)
     }
   }
 

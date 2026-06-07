@@ -8,6 +8,7 @@ import { DocumentIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { useAPIClient, extractData, Document } from '../../services/apiClient'
 import { useAppStore } from '../../store/appStore'
 import Modal from '../common/Modal'
+import { toast } from '../../hooks/useToast'
 
 interface DocumentSelectorProps {
   isOpen: boolean
@@ -55,7 +56,7 @@ export const DocumentSelector: React.FC<DocumentSelectorProps> = ({
       setDocuments(allDocuments)
     } catch (error) {
       console.error('Failed to load documents:', error)
-      alert('加载文档失败: ' + (error as Error).message)
+      toast.error('加载文档失败: ' + (error as Error).message)
     } finally {
       setLoading(false)
     }
