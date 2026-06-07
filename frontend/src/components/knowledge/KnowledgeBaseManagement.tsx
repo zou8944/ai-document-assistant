@@ -28,6 +28,7 @@ import FileUploadModal from '../FileUploadModal'
 import ReadmePanel from './ReadmePanel'
 import DocReader from './DocReader'
 import DocChatSidebar from '../chat/DocChatSidebar'
+import Modal from '../common/Modal'
 import {
   parseCategories,
   findCategoryForPath,
@@ -1426,223 +1427,217 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
       />
 
       {/* Recategorize Modal */}
-      {recategorizeModalOpen && currentKb && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick={() => setRecategorizeModalOpen(false)}
-        >
-          <div
-            className="w-full max-w-md bg-white rounded-xl shadow-2xl flex flex-col mx-4 overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-ink">重新分类文档</h3>
-            </div>
-            <div className="px-6 py-4 space-y-4">
-              <p className="text-sm text-ink/65">
-                选择分类方式后，系统将重新对知识库
-                <span className="font-semibold text-ink">&nbsp;"{currentKb.name}"&nbsp;</span>
-                中的所有文档进行分类。
-              </p>
-              <div>
-                <label className="block text-sm font-medium text-ink/80 mb-2">
-                  分类方式
+      <Modal
+        open={recategorizeModalOpen && !!currentKb}
+        onClose={() => setRecategorizeModalOpen(false)}
+        title="重新分类文档"
+        size="sm"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setRecategorizeModalOpen(false)}
+              className="px-4 py-2 text-sm text-ink/80 hover:text-ink rounded-lg transition-colors"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmRecategorize}
+              className="px-4 py-2 text-sm font-medium text-white bg-accent hover:bg-accent-hover rounded-lg transition-colors"
+            >
+              确认重新分类
+            </button>
+          </>
+        }
+      >
+        {currentKb && (
+          <div className="space-y-4">
+            <p className="text-sm text-ink/65">
+              选择分类方式后，系统将重新对知识库
+              <span className="font-semibold text-ink">&nbsp;"{currentKb.name}"&nbsp;</span>
+              中的所有文档进行分类。
+            </p>
+            <div>
+              <label className="block text-sm font-medium text-ink/80 mb-2">
+                分类方式
+              </label>
+              <div className="flex gap-3">
+                <label className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors">
+                  <input
+                    type="radio"
+                    name="recategorizeMode"
+                    value="ai"
+                    checked={recategorizeMode === 'ai'}
+                    onChange={(e) => setRecategorizeMode(e.target.value)}
+                    className="w-4 h-4 text-accent"
+                  />
+                  <span className="text-sm text-ink/80">AI 智能分类</span>
                 </label>
-                <div className="flex gap-3">
-                  <label className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors">
-                    <input
-                      type="radio"
-                      name="recategorizeMode"
-                      value="ai"
-                      checked={recategorizeMode === 'ai'}
-                      onChange={(e) => setRecategorizeMode(e.target.value)}
-                      className="w-4 h-4 text-macos-blue"
-                    />
-                    <span className="text-sm text-ink/80">AI 智能分类</span>
-                  </label>
-                  <label className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors">
-                    <input
-                      type="radio"
-                      name="recategorizeMode"
-                      value="path_prefix"
-                      checked={recategorizeMode === 'path_prefix'}
-                      onChange={(e) => setRecategorizeMode(e.target.value)}
-                      className="w-4 h-4 text-macos-blue"
-                    />
-                    <span className="text-sm text-ink/80">按路径前缀分类</span>
-                  </label>
-                </div>
+                <label className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors">
+                  <input
+                    type="radio"
+                    name="recategorizeMode"
+                    value="path_prefix"
+                    checked={recategorizeMode === 'path_prefix'}
+                    onChange={(e) => setRecategorizeMode(e.target.value)}
+                    className="w-4 h-4 text-accent"
+                  />
+                  <span className="text-sm text-ink/80">按路径前缀分类</span>
+                </label>
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-              <button
-                onClick={() => setRecategorizeModalOpen(false)}
-                className="px-4 py-2 text-sm text-ink/80 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleConfirmRecategorize}
-                className="px-4 py-2 text-sm text-white bg-accent-hover hover:bg-accent-active rounded-lg transition-colors"
-              >
-                确认重新分类
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       {/* Clear Collection Confirm Modal */}
-      {clearModalOpen && currentKb && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick={() => { setClearModalOpen(false); setConfirmName('') }}
-        >
-          <div
-            className="w-full max-w-md bg-white rounded-xl shadow-2xl flex flex-col mx-4 overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-ink">清空知识库</h3>
-            </div>
-            <div className="px-6 py-4 space-y-4">
-              <p className="text-sm text-ink/65">
-                此操作将删除知识库
-                <span className="font-semibold text-ink">&nbsp;"{currentKb.name}"&nbsp;</span>
-                中的所有文档、向量和任务数据，但保留知识库本身。
-                此操作<span className="text-red-600 font-semibold">无法撤销</span>。
-              </p>
-              <div>
-                <label className="block text-sm font-medium text-ink/80 mb-1">
-                  请输入知识库名称以确认：
-                </label>
-                <input
-                  type="text"
-                  value={confirmName}
-                  onChange={e => setConfirmName(e.target.value)}
-                  placeholder={currentKb.name}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all text-sm"
-                  autoFocus
-                />
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-              <button
-                onClick={() => { setClearModalOpen(false); setConfirmName('') }}
-                className="px-4 py-2 text-sm text-ink/80 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleConfirmClear}
-                disabled={confirmName !== currentKb.name}
-                className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors"
-              >
-                确认清空
-              </button>
+      <Modal
+        open={clearModalOpen && !!currentKb}
+        onClose={() => { setClearModalOpen(false); setConfirmName('') }}
+        title="清空知识库"
+        size="sm"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => { setClearModalOpen(false); setConfirmName('') }}
+              className="px-4 py-2 text-sm text-ink/80 hover:text-ink rounded-lg transition-colors"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmClear}
+              disabled={confirmName !== currentKb?.name}
+              className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors"
+            >
+              确认清空
+            </button>
+          </>
+        }
+      >
+        {currentKb && (
+          <div className="space-y-4">
+            <p className="text-sm text-ink/65">
+              此操作将删除知识库
+              <span className="font-semibold text-ink">&nbsp;"{currentKb.name}"&nbsp;</span>
+              中的所有文档、向量和任务数据，但保留知识库本身。
+              此操作<span className="text-red-600 font-semibold">无法撤销</span>。
+            </p>
+            <div>
+              <label className="block text-sm font-medium text-ink/80 mb-1">
+                请输入知识库名称以确认：
+              </label>
+              <input
+                type="text"
+                value={confirmName}
+                onChange={e => setConfirmName(e.target.value)}
+                placeholder={currentKb.name}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all text-sm"
+                autoFocus
+              />
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       {/* Delete Collection Confirm Modal */}
-      {deleteModalOpen && currentKb && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick={() => { setDeleteModalOpen(false); setConfirmName('') }}
-        >
-          <div
-            className="w-full max-w-md bg-white rounded-xl shadow-2xl flex flex-col mx-4 overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-ink">删除知识库</h3>
-            </div>
-            <div className="px-6 py-4 space-y-4">
-              <p className="text-sm text-ink/65">
-                此操作将
-                <span className="text-red-600 font-semibold">永久删除</span>
-                知识库
-                <span className="font-semibold text-ink">&nbsp;"{currentKb.name}"&nbsp;</span>
-                及其所有文档、向量和任务数据。
-                此操作<span className="text-red-600 font-semibold">无法撤销</span>。
-              </p>
-              <div>
-                <label className="block text-sm font-medium text-ink/80 mb-1">
-                  请输入知识库名称以确认：
-                </label>
-                <input
-                  type="text"
-                  value={confirmName}
-                  onChange={e => setConfirmName(e.target.value)}
-                  placeholder={currentKb.name}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all text-sm"
-                  autoFocus
-                />
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-              <button
-                onClick={() => { setDeleteModalOpen(false); setConfirmName('') }}
-                className="px-4 py-2 text-sm text-ink/80 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleConfirmDelete}
-                disabled={confirmName !== currentKb.name}
-                className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors"
-              >
-                确认删除
-              </button>
+      <Modal
+        open={deleteModalOpen && !!currentKb}
+        onClose={() => { setDeleteModalOpen(false); setConfirmName('') }}
+        title="删除知识库"
+        size="sm"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => { setDeleteModalOpen(false); setConfirmName('') }}
+              className="px-4 py-2 text-sm text-ink/80 hover:text-ink rounded-lg transition-colors"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmDelete}
+              disabled={confirmName !== currentKb?.name}
+              className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors"
+            >
+              确认删除
+            </button>
+          </>
+        }
+      >
+        {currentKb && (
+          <div className="space-y-4">
+            <p className="text-sm text-ink/65">
+              此操作将
+              <span className="text-red-600 font-semibold">永久删除</span>
+              知识库
+              <span className="font-semibold text-ink">&nbsp;"{currentKb.name}"&nbsp;</span>
+              及其所有文档、向量和任务数据。
+              此操作<span className="text-red-600 font-semibold">无法撤销</span>。
+            </p>
+            <div>
+              <label className="block text-sm font-medium text-ink/80 mb-1">
+                请输入知识库名称以确认：
+              </label>
+              <input
+                type="text"
+                value={confirmName}
+                onChange={e => setConfirmName(e.target.value)}
+                placeholder={currentKb.name}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all text-sm"
+                autoFocus
+              />
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       {/* Delete Task Confirm Modal */}
-      {deleteTaskModalOpen && taskToDeleteId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick={() => { setDeleteTaskModalOpen(false); setTaskToDeleteId(null); setCleanupDocsChecked(false) }}
-        >
-          <div
-            className="w-full max-w-md bg-white rounded-xl shadow-2xl flex flex-col mx-4 overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-ink">删除任务</h3>
+      <Modal
+        open={deleteTaskModalOpen && !!taskToDeleteId}
+        onClose={() => { setDeleteTaskModalOpen(false); setTaskToDeleteId(null); setCleanupDocsChecked(false) }}
+        title="删除任务"
+        size="sm"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => { setDeleteTaskModalOpen(false); setTaskToDeleteId(null); setCleanupDocsChecked(false) }}
+              className="px-4 py-2 text-sm text-ink/80 hover:text-ink rounded-lg transition-colors"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmDeleteTask}
+              className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+            >
+              确认删除
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-ink/65">
+            确定要删除该任务吗？任务记录及其日志将被
+            <span className="text-red-600 font-semibold">永久删除</span>。
+          </p>
+          <label className="flex items-start space-x-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+            <input
+              type="checkbox"
+              checked={cleanupDocsChecked}
+              onChange={e => setCleanupDocsChecked(e.target.checked)}
+              className="mt-0.5 h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+            />
+            <div className="flex-1">
+              <span className="text-sm text-ink/80">同时清理该任务下载的文档、向量和缓存</span>
             </div>
-            <div className="px-6 py-4 space-y-4">
-              <p className="text-sm text-ink/65">
-                确定要删除该任务吗？任务记录及其日志将被
-                <span className="text-red-600 font-semibold">永久删除</span>。
-              </p>
-              <label className="flex items-start space-x-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
-                <input
-                  type="checkbox"
-                  checked={cleanupDocsChecked}
-                  onChange={e => setCleanupDocsChecked(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
-                />
-                <div className="flex-1">
-                  <span className="text-sm text-ink/80">同时清理该任务下载的文档、向量和缓存</span>
-                </div>
-              </label>
-            </div>
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-              <button
-                onClick={() => { setDeleteTaskModalOpen(false); setTaskToDeleteId(null); setCleanupDocsChecked(false) }}
-                className="px-4 py-2 text-sm text-ink/80 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleConfirmDeleteTask}
-                className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-              >
-                确认删除
-              </button>
-            </div>
-          </div>
+          </label>
         </div>
-      )}
+      </Modal>
     </div>
   )
 }

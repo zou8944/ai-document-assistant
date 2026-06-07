@@ -20,6 +20,7 @@ import { useAppStore } from '../../store/appStore'
 import { useAPIClient, extractData, Collection, Task } from '../../services/apiClient'
 import AddKnowledgeBaseModal from './AddKnowledgeBaseModal'
 import CircularProgress from './CircularProgress'
+import Modal from '../common/Modal'
 
 interface KnowledgeBaseOverviewProps {
   className?: string
@@ -515,115 +516,117 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
       />
 
       {/* Edit Collection Modal */}
-      {editingCollection && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 animate-fade-in">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-ink">编辑知识库</h2>
-              <p className="text-sm text-ink/50 mt-1">修改知识库的名称和描述</p>
-            </div>
-            <div className="px-6 py-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-ink/80 mb-1">名称</label>
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleConfirmEdit()
-                    if (e.key === 'Escape') handleCancelEdit()
-                  }}
-                  autoFocus
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  placeholder="知识库名称"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-ink/80 mb-1">描述</label>
-                <textarea
-                  value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
-                  placeholder="知识库描述（可选）"
-                />
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-              <button
-                onClick={handleCancelEdit}
-                className="px-4 py-2 text-sm text-ink/65 hover:text-ink/90 transition-colors"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleConfirmEdit}
-                disabled={savingEdit || !editName.trim()}
-                className="px-4 py-2 text-sm bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors disabled:opacity-50"
-              >
-                {savingEdit ? '保存中...' : '保存'}
-              </button>
-            </div>
+      <Modal
+        open={!!editingCollection}
+        onClose={handleCancelEdit}
+        title="编辑知识库"
+        description="修改知识库的名称和描述"
+        size="sm"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={handleCancelEdit}
+              className="px-4 py-2 text-sm text-ink/65 hover:text-ink/90 transition-colors"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmEdit}
+              disabled={savingEdit || !editName.trim()}
+              className="px-4 py-2 text-sm bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors disabled:opacity-50"
+            >
+              {savingEdit ? '保存中...' : '保存'}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-ink/80 mb-1">名称</label>
+            <input
+              type="text"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleConfirmEdit()
+                if (e.key === 'Escape') handleCancelEdit()
+              }}
+              autoFocus
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent outline-none"
+              placeholder="知识库名称"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink/80 mb-1">描述</label>
+            <textarea
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent outline-none resize-none"
+              placeholder="知识库描述（可选）"
+            />
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* Restart Tasks Modal */}
-      {showRestartModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 animate-fade-in">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-ink">发现未完成任务</h2>
-              <p className="text-sm text-ink/50 mt-1">
-                有 {pendingRestartTasks.length} 个任务需要继续处理，是否立即重启？
-              </p>
-            </div>
-            <div className="px-6 py-4 max-h-60 overflow-y-auto">
-              <div className="space-y-2">
-                {pendingRestartTasks.map(task => {
-                  const collection = collections.find(c => c.id === task.collection_id)
-                  return (
-                    <div
-                      key={task.task_id}
-                      className="flex items-center gap-3 p-2 rounded-lg bg-gray-50 border border-gray-100"
-                    >
-                      <div className={clsx(
-                        'w-2.5 h-2.5 rounded-full flex-shrink-0',
-                        task.status === 'processing' && 'bg-yellow-500 animate-pulse',
-                        task.status === 'pending' && 'bg-gray-400',
-                        task.status === 'failed' && 'bg-red-500'
-                      )} />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-ink/90 truncate">
-                          {task.title || (task.task_type === 'ingest_urls' ? '网页抓取' : '文件上传')}
-                        </div>
-                        <div className="text-xs text-ink/50 truncate">
-                          {collection?.name || '未知知识库'}
-                        </div>
-                      </div>
+      <Modal
+        open={showRestartModal}
+        onClose={handleDismissRestart}
+        title="发现未完成任务"
+        description={`有 ${pendingRestartTasks.length} 个任务需要继续处理，是否立即重启？`}
+        size="sm"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={handleDismissRestart}
+              className="px-4 py-2 text-sm text-ink/65 hover:text-ink/90 transition-colors"
+            >
+              稍后
+            </button>
+            <button
+              type="button"
+              onClick={handleRestartAll}
+              disabled={restarting}
+              className="px-4 py-2 text-sm bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors disabled:opacity-50"
+            >
+              {restarting ? '重启中...' : '重启所有'}
+            </button>
+          </>
+        }
+      >
+        <div className="max-h-60 overflow-y-auto -mx-2 px-2">
+          <div className="space-y-2">
+            {pendingRestartTasks.map(task => {
+              const collection = collections.find(c => c.id === task.collection_id)
+              return (
+                <div
+                  key={task.task_id}
+                  className="flex items-center gap-3 p-2 rounded-lg bg-gray-50 border border-gray-100"
+                >
+                  <div className={clsx(
+                    'w-2.5 h-2.5 rounded-full flex-shrink-0',
+                    task.status === 'processing' && 'bg-yellow-500 animate-pulse',
+                    task.status === 'pending' && 'bg-gray-400',
+                    task.status === 'failed' && 'bg-red-500'
+                  )} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-ink/90 truncate">
+                      {task.title || (task.task_type === 'ingest_urls' ? '网页抓取' : '文件上传')}
                     </div>
-                  )
-                })}
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-              <button
-                onClick={handleDismissRestart}
-                className="px-4 py-2 text-sm text-ink/65 hover:text-ink/90 transition-colors"
-              >
-                稍后
-              </button>
-              <button
-                onClick={handleRestartAll}
-                disabled={restarting}
-                className="px-4 py-2 text-sm bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors disabled:opacity-50"
-              >
-                {restarting ? '重启中...' : '重启所有'}
-              </button>
-            </div>
+                    <div className="text-xs text-ink/50 truncate">
+                      {collection?.name || '未知知识库'}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   )
 }
