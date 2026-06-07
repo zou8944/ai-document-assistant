@@ -262,6 +262,28 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
           </p>
         </div>
 
+        {/* Step indicator */}
+        <ol className="flex gap-2 mb-4" aria-label="配置步骤">
+          {SERVICE_GROUPS.map((group) => {
+            const isComplete = group.fields
+              .filter((f) => f.required)
+              .every((f) => !!values[f.key]?.trim())
+            return (
+              <li
+                key={group.id}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium ${
+                  isComplete
+                    ? 'bg-green-50 text-green-700 border border-green-200'
+                    : 'bg-gray-50 text-ink/65 border border-gray-200'
+                }`}
+              >
+                {isComplete && <CheckCircleIcon className="w-3.5 h-3.5" />}
+                {group.title}
+              </li>
+            )
+          })}
+        </ol>
+
         {/* Service groups */}
         <div className="space-y-4">
           {SERVICE_GROUPS.map((group) => {
@@ -283,13 +305,14 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
                 <div className="p-5 grid grid-cols-2 gap-4">
                   {group.fields.map((field) => (
                     <div key={field.key} className={field.key.endsWith('API_KEY') || field.key.endsWith('BASE_URL') ? 'col-span-2' : ''}>
-                      <label className="flex items-center space-x-1 text-xs font-medium text-ink/80 mb-1.5">
+                      <label htmlFor={field.key} className="flex items-center space-x-1 text-xs font-medium text-ink/80 mb-1.5">
                         <span>{field.label}</span>
                         {field.required && <span className="text-red-500">*</span>}
                       </label>
 
                       {field.type === 'select' ? (
                         <select
+                          id={field.key}
                           value={values[field.key] || field.options?.[0]?.value || ''}
                           onChange={(e) => handleChange(field.key, e.target.value)}
                           className={`w-full px-3 py-2 border border-gray-300 rounded-lg ${colors.ring} focus:border-transparent text-sm`}
@@ -303,6 +326,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
                       ) : field.type === 'password' ? (
                         <div className="relative">
                           <input
+                            id={field.key}
                             type={showKeys[field.key] ? 'text' : 'password'}
                             value={values[field.key] || ''}
                             onChange={(e) => handleChange(field.key, e.target.value)}
@@ -323,6 +347,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
                         </div>
                       ) : (
                         <input
+                          id={field.key}
                           type="text"
                           value={values[field.key] || ''}
                           onChange={(e) => handleChange(field.key, e.target.value)}
@@ -340,7 +365,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
 
         {/* Error */}
         {error && (
-          <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-3">
+          <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-3" role="alert" aria-live="polite">
             <p className="text-red-700 text-sm">{error}</p>
           </div>
         )}
@@ -350,7 +375,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
           <button
             onClick={handleSave}
             disabled={!canSubmit || isSaving}
-            className="px-8 py-2.5 bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 text-sm font-medium"
+            className="px-8 py-2.5 bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
           >
             {isSaving ? (
               <>

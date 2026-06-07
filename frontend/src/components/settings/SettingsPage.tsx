@@ -159,7 +159,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-  const [activeSection, setActiveSection] = useState('document-preparation')
+  const [activeSection, setActiveSection] = useState(() => {
+    const params = new URLSearchParams(window.location.search)
+    return params.get('section') || 'document-preparation'
+  })
+
+  const handleSectionChange = (sectionId: string) => {
+    setActiveSection(sectionId)
+    const url = new URL(window.location.href)
+    url.searchParams.set('section', sectionId)
+    window.history.replaceState({}, '', url.toString())
+  }
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -253,7 +263,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
       <div className="max-w-5xl mx-auto p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center space-x-3">
-          <Cog6ToothIcon className="w-8 h-8 text-blue-500" />
+          <Cog6ToothIcon className="w-8 h-8 text-accent" />
           <div>
             <h1 className="text-2xl font-bold text-ink">设置</h1>
             <p className="text-ink/65 mt-1">配置您的 AI 文档助手</p>
@@ -269,11 +279,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
               return (
                 <button
                   key={section.id}
-                  onClick={() => setActiveSection(section.id)}
+                  onClick={() => handleSectionChange(section.id)}
                   className={clsx(
                     'w-full flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left',
                     activeSection === section.id
-                      ? 'bg-blue-50 text-blue-700'
+                      ? 'bg-accent/10 text-accent'
                       : 'text-ink/65 hover:bg-gray-50 hover:text-ink'
                   )}
                 >
@@ -306,12 +316,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
                         <div className="space-y-4">
                           {sub.fields.map((field) => (
                             <div key={field.key}>
-                              <label className="flex items-center space-x-2 text-sm font-medium text-ink/80 mb-1.5">
+                              <label htmlFor={field.key} className="flex items-center space-x-2 text-sm font-medium text-ink/80 mb-1.5">
                                 <span>{field.label}</span>
                               </label>
 
                               {field.type === 'select' ? (
                                 <select
+                                  id={field.key}
                                   value={values[field.key] || ''}
                                   onChange={(e) => handleChange(field.key, e.target.value)}
                                   className={clsx('w-full px-3 py-2 border border-gray-300 rounded-lg bg-white', colors.ring, 'focus:border-transparent')}
@@ -323,6 +334,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
                               ) : field.type === 'password' ? (
                                 <div className="relative">
                                   <input
+                                    id={field.key}
                                     type={showKeys[field.key] ? 'text' : 'password'}
                                     value={values[field.key] || ''}
                                     onChange={(e) => handleChange(field.key, e.target.value)}
@@ -339,6 +351,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
                                 </div>
                               ) : (
                                 <input
+                                  id={field.key}
                                   type="text"
                                   inputMode={field.type === 'number' ? 'numeric' : undefined}
                                   value={values[field.key] || ''}
@@ -361,7 +374,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
 
             {/* Status messages */}
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4" role="alert" aria-live="assertive">
                 <div className="text-red-700 text-sm">{error}</div>
               </div>
             )}
@@ -383,7 +396,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
               <button
                 onClick={handleSave}
                 disabled={!isModified || isSaving}
-                className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
               >
                 {isSaving ? (
                   <>
