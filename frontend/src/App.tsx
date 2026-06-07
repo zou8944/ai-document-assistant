@@ -122,7 +122,7 @@ export const App: React.FC = () => {
 
   return (
     <ErrorBoundary>
-      <div className="flex flex-col h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="flex flex-col h-screen bg-gradient-to-br from-paper to-paper-dark">
         {/* Title Bar with drag region */}
         <div
           className="flex-shrink-0 h-12 bg-white/70 backdrop-blur-xl border-b border-white/30"
@@ -130,9 +130,9 @@ export const App: React.FC = () => {
         >
           <div className="flex items-center justify-between h-full">
             {/* Left side - reserve space for system buttons (about 78px) */}
-            <div className="flex items-center space-x-3 pl-20">
-              <img src="/logo.png" alt="Logo" className="w-6 h-6 rounded-lg object-cover" />
-              <h1 className="text-lg font-semibold text-[#1c1c1e]">
+            <div className="flex items-center space-x-3 pl-20 min-w-0">
+              <img src="/logo.png" alt="Logo" className="w-6 h-6 rounded-lg object-cover flex-shrink-0" />
+              <h1 className="text-lg font-semibold text-ink whitespace-nowrap truncate">
                 AI 文档助手
               </h1>
             </div>
