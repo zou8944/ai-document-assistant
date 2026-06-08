@@ -62,7 +62,7 @@ describe('App', () => {
     render(<App />)
     
     const uploadTab = screen.getByText('上传文件').closest('button')
-    expect(uploadTab).toHaveClass('bg-macos-blue')
+    expect(uploadTab).toHaveClass('bg-accent')
   })
 
   it('chat tab is initially disabled when no documents', () => {
@@ -78,7 +78,7 @@ describe('App', () => {
     const crawlTab = screen.getByText('抓取网站').closest('button')
     fireEvent.click(crawlTab!)
     
-    expect(crawlTab).toHaveClass('bg-macos-blue')
+    expect(crawlTab).toHaveClass('bg-accent')
   })
 
   it('shows file upload component on upload tab', () => {

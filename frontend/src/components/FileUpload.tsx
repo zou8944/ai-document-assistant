@@ -100,8 +100,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           'glass-morph rounded-xl p-8 text-center transition-all duration-200 cursor-pointer',
           'border-2 border-dashed',
           isDragActive 
-            ? 'border-macos-blue bg-blue-50/50 scale-105' 
-            : 'border-macos-gray-300 hover:border-macos-blue hover:bg-macos-gray-50/50',
+            ? 'border-accent bg-accent/5 scale-105'
+            : 'border-warm-line hover:border-accent hover:bg-white/50',
           isProcessing && 'opacity-50 cursor-not-allowed',
           'animate-fade-in'
         )}
@@ -109,13 +109,13 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         <input {...getInputProps()} />
         
         <div className="space-y-4">
-          <DocumentArrowUpIcon className="w-12 h-12 mx-auto text-macos-gray-500" />
+          <DocumentArrowUpIcon className="w-12 h-12 mx-auto text-faint" />
           
           <div>
-            <p className="text-lg font-medium text-macos-gray-900 mb-2">
+            <p className="text-lg font-medium text-ink mb-2">
               {isDragActive ? '释放文件以添加' : '拖拽文件到此处'}
             </p>
-            <p className="text-sm text-macos-gray-600">
+            <p className="text-sm text-muted">
               支持 PDF, TXT, Markdown, Word 文档
             </p>
           </div>
@@ -127,20 +127,20 @@ export const FileUpload: React.FC<FileUploadProps> = ({
               disabled={isProcessing}
               className={clsx(
                 'glass-button px-4 py-2 rounded-lg text-sm font-medium',
-                'text-macos-gray-700 hover:text-macos-blue',
+                'text-inverse hover:text-accent',
                 'disabled:opacity-50 disabled:cursor-not-allowed'
               )}
             >
               选择文件
             </button>
-            
+
             <button
               type="button"
               onClick={handleBrowseFolder}
               disabled={isProcessing}
               className={clsx(
                 'glass-button px-4 py-2 rounded-lg text-sm font-medium',
-                'text-macos-gray-700 hover:text-macos-blue',
+                'text-inverse hover:text-accent',
                 'disabled:opacity-50 disabled:cursor-not-allowed',
                 'flex items-center gap-2'
               )}
@@ -156,13 +156,13 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       {selectedFiles.length > 0 && (
         <div className="glass-morph rounded-xl p-4 animate-slide-up">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-macos-gray-900">
+            <h3 className="text-sm font-medium text-ink">
               已选择 {selectedFiles.length} 个项目
             </h3>
             {!isProcessing && (
               <button
                 onClick={clearAll}
-                className="text-xs text-macos-gray-500 hover:text-red-500 transition-colors"
+                className="text-xs text-muted hover:text-red-500 transition-colors"
               >
                 清除全部
               </button>
@@ -178,7 +178,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                   'bg-white/30 backdrop-blur-sm border border-white/20'
                 )}
               >
-                <span className="text-sm text-macos-gray-700 truncate flex-1 mr-2">
+                <span className="text-sm text-inverse truncate flex-1 mr-2">
                   {file.split('/').pop() || file}
                 </span>
                 

@@ -244,7 +244,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
   }
 
   return (
-    <div className="h-screen overflow-y-auto bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="h-screen overflow-y-auto bg-gradient-to-br from-paper to-paper-dark">
       <div className="flex flex-col items-center min-h-full px-4 py-8">
       <div className="w-full max-w-2xl">
         {/* Header */}
