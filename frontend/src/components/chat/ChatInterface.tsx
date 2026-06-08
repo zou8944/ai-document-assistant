@@ -5,7 +5,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { toast } from '../../hooks/useToast'
 import {
-  PlusIcon,
+  Cog6ToothIcon,
   PaperAirplaneIcon,
   StopIcon,
   CpuChipIcon,
@@ -27,6 +27,7 @@ import RichTextInput from './RichTextInput'
 import MarkdownContent from './MarkdownContent'
 import SourceReferences from './SourceReferences'
 import AgentTrace from './AgentTrace'
+import DotsLoader from '../common/DotsLoader'
 
 interface DocumentMention {
   id: string
@@ -242,7 +243,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
               onClick={() => setShowKnowledgeBaseSelector(true)}
               className="flex items-center space-x-1 text-sm text-muted hover:text-accent transition-colors"
             >
-              <PlusIcon className="w-4 h-4" />
+              <Cog6ToothIcon className="w-4 h-4" />
               <span>管理知识库</span>
             </button>
           )}
@@ -255,11 +256,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
           {/* Loading older messages indicator */}
           {isLoadingOlder && (
             <div className="px-6 py-3 flex justify-center">
-              <div className="flex space-x-1.5">
-                <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" />
-                <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-              </div>
+              <DotsLoader />
             </div>
           )}
           {messages.map((msg) => (
@@ -355,11 +352,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                           <div className="inline-block w-2 h-4 bg-accent ml-0.5 animate-pulse align-middle" />
                         </>
                       ) : (
-                        <div className="flex space-x-1.5 py-2">
-                          <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" />
-                          <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                          <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-                        </div>
+                        <DotsLoader className="py-2" />
                       )}
                     </div>
                   </div>
@@ -378,11 +371,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex space-x-1.5 py-2">
-                    <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                    <div className="w-2 h-2 bg-warm-line rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-                  </div>
+                  <DotsLoader className="py-2" />
                 </div>
               </div>
             </div>
