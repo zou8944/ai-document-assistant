@@ -3,6 +3,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react'
+import { Bars3Icon } from '@heroicons/react/24/outline'
 import MainLayout from './components/layout/MainLayout'
 import StartupScreen from './components/StartupScreen'
 import SetupWizard from './components/settings/SetupWizard'
@@ -12,10 +13,14 @@ import { useAppStore } from './store/appStore'
 import { ToastContainer } from './components/common/ToastContainer'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
 
+const isElectron = typeof window !== 'undefined' && 'electronAPI' in window
+
 export const App: React.FC = () => {
   const { isLoading, isReady, error, message } = useStartup()
   const apiClient = useAPIClient()
   const setChatSessions = useAppStore((s) => s.setChatSessions)
+  const mobileSidebarOpen = useAppStore((s) => s.mobileSidebarOpen)
+  const setMobileSidebarOpen = useAppStore((s) => s.setMobileSidebarOpen)
   const bootstrapped = useRef(false)
 
   // Config completeness state
@@ -129,8 +134,17 @@ export const App: React.FC = () => {
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         >
           <div className="flex items-center justify-between h-full">
-            {/* Left side - reserve space for system buttons (about 78px) */}
-            <div className="flex items-center space-x-3 pl-20 min-w-0">
+            {/* Left side - reserve space for system buttons (about 78px) in Electron */}
+            <div className={`flex items-center space-x-3 min-w-0 ${isElectron ? 'pl-20' : 'pl-4'}`}>
+              {/* Hamburger for mobile sidebar */}
+              <button
+                type="button"
+                onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+                aria-label="切换侧边栏"
+                className="md:hidden inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 rounded-lg text-ink/60 hover:text-ink hover:bg-white/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+              >
+                <Bars3Icon className="w-5 h-5" />
+              </button>
               <img src="/logo.png" alt="Logo" className="w-6 h-6 rounded-lg object-cover flex-shrink-0" />
               <h1 className="text-lg font-semibold text-ink whitespace-nowrap truncate">
                 AI 文档助手

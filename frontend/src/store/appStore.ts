@@ -10,6 +10,9 @@ interface AppStore extends AppState {
   // Layout state
   sidebarWidth: number
 
+  // Mobile sidebar sheet (responsive <md)
+  mobileSidebarOpen: boolean
+
   // Doc chat sidebar state
   docChatSidebarOpen: boolean
   docChatSidebarWidth: number
@@ -25,6 +28,7 @@ interface AppStore extends AppState {
   setActiveKnowledgeBase: (id: string | null) => void
   setActiveChat: (id: string | null) => void
   setSidebarWidth: (width: number) => void
+  setMobileSidebarOpen: (open: boolean) => void
   setDocChatSidebarOpen: (open: boolean) => void
   setDocChatSidebarWidth: (width: number) => void
   setDisplayLanguage: (lang: 'source' | 'zh') => void
@@ -72,6 +76,7 @@ export const useAppStore = create<AppStore>()(
         // Initial state
         activeSidebarSection: 'knowledge',
         sidebarWidth: 256, // 16rem equivalent
+        mobileSidebarOpen: false,
         docChatSidebarOpen: false,
         docChatSidebarWidth: 320,
         displayLanguage: 'zh',
@@ -102,6 +107,9 @@ export const useAppStore = create<AppStore>()(
               )
             )
           }),
+
+        setMobileSidebarOpen: (open) =>
+          set({ mobileSidebarOpen: open }),
 
         setDocChatSidebarOpen: (open) =>
           set({ docChatSidebarOpen: open }),

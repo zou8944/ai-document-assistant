@@ -121,8 +121,8 @@
   /* Input styling */
   .macos-input {
     @apply px-4 py-3 rounded-xl border border-white/30 bg-white/60;
-    @apply backdrop-blur-sm text-macos-gray-900 placeholder-macos-gray-500;
-    @apply focus:outline-none focus:ring-2 focus:ring-macos-blue focus:border-macos-blue;
+    @apply backdrop-blur-sm text-ink placeholder-faint;
+    @apply focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent;
     @apply transition-all duration-200;
   }
   
@@ -135,9 +135,9 @@
   .macos-button-primary {
     @apply px-6 py-3 rounded-xl font-medium text-white;
     @apply bg-accent hover:bg-accent-hover;
-    @apply focus:outline-none focus:ring-2 focus:ring-macos-blue focus:ring-offset-2;
+    @apply focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2;
     @apply transition-all duration-200 transform hover:scale-105;
-    @apply disabled:bg-macos-gray-400 disabled:cursor-not-allowed disabled:transform-none;
+    @apply disabled:bg-subtle disabled:cursor-not-allowed disabled:transform-none;
     box-shadow: 0 4px 16px rgba(0, 122, 255, 0.3);
   }
   
@@ -147,8 +147,8 @@
   
   .macos-button-secondary {
     @apply glass-button px-6 py-3 rounded-xl font-medium;
-    @apply text-macos-gray-700 hover:text-macos-blue;
-    @apply focus:outline-none focus:ring-2 focus:ring-macos-blue focus:ring-offset-2;
+    @apply text-inverse hover:text-accent;
+    @apply focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2;
   }
   
   /* Card styling */
@@ -163,12 +163,12 @@
   
   /* Progress bar styling */
   .macos-progress-bar {
-    @apply w-full bg-macos-gray-200 rounded-full h-2 overflow-hidden;
+    @apply w-full bg-warm-border rounded-full h-2 overflow-hidden;
   }
   
   .macos-progress-fill {
     @apply h-full rounded-full transition-all duration-500 ease-out;
-    @apply bg-gradient-to-r from-macos-blue to-blue-500;
+    @apply bg-gradient-to-r from-accent to-blue-500;
   }
   
   /* Dropdown/Select styling */
@@ -184,7 +184,7 @@
   /* Toast/Notification styling */
   .macos-toast {
     @apply glass-morph rounded-xl p-4 macos-shadow;
-    @apply border-l-4 border-macos-blue;
+    @apply border-l-4 border-accent;
     animation: slideInFromRight 0.3s ease-out;
   }
   
@@ -289,11 +289,11 @@
   
   /* macOS-style focus ring */
   .focus-ring {
-    @apply focus:outline-none focus:ring-2 focus:ring-macos-blue focus:ring-offset-2;
+    @apply focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2;
   }
-  
+
   .focus-ring-inset {
-    @apply focus:outline-none focus:ring-2 focus:ring-inset focus:ring-macos-blue;
+    @apply focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent;
   }
 }
 
@@ -526,6 +526,14 @@
 
   .animate-source-in {
     animation: sourceIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-slide-in-left {
+    animation: slideInFromLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-slide-in-right {
+    animation: slideInFromRight 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 }
 

@@ -1,8 +1,9 @@
 /**
- * Main application layout with sidebar and content area
+ * Main application layout with sidebar and content area.
+ * On <md (768px) the sidebar becomes a slide-over sheet with backdrop.
  */
 
-import React from 'react'
+import React, { useEffect } from 'react'
 import { useAppStore } from '../../store/appStore'
 import Sidebar from './Sidebar'
 import ResizableHandle from './ResizableHandle'
@@ -16,11 +17,13 @@ interface MainLayoutProps {
 }
 
 export const MainLayout: React.FC<MainLayoutProps> = ({ className }) => {
-  const { 
-    activeSidebarSection, 
+  const {
+    activeSidebarSection,
     activeKnowledgeBase,
     sidebarWidth,
-    setSidebarWidth
+    setSidebarWidth,
+    mobileSidebarOpen,
+    setMobileSidebarOpen,
   } = useAppStore()
 
   const renderMainContent = () => {
@@ -30,13 +33,13 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ className }) => {
           return <KnowledgeBaseManagement />
         }
         return <KnowledgeBaseOverview />
-      
+
       case 'chat':
         return <ChatInterface />
-      
+
       case 'settings':
         return <SettingsPage />
-      
+
       default:
         return <KnowledgeBaseOverview />
     }
@@ -57,25 +60,48 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ className }) => {
     setSidebarWidth(clampWidth(sidebarWidth + direction * KEYBOARD_STEP))
   }
 
+  // Close mobile sidebar when section changes (user tapped a nav item)
+  useEffect(() => {
+    setMobileSidebarOpen(false)
+  }, [activeSidebarSection, setMobileSidebarOpen])
+
   return (
     <div className={`h-full ${className || ''}`}>
       <div className="flex h-full">
-        {/* Sidebar - Dynamic width */}
+        {/* Desktop sidebar — hidden on <md */}
         <div
-          className="flex-shrink-0 h-full"
+          className="hidden md:flex flex-shrink-0 h-full"
           style={{ width: `${sidebarWidth}px` }}
         >
           <Sidebar />
         </div>
 
-        {/* Resizable handle */}
-        <ResizableHandle
-          onResize={handleResize}
-          onKeyboardResize={handleKeyboardResize}
-          currentWidth={sidebarWidth}
-          minWidth={MIN_SIDEBAR_WIDTH}
-          maxWidth={MAX_SIDEBAR_WIDTH}
-        />
+        {/* Desktop resizable handle — hidden on <md */}
+        <div className="hidden md:block">
+          <ResizableHandle
+            onResize={handleResize}
+            onKeyboardResize={handleKeyboardResize}
+            currentWidth={sidebarWidth}
+            minWidth={MIN_SIDEBAR_WIDTH}
+            maxWidth={MAX_SIDEBAR_WIDTH}
+          />
+        </div>
+
+        {/* Mobile sidebar sheet — visible on <md when open */}
+        {mobileSidebarOpen && (
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm md:hidden animate-fade-in"
+              onClick={() => setMobileSidebarOpen(false)}
+              aria-hidden
+            />
+            {/* Sheet */}
+            <div className="fixed inset-y-0 left-0 z-50 w-72 max-w-[80vw] md:hidden animate-slide-in-left">
+              <Sidebar className="h-full" />
+            </div>
+          </>
+        )}
 
         {/* Main Content Area - Flexible width */}
         <div className="flex-1 min-w-0">
