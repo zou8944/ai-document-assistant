@@ -440,7 +440,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                     </div>
                   </div>
                   
-                  <p className="text-sm text-ink/65 mb-3 line-clamp-2">
+                  <p className="text-sm text-ink/65 mb-3 line-clamp-2 h-[2.5rem]">
                     {collection.description || '暂无描述'}
                   </p>
 
