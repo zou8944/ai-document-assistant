@@ -149,17 +149,16 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
   }
 
-  // Load collections on component mount and when search query changes
+  // Load active tasks on mount
   useEffect(() => {
-    loadCollections()
     loadActiveTasks()
   }, [])
-  
-  // Debounced search
+
+  // Load collections on mount (via initial searchQuery=''), and debounce on search changes
   useEffect(() => {
     const timer = setTimeout(() => {
       loadCollections()
-    }, 500)
+    }, 300)
 
     return () => clearTimeout(timer)
   }, [searchQuery])
