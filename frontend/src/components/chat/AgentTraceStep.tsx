@@ -70,14 +70,14 @@ const ThinkingBlock: React.FC<{ step: AgentStep; isRunning: boolean }> = ({ step
       <div className="flex items-center justify-between px-3 py-2">
         <div className="flex items-center space-x-2">
           <SparklesIcon className="w-4 h-4 text-muted" />
-          <span className="text-meta-sm font-medium text-ink">思考过程</span>
+          <span className="text-meta-xs text-ink">思考过程</span>
           {isRunning && (
             <span className="w-1.5 h-1.5 rounded-full bg-muted animate-pulse" />
           )}
         </div>
         <div className="flex items-center space-x-1">
           {step.thinkingMs !== undefined && !isRunning && (
-            <span className="text-meta-xs text-faint tabular-nums">
+            <span className="text-[10px] text-faint tabular-nums">
               {step.thinkingMs >= 1000
                 ? `${(step.thinkingMs / 1000).toFixed(1)}s`
                 : `${step.thinkingMs}ms`}
@@ -92,7 +92,7 @@ const ThinkingBlock: React.FC<{ step: AgentStep; isRunning: boolean }> = ({ step
       {/* Body */}
       <Collapsible expanded={expanded}>
         <div className="px-3 pb-2 pt-0 ml-6">
-          <p className="text-meta-sm text-inverse leading-[1.5] whitespace-pre-wrap">
+          <p className="text-meta-xs text-inverse leading-[1.5] whitespace-pre-wrap">
             {step.text}
           </p>
         </div>
@@ -124,44 +124,44 @@ const ToolBlock: React.FC<{ step: AgentStep }> = ({ step }) => {
   return (
     <div
       className={clsx(
-        'rounded-2xl border',
+        'rounded-xl border',
         isError ? 'border-red-200/50' : 'border-warm-line'
       )}
     >
       {/* Clickable header area */}
       <div
         className={clsx(
-          'px-4 py-2.5',
+          'px-3 py-2',
           hasDetails && 'cursor-pointer'
         )}
         onClick={hasDetails ? () => setExpanded((v) => !v) : undefined}
       >
         {/* Row 1: icon + title + chevron */}
-        <div className="flex items-center">
-          {/* Status icon */}
-          <div className="flex-shrink-0 mr-2">
-            {isError ? (
-              <XCircleIcon className="w-5 h-5 text-red-400" />
-            ) : isDone ? (
-              <CheckCircleIcon className="w-5 h-5 text-apple-green" />
-            ) : isRunning ? (
-              <span className="block w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <CheckCircleIcon className="w-5 h-5 text-subtle" />
-            )}
-          </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2 min-w-0">
+            {/* Status icon */}
+            <div className="flex-shrink-0">
+              {isError ? (
+                <XCircleIcon className="w-4 h-4 text-red-400" />
+              ) : isDone ? (
+                <CheckCircleIcon className="w-4 h-4 text-apple-green" />
+              ) : isRunning ? (
+                <span className="block w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <CheckCircleIcon className="w-4 h-4 text-subtle" />
+              )}
+            </div>
 
-          {/* Title */}
-          <div className="flex-1 min-w-0">
-            <span className="text-meta-md text-ink">
+            {/* Title */}
+            <span className="text-meta-xs text-ink truncate">
               {renderToolTitle(step)}
             </span>
           </div>
 
           {/* Time + chevron */}
-          <div className="flex items-center space-x-1.5 flex-shrink-0 ml-3">
+          <div className="flex items-center space-x-1 flex-shrink-0 ml-2">
             {step.toolMs !== undefined && !isRunning && (
-              <span className="text-meta-xs text-faint tabular-nums">
+              <span className="text-[10px] text-faint tabular-nums">
                 {step.toolMs >= 1000
                   ? `${(step.toolMs / 1000).toFixed(1)}s`
                   : `${step.toolMs}ms`}
@@ -169,7 +169,7 @@ const ToolBlock: React.FC<{ step: AgentStep }> = ({ step }) => {
             )}
             {hasDetails && (
               <div className={clsx('transition-transform duration-200', expanded && 'rotate-180')}>
-                <ChevronDownIcon className="w-4 h-4 text-subtle" />
+                <ChevronDownIcon className="w-3.5 h-3.5 text-faint" />
               </div>
             )}
           </div>
@@ -179,14 +179,14 @@ const ToolBlock: React.FC<{ step: AgentStep }> = ({ step }) => {
 
       {/* Expanded details */}
       <Collapsible expanded={expanded}>
-        <div className="px-4 pb-3 ml-7 space-y-2">
+        <div className="px-3 pb-3 ml-6 space-y-2">
           {summary && !isRunning && (
-            <div className="text-meta-sm text-inverse">{summary}</div>
+            <div className="text-meta-xs text-inverse">{summary}</div>
           )}
 
           {step.toolPreview && (
             <div className="rounded-xl bg-white/50 backdrop-blur-sm border border-warm-line p-3">
-              <pre className="text-meta-xs text-inverse overflow-x-auto whitespace-pre-wrap break-all leading-relaxed font-mono">
+              <pre className="text-[10px] text-inverse overflow-x-auto whitespace-pre-wrap break-all leading-relaxed font-mono">
                 {step.toolPreview.length > 500
                   ? step.toolPreview.slice(0, 500) + '...'
                   : step.toolPreview}
@@ -198,7 +198,7 @@ const ToolBlock: React.FC<{ step: AgentStep }> = ({ step }) => {
             <div>
               <button
                 onClick={toggleRawExpanded}
-                className="flex items-center space-x-1 text-meta-xs text-faint hover:text-accent transition-colors rounded-lg px-2 py-1 hover:bg-white/50"
+                className="flex items-center space-x-1 text-[10px] text-faint hover:text-accent transition-colors rounded-lg px-2 py-1 hover:bg-white/50"
               >
                 <CodeBracketIcon className="w-3.5 h-3.5" />
                 <span>原始数据</span>
@@ -211,16 +211,16 @@ const ToolBlock: React.FC<{ step: AgentStep }> = ({ step }) => {
                 <div className="mt-2 space-y-2">
                   {step.toolInput && Object.keys(step.toolInput).length > 0 && (
                     <div className="rounded-xl bg-white/50 backdrop-blur-sm border border-warm-line p-3">
-                      <div className="text-meta-xs text-muted mb-1.5 font-semibold tracking-wide">输入</div>
-                      <pre className="text-meta-xs text-inverse overflow-x-auto whitespace-pre-wrap break-all leading-relaxed font-mono">
+                      <div className="text-[10px] text-muted mb-1.5 font-semibold tracking-wide">输入</div>
+                      <pre className="text-[10px] text-inverse overflow-x-auto whitespace-pre-wrap break-all leading-relaxed font-mono">
                         {JSON.stringify(step.toolInput, null, 2)}
                       </pre>
                     </div>
                   )}
                   {step.toolPreview && (
                     <div className="rounded-xl bg-white/50 backdrop-blur-sm border border-warm-line p-3">
-                      <div className="text-meta-xs text-muted mb-1.5 font-semibold tracking-wide">输出</div>
-                      <pre className="text-meta-xs text-inverse overflow-x-auto whitespace-pre-wrap break-all leading-relaxed font-mono">
+                      <div className="text-[10px] text-muted mb-1.5 font-semibold tracking-wide">输出</div>
+                      <pre className="text-[10px] text-inverse overflow-x-auto whitespace-pre-wrap break-all leading-relaxed font-mono">
                         {step.toolPreview}
                       </pre>
                     </div>
@@ -240,8 +240,8 @@ const ToolBlock: React.FC<{ step: AgentStep }> = ({ step }) => {
 /* ================================================================ */
 
 const CompactBlock: React.FC<{ step: AgentStep }> = ({ step }) => (
-  <div className="rounded-2xl border border-warm-line px-4 py-2">
-    <span className="text-meta-xs text-muted">
+  <div className="rounded-xl border border-warm-line px-3 py-2">
+    <span className="text-[10px] text-muted">
       压缩上下文
       {step.beforeTokens !== undefined && (
         <span className="text-subtle">

@@ -8,8 +8,7 @@
  */
 
 import React, { useMemo } from 'react'
-import { SparklesIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
-import clsx from 'clsx'
+import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { AgentMessageState } from '../../types/agent'
 import { useAppStore } from '../../store/appStore'
 import { Collapsible } from './AgentTraceStep'
@@ -49,31 +48,25 @@ export const AgentTrace: React.FC<AgentTraceProps> = ({ state }) => {
       {/* Header bar — controls global expand/collapse */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className={clsx(
-          'w-full flex items-center justify-between px-4 py-2.5 rounded-2xl border transition-colors',
-          expanded
-            ? 'border-warm-line bg-transparent cursor-pointer hover:bg-white/40'
-            : 'border-warm-line bg-white/40 cursor-pointer hover:bg-white/60'
-        )}
+        className="flex items-center space-x-1.5 cursor-pointer py-1.5 px-1 w-full text-left"
       >
-        <div className="flex items-center space-x-2">
-          <SparklesIcon className="w-4 h-4 text-muted" />
-          <span className="text-meta-md font-medium text-ink">思考过程</span>
-          {!expanded && blockCount > 0 && (
-            <span className="text-meta-sm text-muted">{blockCount} 个步骤</span>
-          )}
-          {isRunning && (
-            <span className="w-1.5 h-1.5 rounded-full bg-muted animate-pulse" />
-          )}
-        </div>
-        <div className={clsx('transition-transform duration-200', expanded && 'rotate-180')}>
-          <ChevronDownIcon className="w-4 h-4 text-faint" />
-        </div>
+        {expanded ? (
+          <ChevronDownIcon className="w-4 h-4 text-faint transition-transform duration-200" />
+        ) : (
+          <ChevronRightIcon className="w-4 h-4 text-faint transition-transform duration-200" />
+        )}
+        <span className="text-meta-sm text-ink">Activities</span>
+        {!expanded && blockCount > 0 && (
+          <span className="text-meta-xs text-muted">{blockCount}</span>
+        )}
+        {isRunning && (
+          <span className="w-1.5 h-1.5 rounded-full bg-muted animate-pulse" />
+        )}
       </button>
 
-      {/* Expandable steps area */}
+      {/* Expandable steps area with left border */}
       <Collapsible expanded={expanded}>
-        <div className="mt-1.5 space-y-1.5">
+        <div className="mt-1 ml-[7px] pl-3 border-l border-warm-line space-y-1.5">
           {visibleSteps.map((step, index) => (
             <div key={`${step.kind}-${step.iteration}-${index}`} className="animate-step-in">
               <AgentTraceStep
@@ -84,7 +77,7 @@ export const AgentTrace: React.FC<AgentTraceProps> = ({ state }) => {
             </div>
           ))}
           {totalTime !== undefined && !isRunning && (
-            <div className="text-meta-xs text-faint tabular-nums px-1">
+            <div className="text-[10px] text-faint tabular-nums px-1">
               总耗时 {totalTime >= 1000 ? `${(totalTime / 1000).toFixed(1)}s` : `${totalTime}ms`}
               {state.timings && state.timings.iteration_count > 1 && (
                 <span> · {state.timings.iteration_count} 轮</span>
