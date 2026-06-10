@@ -86,12 +86,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
       totalRef.current = total
 
       if (total === 0) {
-        setMessages([{
-          id: 'welcome',
-          type: 'assistant',
-          content: '您好！我可以帮您解答关于已加载知识库的问题。请问有什么需要了解的吗？',
-          timestamp: new Date().toISOString()
-        }])
+        setMessages([])
         loadedRef.current = 0
         setHasMoreOlder(false)
         return
