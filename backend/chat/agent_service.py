@@ -44,17 +44,32 @@ class AgentChatService:
         self,
         chat_id: str,
         query: str,
+        document_ids: list[str] | None = None,
     ) -> AsyncIterator[SSEEvent]:
         message_id = str(uuid.uuid4())
         token = CancellationToken()
         _cancel_registry[(chat_id, message_id)] = token
+
+        # Build user message metadata
+        user_meta: dict = {"engine": "agent"}
+        if document_ids:
+            user_meta["document_ids"] = document_ids
+            # Store document names for frontend display
+            doc_names: list[str] = []
+            for did in document_ids:
+                try:
+                    doc = self.document_repo.get_by_id(did)
+                    doc_names.append(doc.name if doc else did)
+                except Exception:
+                    doc_names.append(did)
+            user_meta["document_names"] = doc_names
 
         # Persist user message with engine marker so _load_history includes it
         user_message = self.chat_message_repo.add_message(
             chat_id=chat_id,
             role="user",
             content=query,
-            metadata=json.dumps({"engine": "agent"}),
+            metadata=json.dumps(user_meta),
         )
         user_message_id = user_message.id
 
@@ -122,6 +137,7 @@ class AgentChatService:
                     query=query,
                     history=history,
                     collection_ids=collection_ids,
+                    document_ids=document_ids,
                     cancellation=token,
                     deps=deps,
                     emit=_noop_emit,

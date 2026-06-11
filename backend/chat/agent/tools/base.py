@@ -29,6 +29,8 @@ class ToolContext:
     # Set of document IDs that have been accessed during this agent run.
     # Maintained by AgentRuntime — tools must treat this as read-only.
     visited_doc_ids: set[str] = field(default_factory=set)
+    # When set, tools must restrict results to these document IDs only.
+    document_ids: list[str] | None = None
 
 
 @dataclass

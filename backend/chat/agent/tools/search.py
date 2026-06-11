@@ -32,6 +32,10 @@ class SearchDocumentsTool(Tool):
         category: str | None = kwargs.get("category")
         limit: int = kwargs.get("limit", 15)
 
+        # When user has @-ed specific documents, restrict search to those only
+        if ctx.document_ids:
+            collection_ids = None  # ignore any LLM-supplied collection_ids
+
         try:
             ctx.cancellation.raise_if_cancelled()
             docs = ctx.deps.document_repo.search_by_keywords(
@@ -42,6 +46,11 @@ class SearchDocumentsTool(Tool):
             )
         except Exception as exc:
             return ToolResult(content=f"Error: {exc}", is_error=True)
+
+        # Enforce document_ids filter on results
+        if ctx.document_ids:
+            allowed = set(ctx.document_ids)
+            docs = [d for d in docs if d.id in allowed]
 
         if not docs:
             return ToolResult(
@@ -103,7 +112,15 @@ class GrepDocumentsTool(Tool):
 
         try:
             ctx.cancellation.raise_if_cancelled()
-            if collection_ids:
+            if ctx.document_ids:
+                # User @-ed specific documents — only grep those
+                candidates = []
+                for did in ctx.document_ids:
+                    ctx.cancellation.raise_if_cancelled()
+                    doc = ctx.deps.document_repo.get_by_id(did)
+                    if doc:
+                        candidates.append(doc)
+            elif collection_ids:
                 candidates: list = []
                 for cid in collection_ids:
                     ctx.cancellation.raise_if_cancelled()

@@ -231,6 +231,7 @@ async def send_message_stream(
             async for event in agent_service.process(
                 chat_id=chat_id,
                 query=request_data.message,
+                document_ids=request_data.document_ids,
             ):
                 if event.type.value == "agent_start" and message_id is None:
                     message_id = event.data.get("message_id")

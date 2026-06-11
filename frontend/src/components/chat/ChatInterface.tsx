@@ -44,6 +44,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
   const [message, setMessage] = useState('')
   const [showKnowledgeBaseSelector, setShowKnowledgeBaseSelector] = useState(false)
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([])
+  const [selectedDocumentNames, setSelectedDocumentNames] = useState<string[]>([])
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -123,7 +124,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
 
     const userMessageContent = getRealUserInput(message).trim()
     if (!userMessageContent) return
+
+    const docIds = selectedDocumentIds.length > 0 ? [...selectedDocumentIds] : undefined
+    const docNames = selectedDocumentNames.length > 0 ? [...selectedDocumentNames] : undefined
+
     setMessage('')
+    setSelectedDocumentIds([])
+    setSelectedDocumentNames([])
 
     // Always scroll to bottom when user sends a new message
     wasNearBottomRef.current = true
@@ -131,10 +138,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
     }
 
-    await sendMessage(
-      userMessageContent,
-      selectedDocumentIds.length > 0 ? selectedDocumentIds : undefined
-    )
+    await sendMessage(userMessageContent, docIds, docNames)
   }
 
   const handleUpdateKnowledgeBases = async (selectedKbIds: string[]) => {
@@ -181,12 +185,16 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
     // intentionally a no-op until the regenerate flow is wired
   }
 
-  const handleRichTextChange = (value: string, _mentions: DocumentMention[], mentionedDocIds: string[]) => {
+  const handleRichTextChange = (value: string, mentions: DocumentMention[], mentionedDocIds: string[]) => {
     setMessage(value)
 
     if (mentionedDocIds.length > 0) {
       const allSelectedIds = [...new Set([...selectedDocumentIds, ...mentionedDocIds])]
       setSelectedDocumentIds(allSelectedIds)
+      // Sync document names from mentions
+      const nameMap = new Map(mentions.map(m => [m.id, m.name]))
+      const allNames = allSelectedIds.map(id => nameMap.get(id) || id)
+      setSelectedDocumentNames(allNames)
     }
   }
 
@@ -271,6 +279,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                     <div className="brand-surface rounded-2xl px-5 py-3">
                       <MarkdownContent content={msg.content} isUser />
                     </div>
+                    {msg.documentNames && msg.documentNames.length > 0 && (
+                      <div className="mt-1 flex items-center gap-1 text-xs text-neutral-400 justify-end">
+                        <span>📄</span>
+                        <span>基于：{msg.documentNames.join('、')}</span>
+                      </div>
+                    )}
                     <div className="mt-1.5 text-meta-xs text-muted text-right">
                       {formatTime(msg.timestamp)}
                     </div>
@@ -394,6 +408,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
             selectedDocumentIds={selectedDocumentIds}
             onDocumentSelect={handleUpdateSelectedDocuments}
           />
+
+          {/* @ document hint */}
+          {selectedDocumentIds.length > 0 && (
+            <div className="flex items-center gap-1 text-xs text-neutral-400 mb-1.5 ml-1">
+              <span>📌</span>
+              <span>AI 将基于选中的文档回答</span>
+            </div>
+          )}
 
           {/* Input box */}
           <div className="flex space-x-3 bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 px-4 py-3 shadow-[0_2px_10px_rgba(0,0,0,0.06)] transition-all duration-200 focus-within:border-blue-300/60 focus-within:shadow-[0_2px_20px_rgba(0,122,255,0.12)] focus-within:bg-white/85">

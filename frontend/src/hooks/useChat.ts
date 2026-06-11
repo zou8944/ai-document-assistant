@@ -20,10 +20,14 @@ export interface Message {
   timestamp: string
   sources?: SourceReference[]
   agentState?: AgentMessageState
+  documentIds?: string[]
+  documentNames?: string[]
 }
 
 const mapAPIMessageToUIMessage = (msg: APIChatMessage): Message => {
   const agentState = msg.metadata?.ui_state as AgentMessageState | undefined
+  const documentIds = msg.metadata?.document_ids as string[] | undefined
+  const documentNames = msg.metadata?.document_names as string[] | undefined
   return {
     id: msg.message_id,
     type: msg.role,
@@ -31,6 +35,8 @@ const mapAPIMessageToUIMessage = (msg: APIChatMessage): Message => {
     timestamp: msg.created_at,
     sources: msg.sources || [],
     agentState,
+    documentIds,
+    documentNames,
   }
 }
 
@@ -41,7 +47,7 @@ export interface UseChatReturn {
   streamingContent: string
   streamingAgentState: AgentMessageState | null
   processingStatus: string | null
-  sendMessage: (content: string, documentIds?: string[]) => Promise<void>
+  sendMessage: (content: string, documentIds?: string[], documentNames?: string[]) => Promise<void>
   stopGeneration: () => void
   loadMessages: () => Promise<void>
   loadOlderMessages: () => Promise<void>
@@ -589,7 +595,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
     streamingAgentStateRef.current = null
   }, [apiClient])
 
-  const sendMessage = useCallback(async (content: string, documentIds?: string[]) => {
+  const sendMessage = useCallback(async (content: string, documentIds?: string[], documentNames?: string[]) => {
     if (!content.trim() || isLoading || !chatId) return
 
     const userMessageContent = content.trim()
@@ -600,7 +606,9 @@ export const useChat = (chatId: string | null): UseChatReturn => {
       id: `user_${Date.now()}`,
       type: 'user',
       content: userMessageContent,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      documentIds: documentIds && documentIds.length > 0 ? documentIds : undefined,
+      documentNames: documentNames && documentNames.length > 0 ? documentNames : undefined,
     }
     setMessages(prev => [...prev, userMessage])
 

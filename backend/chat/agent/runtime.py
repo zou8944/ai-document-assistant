@@ -50,6 +50,7 @@ class AgentRuntime:
         query: str,
         history: list[dict],
         collection_ids: list[str],
+        document_ids: list[str] | None = None,
         cancellation: CancellationToken,
         deps: "AgentDeps",
         emit: Callable[[SSEEvent], Awaitable[None]],
@@ -117,7 +118,7 @@ class AgentRuntime:
 
             llm_task = asyncio.create_task(
                 self.backend.generate_with_tools(
-                    system=self._system_prompt(collection_ids),
+                    system=self._system_prompt(collection_ids, document_ids),
                     messages=messages,
                     tools=self.registry.schemas(),
                     max_tokens=8192,
@@ -197,6 +198,7 @@ class AgentRuntime:
                 emit=emit,
                 deps=deps,
                 visited_doc_ids=visited_doc_ids,
+                document_ids=document_ids,
             )
 
             results: list[dict] = []
@@ -425,8 +427,18 @@ class AgentRuntime:
         if transcript:
             transcript.write_event("done", {"iterations": iteration, "halted": True, "reason": reason})
 
-    def _system_prompt(self, collection_ids: list[str]) -> str:
-        return RAG_SYSTEM_PROMPT
+    def _system_prompt(self, collection_ids: list[str], document_ids: list[str] | None = None) -> str:
+        prompt = RAG_SYSTEM_PROMPT
+        if document_ids:
+            doc_list = "\n".join(f"- {did}" for did in document_ids)
+            prompt += (
+                "\n\n## 用户指定的焦点文档\n"
+                "用户通过 @ 指定了以下文档，请仅基于这些文档回答：\n"
+                f"{doc_list}\n"
+                "请先用 get_document 读取这些文档内容，再回答问题。\n"
+                "不要检索或引用其他文档。"
+            )
+        return prompt
 
     def _build_tool_context(
         self,
@@ -436,6 +448,7 @@ class AgentRuntime:
         emit: Callable[[SSEEvent], Awaitable[None]],
         deps: "AgentDeps",
         visited_doc_ids: set[str],
+        document_ids: list[str] | None = None,
     ) -> "ToolContext":
         from chat.agent.tools.base import ToolContext
 
@@ -446,4 +459,5 @@ class AgentRuntime:
             emit=emit,
             deps=deps,
             visited_doc_ids=visited_doc_ids,
+            document_ids=document_ids,
         )
