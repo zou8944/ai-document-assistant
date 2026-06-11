@@ -188,14 +188,21 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
   const handleRichTextChange = (value: string, mentions: DocumentMention[], mentionedDocIds: string[]) => {
     setMessage(value)
 
-    if (mentionedDocIds.length > 0) {
-      const allSelectedIds = [...new Set([...selectedDocumentIds, ...mentionedDocIds])]
-      setSelectedDocumentIds(allSelectedIds)
-      // Sync document names from mentions
-      const nameMap = new Map(mentions.map(m => [m.id, m.name]))
-      const allNames = allSelectedIds.map(id => nameMap.get(id) || id)
-      setSelectedDocumentNames(allNames)
-    }
+    // Always merge: RichTextInput removes @[name](doc:id) from text after
+    // selection, so subsequent keystrokes produce empty mentionedDocIds.
+    // We must preserve previously-selected documents across those calls.
+    const allSelectedIds = [...new Set([...selectedDocumentIds, ...mentionedDocIds])]
+    setSelectedDocumentIds(allSelectedIds)
+
+    // Build name lookup: seed with existing names, then overlay new mentions
+    const nameMap = new Map<string, string>()
+    selectedDocumentIds.forEach((id, i) => {
+      if (selectedDocumentNames[i]) nameMap.set(id, selectedDocumentNames[i])
+    })
+    mentions.forEach(m => nameMap.set(m.id, m.name))
+
+    const allNames = allSelectedIds.map(id => nameMap.get(id) || id)
+    setSelectedDocumentNames(allNames)
   }
 
   const getRealUserInput = (input: string): string => {

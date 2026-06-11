@@ -124,13 +124,19 @@ export const RichTextInput: React.FC<RichTextInputProps> = ({
 
       // 不在输入框中保留@内容，直接通知父组件添加文档到选择列表
       const { displayText, mentions: newMentions } = parseInput(newText)
-      setMentions(newMentions)
 
-      // 将当前文档添加到选中列表（通过回调通知父组件）
-      const currentSelectedIds = newMentions.map(mention => mention.id)
-      const updatedSelectedIds = [...currentSelectedIds, document.id]
+      // Add selected document to mentions so parent receives the name
+      const selectedMention: DocumentMention = {
+        id: document.id,
+        name: document.name,
+        start: -1,
+        end: -1,
+      }
+      const allMentions = [...newMentions, selectedMention]
+      setMentions(allMentions)
 
-      onChange(newText, newMentions, updatedSelectedIds)
+      const updatedSelectedIds = allMentions.map(m => m.id)
+      onChange(newText, allMentions, updatedSelectedIds)
 
       // 设置光标位置到@的起始位置
       setTimeout(() => {
