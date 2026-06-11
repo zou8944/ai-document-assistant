@@ -61,6 +61,14 @@ export const DocumentPicker: React.FC<DocumentPickerProps> = ({
     }
   }
 
+  // Auto-load documents when selections exist but list is empty
+  // (e.g. user @-ed a document via RichTextInput before opening the picker)
+  useEffect(() => {
+    if (selectedDocumentIds.length > 0 && documents.length === 0 && !loading) {
+      loadDocuments()
+    }
+  }, [selectedDocumentIds])
+
   const handleToggleDropdown = () => {
     if (!isOpen) {
       loadDocuments()
