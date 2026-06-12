@@ -1,13 +1,13 @@
 /**
- * Agent trace panel — block container with global expand/collapse
+ * Agent trace panel — block container with per-message expand/collapse
  *
- * The entire trace area can be expanded or collapsed via a header bar.
- * User preference is stored globally and applies to new messages too.
- * When collapsed, the header shows the live count of visible blocks.
- * Individual block expand/collapse states inside are preserved.
+ * Each trace instance owns its own expand/collapse state. Toggling here only
+ * affects this message (and updates the global default for any NEW messages
+ * mounted afterwards). Previously-rendered messages are unaffected, so their
+ * trace expand state stays where the user left it.
  */
 
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { AgentMessageState } from '../../types/agent'
 import { useAppStore } from '../../store/appStore'
@@ -22,8 +22,17 @@ interface AgentTraceProps {
 const INTERNAL_TOOL_NAMES = new Set(['cite_sources', 'citations', 'start_answer'])
 
 export const AgentTrace: React.FC<AgentTraceProps> = ({ state }) => {
-  const expanded = useAppStore((s) => s.agentTraceExpanded)
-  const setExpanded = useAppStore((s) => s.setAgentTraceExpanded)
+  const setGlobalExpanded = useAppStore((s) => s.setAgentTraceExpanded)
+  // Seed from the current global default at mount time, then detach. Later
+  // toggles in other messages won't re-render this instance.
+  const [expanded, setLocalExpanded] = useState(() => useAppStore.getState().agentTraceExpanded)
+
+  const handleToggle = () => {
+    const next = !expanded
+    setLocalExpanded(next)
+    // Persist as the new default so future messages adopt this preference.
+    setGlobalExpanded(next)
+  }
 
   const visibleSteps = useMemo(() => {
     return state.steps.filter((s) => {
@@ -45,9 +54,9 @@ export const AgentTrace: React.FC<AgentTraceProps> = ({ state }) => {
 
   return (
     <div className="mb-2">
-      {/* Header bar — controls global expand/collapse */}
+      {/* Header bar — per-message toggle; also seeds the default for new messages */}
       <button
-        onClick={() => setExpanded(!expanded)}
+        onClick={handleToggle}
         className="flex items-center space-x-1.5 cursor-pointer py-1.5 px-1 w-full text-left"
       >
         {expanded ? (
