@@ -565,25 +565,9 @@ export const useChat = (chatId: string | null): UseChatReturn => {
   const stopGeneration = useCallback(() => {
     apiClient.cancelRequests()
 
-    const partialContent = streamingContentRef.current
-    const partialSources = streamingSourcesRef.current
-    const partialMessageId = streamingMessageIdRef.current
-    const agentState = streamingAgentStateRef.current
-
-    if (partialContent || agentState) {
-      const aiMessage: Message = {
-        id: partialMessageId || `ai_${Date.now()}`,
-        type: 'assistant',
-        content: partialContent || agentState?.finalText || '',
-        timestamp: new Date().toISOString(),
-        sources: partialSources,
-        agentState: agentState
-          ? { ...agentState, status: 'cancelled' as const }
-          : undefined,
-      }
-      setMessages((prev) => [...prev, aiMessage])
-    }
-
+    // Discard the half-generated reply entirely — user asked to stop, so the
+    // partial bubble should disappear instead of being committed as a message.
+    // (Backend mirrors this by deleting the empty assistant placeholder.)
     setIsLoading(false)
     setIsStreaming(false)
     setStreamingContent('')

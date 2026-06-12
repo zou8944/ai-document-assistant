@@ -1,5 +1,6 @@
 """Agent-based chat service replacing legacy ChatService."""
 
+import asyncio
 import json
 import logging
 import time
@@ -266,6 +267,13 @@ class AgentChatService:
                     sources=json.dumps(sources),
                     message_metadata=json.dumps(agent_trace),
                 )
+        except asyncio.CancelledError:
+            # User-initiated stop (or client disconnect). Keep their question,
+            # but drop the empty assistant placeholder so the chat doesn't
+            # show a half-baked reply bubble on reload.
+            self.chat_message_repo.delete(placeholder_id)
+            self.chat_repo.update_message_count(chat_id)
+            raise
         except Exception:
             # Clean up: remove both user message and placeholder on failure
             self.chat_message_repo.delete(placeholder_id)
