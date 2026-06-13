@@ -275,7 +275,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
   }
 
   return (
-    <div className={clsx('flex flex-col h-full bg-white/60 backdrop-blur-xl border-r border-white/20', className)}>
+    <div className={clsx('flex flex-col h-full w-full bg-white/60 backdrop-blur-xl border-r border-white/20', className)}>
       {/* Knowledge Base Section - Fixed at top */}
       <div className="flex-shrink-0 p-4 border-b border-white/40">
         <button
