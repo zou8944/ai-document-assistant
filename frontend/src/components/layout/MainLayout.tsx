@@ -77,7 +77,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ className }) => {
         </div>
 
         {/* Desktop resizable handle — hidden on <md */}
-        <div className="hidden md:block">
+        <div className="hidden md:flex h-full">
           <ResizableHandle
             onResize={handleResize}
             onKeyboardResize={handleKeyboardResize}

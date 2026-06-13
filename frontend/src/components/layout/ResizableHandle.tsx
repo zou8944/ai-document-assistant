@@ -104,9 +104,9 @@ export const ResizableHandle: React.FC<ResizableHandleProps> = ({
       tabIndex={0}
       onKeyDown={handleKeyDown}
       className={clsx(
-        'group relative z-20 w-1 bg-gray-200/40 hover:bg-accent/40 transition-all duration-200 cursor-col-resize',
+        'group relative z-20 h-full w-1.5 bg-gray-200/40 hover:bg-accent/40 transition-all duration-200 cursor-col-resize',
         'flex items-center justify-center',
-        'focus-visible:outline-none focus-visible:bg-accent/60 focus-visible:w-1.5',
+        'focus-visible:outline-none focus-visible:bg-accent/60 focus-visible:w-2',
         isResizing && 'bg-accent',
         className
       )}
