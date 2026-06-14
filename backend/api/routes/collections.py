@@ -6,11 +6,9 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Request, status
-from fastapi.responses import FileResponse
 
 from api.state import get_app_state
 from exception import HTTPBadRequestException, HTTPConflictException, HTTPNotFoundException
-from models.config import AppConfig
 from models.requests import (
     CreateCollectionRequest,
     RecategorizeRequest,
@@ -155,40 +153,6 @@ async def get_collection_readme(collection_id: str, request: Request):
         categories_json_zh=categories_json_zh,
         source_language=source_language,
     )
-
-
-@router.get("/collections/{collection_id}/static/{path:path}")
-async def serve_static_file(collection_id: str, path: str, request: Request):
-    """Serve static assets from the crawl cache directory"""
-    app_state = get_app_state(request)
-
-    # Verify collection exists
-    collection = await app_state.collection_service.get_collection(collection_id)
-    if not collection:
-        raise HTTPNotFoundException(f"Collection '{collection_id}' not found")
-
-    # Find domain_key from any document in this collection that has a source_path (crawled doc)
-    from repository.document import DocumentRepository
-    doc_repo = DocumentRepository()
-    docs = doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
-
-    domain_key = None
-    for doc in docs:
-        if doc.source_path and doc.uri:
-            from urllib.parse import urlparse
-            domain_key = urlparse(doc.uri).netloc.lower().replace(":", "_")
-            break
-
-    if not domain_key:
-        raise HTTPNotFoundException("No crawled documents found in this collection")
-
-    cache_root = AppConfig.get_crawl_cache_dir()
-    file_path = cache_root / domain_key / path
-
-    if not file_path.exists() or not file_path.is_file():
-        raise HTTPNotFoundException(f"Static file not found: {path}")
-
-    return FileResponse(str(file_path))
 
 
 @router.post("/collections/{collection_id}/reindex", status_code=status.HTTP_202_ACCEPTED)

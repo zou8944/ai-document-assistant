@@ -185,12 +185,6 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     return findCategoryForPath(categories, selectedDoc.source_path)
   }, [selectedDoc, categories])
 
-  // Preview URL for selected doc
-  const previewUrl = useMemo(() => {
-    if (!selectedDoc || !currentKb) return ''
-    return apiClient.getDocumentPreviewUrl(currentKb.id, selectedDoc.id)
-  }, [selectedDoc, currentKb, apiClient])
-
   // Group -> docs mapping
   const groupDocsMap = useMemo(() => {
     const docByPath = new Map<string, MappedDoc>()
@@ -1377,7 +1371,6 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
             <DocReader
               key={selectedDoc.id}
               doc={{ id: selectedDoc.id, name: selectedDoc.name, nameTranslated: selectedDoc.nameTranslated, url: selectedDoc.url }}
-              previewUrl={previewUrl}
               collectionId={currentKb.id}
             />
           ) : showReadme && readmeContent ? (

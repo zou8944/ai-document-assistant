@@ -1,10 +1,10 @@
 /**
- * Document reader panel - shows a document in HTML (iframe) or Markdown view
+ * Document reader panel - shows a document's Markdown content with
+ * a prominent "Open Original Page" button.
  */
 
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ArrowTopRightOnSquareIcon, DocumentTextIcon, CodeBracketIcon } from '@heroicons/react/24/outline'
-import clsx from 'clsx'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline'
 import { useAPIClient, extractData } from '../../services/apiClient'
 import { markdownToHtml } from '../../utils/markdown'
 
@@ -17,20 +17,15 @@ interface DocInfo {
 
 interface DocReaderProps {
   doc: DocInfo
-  previewUrl: string
   collectionId: string
 }
 
-type ViewMode = 'html' | 'markdown'
-
-export const DocReader: React.FC<DocReaderProps> = ({ doc, previewUrl, collectionId }) => {
-  const [viewMode, setViewMode] = useState<ViewMode>('html')
+export const DocReader: React.FC<DocReaderProps> = ({ doc, collectionId }) => {
   const [markdownContent, setMarkdownContent] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const apiClient = useAPIClient()
   const containerRef = useRef<HTMLDivElement>(null)
-  const savedScrollTop = useRef(0)
 
   const loadMarkdown = useCallback(async () => {
     setLoading(true)
@@ -46,29 +41,12 @@ export const DocReader: React.FC<DocReaderProps> = ({ doc, previewUrl, collectio
     }
   }, [apiClient, collectionId, doc.id])
 
-  // Reset markdown content when document changes
+  // Load markdown on mount and when document changes
   useEffect(() => {
     setMarkdownContent(null)
     setError(null)
-  }, [doc.id])
-
-  // Save scroll position before viewMode changes
-  useEffect(() => {
-    savedScrollTop.current = containerRef.current?.scrollTop ?? 0
-  }, [viewMode])
-
-  // Restore scroll position after new view renders
-  useLayoutEffect(() => {
-    if (containerRef.current) {
-      containerRef.current.scrollTop = savedScrollTop.current
-    }
-  }, [viewMode, markdownContent])
-
-  useEffect(() => {
-    if (viewMode === 'markdown') {
-      loadMarkdown()
-    }
-  }, [viewMode, loadMarkdown])
+    loadMarkdown()
+  }, [doc.id, loadMarkdown])
 
   const html = useMemo(() => {
     if (!markdownContent) return ''
@@ -115,109 +93,72 @@ export const DocReader: React.FC<DocReaderProps> = ({ doc, previewUrl, collectio
           )}
         </h3>
 
-        {/* View mode toggle */}
-        <div
-          role="group"
-          aria-label="视图模式"
-          className="flex items-center bg-gray-100 rounded-lg p-0.5 flex-shrink-0"
-        >
-          <button
-            onClick={() => setViewMode('html')}
-            aria-label="HTML 视图"
-            aria-pressed={viewMode === 'html'}
-            className={clsx(
-              'inline-flex items-center justify-center gap-1 px-2.5 py-1 min-h-[44px] min-w-[44px] rounded-lg text-xs font-medium transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
-              viewMode === 'html'
-                ? 'bg-white text-ink shadow-sm'
-                : 'text-ink/50 hover:text-ink/80'
-            )}
-            title="HTML 预览"
-          >
-            <CodeBracketIcon className="w-3.5 h-3.5" />
-            HTML
-          </button>
-          <button
-            onClick={() => setViewMode('markdown')}
-            aria-label="Markdown 视图"
-            aria-pressed={viewMode === 'markdown'}
-            className={clsx(
-              'inline-flex items-center justify-center gap-1 px-2.5 py-1 min-h-[44px] min-w-[44px] rounded-lg text-xs font-medium transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
-              viewMode === 'markdown'
-                ? 'bg-white text-ink shadow-sm'
-                : 'text-ink/50 hover:text-ink/80'
-            )}
-            title="Markdown 原文"
-          >
-            <DocumentTextIcon className="w-3.5 h-3.5" />
-            Markdown
-          </button>
-        </div>
-
-        {doc.url && (
+        {doc.url ? (
           <a
             href={doc.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-600 flex-shrink-0"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium
+              border border-accent/30 bg-accent/5 text-accent rounded-lg
+              hover:bg-accent/10 transition-colors flex-shrink-0
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
           >
             <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5" />
-            原文
+            打开原网页
           </a>
+        ) : (
+          <button
+            disabled
+            title="无原始链接"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium
+              border border-gray-200 bg-gray-50 text-gray-400 rounded-lg
+              cursor-not-allowed flex-shrink-0"
+          >
+            <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5" />
+            打开原网页
+          </button>
         )}
       </div>
 
       {/* Content area */}
-      <div className="flex-1 overflow-hidden">
-        {viewMode === 'html' ? (
-          <iframe
-            src={previewUrl}
-            className="w-full h-full border-0"
-            title={doc.name}
-            sandbox="allow-same-origin"
-          />
+      <div className="flex-1 overflow-auto bg-white">
+        {loading ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex items-center justify-center h-full text-sm text-ink/50"
+          >
+            加载 Markdown 内容...
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-full text-sm text-red-500">
+            加载失败: {error}
+          </div>
+        ) : !markdownContent ? (
+          <div className="flex items-center justify-center h-full text-sm text-gray-400">
+            暂无 Markdown 内容
+          </div>
         ) : (
-          <div className="w-full h-full overflow-auto bg-white">
-            {loading ? (
-              <div
-                role="status"
-                aria-live="polite"
-                className="flex items-center justify-center h-full text-sm text-ink/50"
-              >
-                加载 Markdown 内容...
-              </div>
-            ) : error ? (
-              <div className="flex items-center justify-center h-full text-sm text-red-500">
-                加载失败: {error}
-              </div>
-            ) : !markdownContent ? (
-              <div className="flex items-center justify-center h-full text-sm text-gray-400">
-                暂无 Markdown 内容
-              </div>
-            ) : (
-              <div className="max-w-3xl mx-auto px-6 py-8">
-                <div
-                  ref={containerRef}
-                  className="prose prose-sm max-w-none
-                    prose-headings:text-ink prose-headings:font-semibold
-                    prose-h1:text-2xl prose-h1:mb-4 prose-h1:pb-2 prose-h1:border-b prose-h1:border-gray-200
-                    prose-h2:text-xl prose-h2:mt-6 prose-h2:mb-3
-                    prose-h3:text-lg prose-h3:mt-4 prose-h3:mb-2
-                    prose-p:text-ink/90 prose-p:leading-relaxed
-                    prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline
-                    prose-strong:text-ink
-                    prose-ul:text-ink/90 prose-ul:my-3
-                    prose-li:my-1
-                    prose-img:rounded-lg prose-img:shadow-sm
-                    prose-blockquote:border-l-4 prose-blockquote:border-gray-300 prose-blockquote:pl-4 prose-blockquote:py-2 prose-blockquote:bg-gray-50 prose-blockquote:text-ink/80 prose-blockquote:italic
-                    prose-code:bg-gray-100 prose-code:text-ink/90 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:font-mono
-                    prose-pre:bg-gray-900 prose-pre:text-gray-100 prose-pre:p-4 prose-pre:rounded-lg prose-pre:overflow-x-auto prose-pre:text-sm"
-                  dangerouslySetInnerHTML={{ __html: html }}
-                  onClick={handleClick}
-                />
-              </div>
-            )}
+          <div className="max-w-3xl mx-auto px-6 py-8">
+            <div
+              ref={containerRef}
+              className="prose prose-sm max-w-none
+                prose-headings:text-ink prose-headings:font-semibold
+                prose-h1:text-2xl prose-h1:mb-4 prose-h1:pb-2 prose-h1:border-b prose-h1:border-gray-200
+                prose-h2:text-xl prose-h2:mt-6 prose-h2:mb-3
+                prose-h3:text-lg prose-h3:mt-4 prose-h3:mb-2
+                prose-p:text-ink/90 prose-p:leading-relaxed
+                prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline
+                prose-strong:text-ink
+                prose-ul:text-ink/90 prose-ul:my-3
+                prose-li:my-1
+                prose-img:rounded-lg prose-img:shadow-sm
+                prose-blockquote:border-l-4 prose-blockquote:border-gray-300 prose-blockquote:pl-4 prose-blockquote:py-2 prose-blockquote:bg-gray-50 prose-blockquote:text-ink/80 prose-blockquote:italic
+                prose-code:bg-gray-100 prose-code:text-ink/90 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:font-mono
+                prose-pre:bg-gray-900 prose-pre:text-gray-100 prose-pre:p-4 prose-pre:rounded-lg prose-pre:overflow-x-auto prose-pre:text-sm"
+              dangerouslySetInnerHTML={{ __html: html }}
+              onClick={handleClick}
+            />
           </div>
         )}
       </div>

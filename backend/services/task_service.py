@@ -6,11 +6,8 @@ import asyncio
 import hashlib
 import json
 import logging
-import mimetypes
-import os
 import posixpath
 import queue
-import re
 import threading
 import uuid
 from collections import defaultdict
@@ -19,10 +16,10 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
-from urllib.parse import urldefrag, urljoin, urlparse
 
 from langchain_core.output_parsers import StrOutputParser
 
+from crawler.manifest_store import ManifestStore, _domain_key
 from crawler.simple_web_crawler import SimpleCrawlResult, create_simple_web_crawler
 from data_processing.file_processor import create_file_processor
 from data_processing.text_splitter import create_document_processor
@@ -50,9 +47,6 @@ class UrlTaskStats:
     urls_crawl_total: int = 0
     pages_processed: int = 0
     pages_total: int = 0
-    phase: str = "crawl"          # crawl | rewrite | readme
-    rewrite_done: int = 0
-    rewrite_total: int = 0
 
 class TaskService:
     """Service for managing async tasks"""
@@ -89,6 +83,7 @@ class TaskService:
         self.chroma_manager = create_chroma_manager()
         self.file_processor = create_file_processor(self.config)
         self.web_crawler = create_simple_web_crawler(self.config)
+        self.manifest_store = ManifestStore(self.config)
 
         # LLM service
         self.llm_service = llm_service
@@ -449,20 +444,22 @@ class TaskService:
         return True
 
     def _delete_crawl_cache(self, collection_id: str) -> None:
-        """Delete local crawl cache directory for a collection."""
+        """Delete pages/ and assets/ from crawl cache, preserving manifests/."""
+        import shutil
         cache_root = Path(self.config.get_crawl_cache_dir())
-        # Find domain dirs that belong to this collection's documents
         docs = self.doc_repo.get_by_collection(collection_id)
         domains = set()
         for doc in docs:
             if doc.uri and doc.uri.startswith("http"):
-                domains.add(self._domain_key(doc.uri))
+                from crawler.manifest_store import _domain_key
+                domains.add(_domain_key(doc.uri))
         for domain in domains:
             domain_dir = cache_root / domain
-            if domain_dir.exists():
-                import shutil
-                shutil.rmtree(domain_dir)
-                logger.info(f"Deleted crawl cache: {domain_dir}")
+            for subdir in ("pages", "assets"):
+                target = domain_dir / subdir
+                if target.exists():
+                    shutil.rmtree(target)
+                    logger.info(f"Deleted crawl cache subdir: {target}")
 
     async def get_task_stream_generator(self, task_id: str):
         task = self.task_repo.get_by_id(task_id)
@@ -1123,7 +1120,7 @@ class TaskService:
         # Determine stages dynamically based on user options
         categorize_mode = input_params.get("categorize_mode", "ai")
         generate_readme = input_params.get("generate_readme", True)
-        active_stages = ["crawl", "vectorize", "rewrite_static"]
+        active_stages = ["crawl", "vectorize"]
         if categorize_mode != "skip":
             active_stages.append("categorize")
         if generate_readme and categorize_mode != "skip":
@@ -1139,9 +1136,6 @@ class TaskService:
 
             existing_docs = self.doc_repo.get_by_collection(collection_id)
             skip_urls = {d.uri for d in existing_docs if d.uri}
-
-            # Recover URLs discovered by previously crawled pages
-            indexed_docs = self.doc_repo.get_by_collection(collection_id, status="indexed")
 
             crawl_count = 0
             sem = asyncio.Semaphore(5)
@@ -1174,18 +1168,13 @@ class TaskService:
                 prefix_repr = ", ".join(prefixes) if prefixes else "无"
                 self._log_info_task(task_id, f"Crawling {config_label} prefixes=[{prefix_repr}], seeds={len(urls)}")
 
-                # Recover URLs matching any of the prefixes from previously crawled pages
+                # Recover URLs from manifest (links discovered in a previous interrupted run)
+                seed_domain = _domain_key(urls[0]) if urls else ""
                 recovered_urls: set[str] = set()
-                for doc in indexed_docs:
-                    if doc.html_content and doc.uri:
-                        links = self.web_crawler.extract_links_from_html(doc.html_content, doc.uri)
-                        for link in links:
-                            if link in skip_urls:
-                                continue
-                            if prefixes and not any(link.lower().startswith(p.lower()) for p in prefixes):
-                                continue
-                            recovered_urls.add(link)
-
+                if seed_domain:
+                    recovered_urls = self.manifest_store.recover_links(
+                        seed_domain, skip_urls, prefixes,
+                    )
                 if recovered_urls:
                     self._log_info_task(task_id, f"Recovered {len(recovered_urls)} URLs for prefixes [{prefix_repr}]")
 
@@ -1235,6 +1224,10 @@ class TaskService:
                 finally:
                     if not loop_aborted and pending_tasks:
                         await asyncio.gather(*pending_tasks)
+
+                # Deduplicate manifest after each config completes
+                if seed_domain:
+                    self.manifest_store.merge_and_dedup(seed_domain)
 
                 self._log_info_task(task_id, f"Crawl {config_label} completed")
 
@@ -1298,24 +1291,6 @@ class TaskService:
                 self._log_info_task(task_id, "No documents need vectorization")
 
         # ========================================
-        # Stage: rewrite_static
-        # ========================================
-        if start_index <= STAGES.index("rewrite_static"):
-            if self._check_task_cancelled(task_id):
-                await self._apply_stop(task_id)
-                return
-
-            self._update_stage(task_id, "rewrite_static")
-
-            docs = self.doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
-            crawled_docs = [d for d in docs if d.uri and d.source_path and d.clean_html]
-            stats.phase = "rewrite"
-            stats.rewrite_total = len(crawled_docs)
-            stats.rewrite_done = 0
-            self.update_url_task_progress(task_id, stats)
-            await self._rewrite_html_links(task_id, collection_id, stats)
-
-        # ========================================
         # Stage: categorize
         # ========================================
         if "categorize" in STAGES and start_index <= STAGES.index("categorize"):
@@ -1376,8 +1351,6 @@ class TaskService:
                 url=crawl_result.url,
                 title=crawl_result.title,
                 content=crawl_result.content,
-                html_content=crawl_result.html_content,
-                clean_html=crawl_result.clean_html,
                 summary="",
                 doc_status=doc_status,
                 error_message=crawl_result.error,
@@ -1423,8 +1396,6 @@ class TaskService:
                 url=page_url,
                 title=crawl_result.title,
                 content=crawl_result.content,
-                html_content=crawl_result.html_content,
-                clean_html=crawl_result.clean_html,
                 summary=summary,
                 doc_status="indexed",
                 error_message=None,
@@ -1432,6 +1403,8 @@ class TaskService:
                 chunks=chunks,
                 chunk_embeddings=chunk_embeddings,
             )
+            # Record discovered links for checkpoint resume
+            self.manifest_store.record_links(page_url, crawl_result.links)
         except Exception as e:
             self._log_err_task(task_id, f"Storage failed for {page_url}: {e}")
 
@@ -1441,8 +1414,6 @@ class TaskService:
         url: str,
         title: str,
         content: str,
-        html_content: str,
-        clean_html: str,
         summary: str,
         doc_status: str,
         error_message: str | None,
@@ -1475,8 +1446,6 @@ class TaskService:
             name=title or f"Page from {url}",
             uri=url,
             content=content,
-            html_content=html_content,
-            clean_html=clean_html,
             summary=summary,
             source_path=source_path,
             size_bytes=len(content.encode()) if content else 0,
@@ -1537,507 +1506,6 @@ class TaskService:
                     content=content or "",
                     document_name=title or url,
                 )
-
-    @staticmethod
-    def _canonicalize_page_url(url: str) -> str:
-        """Canonical URL for page matching: drop query/fragment and trailing slash."""
-        stripped, _ = urldefrag(url.strip())
-        parsed = urlparse(stripped)
-        if not parsed.scheme or not parsed.netloc:
-            return stripped
-        canonical = parsed._replace(query="", fragment="")
-        return canonical.geturl().rstrip("/")
-
-    @staticmethod
-    def _canonicalize_asset_url(url: str) -> str:
-        """Canonical URL for asset deduplication: keep query, drop fragment."""
-        stripped, _ = urldefrag(url.strip())
-        parsed = urlparse(stripped)
-        if not parsed.scheme or not parsed.netloc:
-            return stripped
-        return parsed.geturl()
-
-    @staticmethod
-    def _source_path_to_page_rel_path(source_path: str) -> str:
-        """Map URL source_path to local HTML path under pages/."""
-        clean = source_path.split("?", 1)[0].split("#", 1)[0].strip().lstrip("/")
-        if not clean:
-            return "pages/index.html"
-
-        suffix = Path(clean).suffix.lower()
-        if suffix in {".html", ".htm"}:
-            return f"pages/{clean}"
-        return f"pages/{clean}.html"
-
-    @staticmethod
-    def _relative_link(from_rel_path: str, to_rel_path: str) -> str:
-        from_dir = str(Path(from_rel_path).parent)
-        rel = os.path.relpath(to_rel_path, start=from_dir)
-        return rel.replace("\\", "/")
-
-    @staticmethod
-    def _should_skip_reference(value: str) -> bool:
-        ref = value.strip().lower()
-        return (
-            not ref
-            or ref.startswith("#")
-            or ref.startswith("javascript:")
-            or ref.startswith("mailto:")
-            or ref.startswith("tel:")
-            or ref.startswith("data:")
-            or ref.startswith("blob:")
-            or ref.startswith("ftp:")
-        )
-
-    @staticmethod
-    def _domain_key(url: str) -> str:
-        return urlparse(url).netloc.lower().replace(":", "_")
-
-    @staticmethod
-    def _guess_asset_category(asset_url: str, content_type: str) -> str:
-        ct = content_type.lower()
-        suffix = Path(urlparse(asset_url).path).suffix.lower()
-
-        if ct.startswith("text/css") or suffix == ".css":
-            return "css"
-        if "javascript" in ct or suffix in {".js", ".mjs"}:
-            return "js"
-        if ct.startswith("image/") or suffix in {
-            ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico", ".bmp", ".avif",
-        }:
-            return "img"
-        if ct.startswith("font/") or suffix in {".woff", ".woff2", ".ttf", ".otf", ".eot"}:
-            return "fonts"
-        if ct.startswith("audio/") or ct.startswith("video/"):
-            return "media"
-        return "misc"
-
-    def _mirror_asset(
-        self,
-        asset_url: str,
-        domain_dir: Path,
-        asset_map: dict[str, str],
-        failed_assets: set[str],
-    ) -> str | None:
-        """Download one static asset and return its local relative path."""
-        canonical = self._canonicalize_asset_url(asset_url)
-
-        logger.debug(f"Processing asset: {asset_url} (canonical: {canonical})")
-
-        if canonical in asset_map:
-            logger.debug(f"Asset {canonical} already in cache, returning: {asset_map[canonical]}")
-            return asset_map[canonical]
-        if canonical in failed_assets:
-            logger.debug(f"Asset {canonical} failed previously, skipping")
-            return None
-
-        # Check disk cache before downloading
-        file_hash = hashlib.sha1(canonical.encode()).hexdigest()[:24]
-        assets_dir = domain_dir / "assets"
-        if assets_dir.exists():
-            for category_dir in assets_dir.iterdir():
-                if not category_dir.is_dir():
-                    continue
-                for existing_file in category_dir.iterdir():
-                    if existing_file.name.startswith(file_hash):
-                        local_rel_path = str(existing_file.relative_to(domain_dir)).replace("\\", "/")
-                        asset_map[canonical] = local_rel_path
-                        logger.debug(f"Asset {canonical} found in disk cache, returning: {local_rel_path}")
-                        return local_rel_path
-
-        try:
-            logger.debug(f"Downloading asset: {canonical}")
-            response = self.web_crawler.session.get(canonical, timeout=30)
-            response.raise_for_status()
-        except Exception as e:
-            logger.error(f"Failed to download asset {canonical}: {e}")
-            failed_assets.add(canonical)
-            return None
-
-        content_type = response.headers.get("Content-Type", "").split(";")[0].strip().lower()
-        logger.debug(f"Asset {canonical} content-type: {content_type}")
-
-        if content_type.startswith("text/html"):
-            logger.debug(f"Skipping HTML asset: {canonical}")
-            failed_assets.add(canonical)
-            return None
-
-        suffix = Path(urlparse(canonical).path).suffix.lower()
-        if not suffix:
-            suffix = mimetypes.guess_extension(content_type) or ""
-        if suffix == ".jpe":
-            suffix = ".jpg"
-
-        category = self._guess_asset_category(canonical, content_type)
-        file_hash = hashlib.sha1(canonical.encode()).hexdigest()[:24]
-        local_rel_path = f"assets/{category}/{file_hash}{suffix}"
-        local_abs_path = domain_dir / local_rel_path
-        local_abs_path.parent.mkdir(parents=True, exist_ok=True)
-
-        logger.debug(f"Asset {canonical} will be saved to: {local_rel_path} (category: {category})")
-
-        content_bytes = response.content
-        if category == "css":
-            logger.debug(f"Rewriting CSS references in: {canonical}")
-            encoding = response.encoding or "utf-8"
-            try:
-                css_text = response.content.decode(encoding, errors="replace")
-            except Exception:
-                css_text = response.content.decode("utf-8", errors="replace")
-            css_text = self._rewrite_css_references(
-                css_text=css_text,
-                base_url=canonical,
-                current_rel_path=local_rel_path,
-                domain_dir=domain_dir,
-                asset_map=asset_map,
-                failed_assets=failed_assets,
-            )
-            content_bytes = css_text.encode("utf-8")
-
-        local_abs_path.write_bytes(content_bytes)
-        asset_map[canonical] = local_rel_path
-        failed_assets.discard(canonical)
-        logger.info(f"Successfully mirrored asset: {canonical} -> {local_rel_path} ({len(content_bytes)} bytes)")
-        return local_rel_path
-
-    def _rewrite_css_references(
-        self,
-        css_text: str,
-        base_url: str,
-        current_rel_path: str,
-        domain_dir: Path,
-        asset_map: dict[str, str],
-        failed_assets: set[str],
-    ) -> str:
-        """Rewrite CSS url(...) and @import references to local mirrored assets."""
-        url_pattern = re.compile(r"url\((?P<inner>[^)]+)\)", flags=re.IGNORECASE)
-        import_pattern = re.compile(
-            r"@import\s+(?P<quote>['\"])(?P<ref>.+?)(?P=quote)",
-            flags=re.IGNORECASE,
-        )
-
-        def replace_import(match: re.Match[str]) -> str:
-            ref = match.group("ref").strip()
-            if self._should_skip_reference(ref):
-                return match.group(0)
-            target_url = urljoin(base_url, ref)
-            logger.debug(f"Processing @import: {ref} (resolved: {target_url})")
-            local_rel = self._mirror_asset(target_url, domain_dir, asset_map, failed_assets)
-            if not local_rel:
-                logger.warning(f"Failed to mirror CSS import asset: {target_url}")
-                return match.group(0)
-            rewritten = self._relative_link(current_rel_path, local_rel)
-            logger.info(f"Rewriting @import: {ref} -> {rewritten}")
-            quote = match.group("quote")
-            return f"@import {quote}{rewritten}{quote}"
-
-        def replace_url(match: re.Match[str]) -> str:
-            inner = match.group("inner").strip()
-            quote = ""
-            if (inner.startswith('"') and inner.endswith('"')) or (
-                inner.startswith("'") and inner.endswith("'")
-            ):
-                quote = inner[0]
-                inner = inner[1:-1].strip()
-            if self._should_skip_reference(inner):
-                return match.group(0)
-            target_url = urljoin(base_url, inner)
-            logger.debug(f"Processing CSS url(): {inner} (resolved: {target_url})")
-            local_rel = self._mirror_asset(target_url, domain_dir, asset_map, failed_assets)
-            if not local_rel:
-                logger.warning(f"Failed to mirror CSS url() asset: {target_url}")
-                return match.group(0)
-            rewritten = self._relative_link(current_rel_path, local_rel)
-            logger.debug(f"Rewriting CSS url(): {inner} -> {rewritten}")
-            if quote:
-                return f"url({quote}{rewritten}{quote})"
-            return f"url({rewritten})"
-
-        css_text = import_pattern.sub(replace_import, css_text)
-        css_text = url_pattern.sub(replace_url, css_text)
-        return css_text
-
-    def _rewrite_srcset(
-        self,
-        srcset: str,
-        page_url: str,
-        page_rel_path: str,
-        domain_dir: Path,
-        asset_map: dict[str, str],
-        failed_assets: set[str],
-    ) -> str:
-        """Rewrite each srcset URL to local mirrored assets."""
-        rewritten_entries: list[str] = []
-        changed = False
-
-        for raw_entry in srcset.split(","):
-            entry = raw_entry.strip()
-            if not entry:
-                continue
-            parts = entry.split()
-            ref = parts[0]
-            if self._should_skip_reference(ref):
-                rewritten_entries.append(entry)
-                continue
-            target_url = urljoin(page_url, ref)
-            logger.debug(f"Processing srcset entry: {ref} (resolved: {target_url})")
-            local_rel = self._mirror_asset(target_url, domain_dir, asset_map, failed_assets)
-            if not local_rel:
-                logger.warning(f"Failed to mirror srcset asset: {target_url}")
-                rewritten_entries.append(entry)
-                continue
-            rel_ref = self._relative_link(page_rel_path, local_rel)
-            descriptor = " ".join(parts[1:]).strip()
-            rewritten_entries.append(f"{rel_ref} {descriptor}".strip())
-            logger.debug(f"Rewriting srcset entry: {entry} -> {rel_ref} {descriptor}")
-            changed = True
-
-        if not changed:
-            return srcset
-        return ", ".join(rewritten_entries)
-
-    @staticmethod
-    def _render_markdown_frontmatter(source_url: str, title: str, markdown_content: str) -> str:
-        escaped_title = title.replace("\\", "\\\\").replace('"', '\\"')
-        escaped_url = source_url.replace("\\", "\\\\").replace('"', '\\"')
-        crawled_at = datetime.now(timezone.utc).isoformat()
-        return (
-            f"---\n"
-            f"source_url: \"{escaped_url}\"\n"
-            f"title: \"{escaped_title}\"\n"
-            f"crawled_at: \"{crawled_at}\"\n"
-            f"---\n\n"
-            f"{markdown_content or ''}"
-        )
-
-    async def _rewrite_html_links(self, task_id: str, collection_id: str, stats: UrlTaskStats):
-        """Phase 2: mirror static assets and rewrite links to local relative paths."""
-        from bs4 import BeautifulSoup
-
-        self._log_info_task(task_id, "Mirroring static assets and rewriting HTML links...")
-        docs = self.doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
-        crawled_docs = [d for d in docs if d.uri and d.source_path and d.clean_html]
-        if not crawled_docs:
-            self._log_info_task(task_id, "No crawled HTML pages found, skipping link rewriting")
-            return
-
-        logger.info(f"Starting link rewriting for {len(crawled_docs)} crawled pages")
-
-        page_rel_map: dict[str, str] = {}
-        for doc in crawled_docs:
-            assert doc.uri and doc.source_path
-            page_rel_map[self._canonicalize_page_url(doc.uri)] = self._source_path_to_page_rel_path(doc.source_path)
-
-        cache_root = Path(self.config.get_crawl_cache_dir())
-        rewritten_pages = 0
-        total_assets = 0
-        total_failed_assets = 0
-
-        docs_by_domain: dict[str, list[DocumentDTO]] = {}
-        for doc in crawled_docs:
-            assert doc.uri
-            docs_by_domain.setdefault(self._domain_key(doc.uri), []).append(doc)
-
-        for domain_key, domain_docs in docs_by_domain.items():
-            domain_dir = cache_root / domain_key
-            (domain_dir / "pages").mkdir(parents=True, exist_ok=True)
-            (domain_dir / "assets").mkdir(parents=True, exist_ok=True)
-            (domain_dir / "manifests").mkdir(parents=True, exist_ok=True)
-
-            asset_map: dict[str, str] = {}
-            failed_assets: set[str] = set()
-            pages_manifest: dict[str, str] = {}
-
-            for doc in domain_docs:
-                if not doc.id or not doc.clean_html or not doc.uri or not doc.source_path:
-                    continue
-
-                canonical_page_url = self._canonicalize_page_url(doc.uri)
-                page_rel_path = page_rel_map[canonical_page_url]
-                pages_manifest[canonical_page_url] = page_rel_path
-
-                logger.debug(f"Processing page: {doc.uri} -> {page_rel_path}")
-
-                soup = BeautifulSoup(doc.clean_html, "lxml")
-                changed = False
-
-                for a_tag in soup.find_all("a", href=True):
-                    raw_href = str(a_tag.get("href", "")).strip()
-                    if self._should_skip_reference(raw_href):
-                        continue
-                    resolved = urljoin(doc.uri, raw_href)
-                    target_rel = page_rel_map.get(self._canonicalize_page_url(resolved))
-                    if not target_rel:
-                        continue
-                    new_href = self._relative_link(page_rel_path, target_rel)
-                    if new_href != raw_href:
-                        logger.info(f"Rewriting page link: {raw_href} -> {new_href} (resolves to {resolved})")
-                        a_tag["href"] = new_href
-                        changed = True
-
-                for script_tag in soup.find_all("script", src=True):
-                    raw_src = str(script_tag.get("src", "")).strip()
-                    if self._should_skip_reference(raw_src):
-                        continue
-                    resolved = urljoin(doc.uri, raw_src)
-                    logger.debug(f"Found script asset: {raw_src} (resolved: {resolved})")
-                    local_rel = self._mirror_asset(resolved, domain_dir, asset_map, failed_assets)
-                    if not local_rel:
-                        logger.warning(f"Failed to mirror script asset: {resolved}")
-                        continue
-                    new_src = self._relative_link(page_rel_path, local_rel)
-                    if new_src != raw_src:
-                        logger.info(f"Rewriting script src: {raw_src} -> {new_src}")
-                        script_tag["src"] = new_src
-                        changed = True
-
-                for media_tag in soup.find_all(
-                    ["img", "source", "video", "audio", "track", "embed", "iframe", "input"]
-                ):
-                    for attr in ("src", "poster", "data-src"):
-                        if not media_tag.has_attr(attr):
-                            continue
-                        raw_value = str(media_tag.get(attr, "")).strip()
-                        if self._should_skip_reference(raw_value):
-                            continue
-                        resolved = urljoin(doc.uri, raw_value)
-                        logger.debug(f"Found media asset: {raw_value} (resolved: {resolved})")
-                        local_rel = self._mirror_asset(resolved, domain_dir, asset_map, failed_assets)
-                        if not local_rel:
-                            logger.warning(f"Failed to mirror media asset: {resolved}")
-                            continue
-                        new_value = self._relative_link(page_rel_path, local_rel)
-                        if new_value != raw_value:
-                            logger.info(f"Rewriting {attr} for <{media_tag.name}>: {raw_value} -> {new_value}")
-                            media_tag[attr] = new_value
-                            changed = True
-
-                    if media_tag.has_attr("srcset"):
-                        raw_srcset = str(media_tag.get("srcset", "")).strip()
-                        if raw_srcset:
-                            logger.debug(f"Found srcset: {raw_srcset}")
-                            rewritten_srcset = self._rewrite_srcset(
-                                srcset=raw_srcset,
-                                page_url=doc.uri,
-                                page_rel_path=page_rel_path,
-                                domain_dir=domain_dir,
-                                asset_map=asset_map,
-                                failed_assets=failed_assets,
-                            )
-                            if rewritten_srcset != raw_srcset:
-                                logger.info(f"Rewriting srcset: {raw_srcset} -> {rewritten_srcset}")
-                                media_tag["srcset"] = rewritten_srcset
-                                changed = True
-
-                asset_rel_types = {"stylesheet", "icon", "shortcut icon", "preload", "prefetch", "apple-touch-icon"}
-                for link_tag in soup.find_all("link", href=True):
-                    raw_href = str(link_tag.get("href", "")).strip()
-                    if self._should_skip_reference(raw_href):
-                        continue
-                    link_rel = str(link_tag.get("rel", "")).lower()
-                    if not any(r in asset_rel_types for r in link_rel.split()):
-                        logger.debug(f"Skipping non-asset <link rel='{link_rel}'>: {raw_href}")
-                        continue
-                    resolved = urljoin(doc.uri, raw_href)
-                    logger.debug(f"Found link asset: {raw_href} (resolved: {resolved})")
-                    local_rel = self._mirror_asset(resolved, domain_dir, asset_map, failed_assets)
-                    if not local_rel:
-                        logger.warning(f"Failed to mirror link asset: {resolved}")
-                        continue
-                    new_href = self._relative_link(page_rel_path, local_rel)
-                    if new_href != raw_href:
-                        logger.info(f"Rewriting link href: {raw_href} -> {new_href}")
-                        link_tag["href"] = new_href
-                        changed = True
-
-                for style_tag in soup.find_all("style"):
-                    css_text = style_tag.string
-                    if not css_text:
-                        continue
-                    logger.debug("Found style tag, rewriting CSS references")
-                    rewritten_css = self._rewrite_css_references(
-                        css_text=css_text,
-                        base_url=doc.uri,
-                        current_rel_path=page_rel_path,
-                        domain_dir=domain_dir,
-                        asset_map=asset_map,
-                        failed_assets=failed_assets,
-                    )
-                    if rewritten_css != css_text:
-                        logger.info("Rewriting style tag content with CSS references")
-                        style_tag.string.replace_with(rewritten_css)
-                        changed = True
-
-                for styled_tag in soup.find_all(style=True):
-                    inline_css = str(styled_tag.get("style", ""))
-                    if not inline_css:
-                        continue
-                    logger.debug(f"Found inline style on <{getattr(styled_tag, 'name', 'tag')}>: {inline_css}")
-                    rewritten_inline = self._rewrite_css_references(
-                        css_text=inline_css,
-                        base_url=doc.uri,
-                        current_rel_path=page_rel_path,
-                        domain_dir=domain_dir,
-                        asset_map=asset_map,
-                        failed_assets=failed_assets,
-                    )
-                    if rewritten_inline != inline_css:
-                        logger.info(f"Rewriting inline style on <{getattr(styled_tag, 'name', 'tag')}>: {inline_css} -> {rewritten_inline}")
-                        styled_tag["style"] = rewritten_inline
-                        changed = True
-
-                rewritten_html = str(soup)
-                if changed:
-                    self.doc_repo.update(doc.id, clean_html=rewritten_html)
-                    rewritten_pages += 1
-
-                stats.rewrite_done += 1
-                self.update_url_task_progress(task_id, stats)
-
-                page_file = domain_dir / page_rel_path
-                page_file.parent.mkdir(parents=True, exist_ok=True)
-                page_file.write_text(rewritten_html, encoding="utf-8")
-
-                if page_rel_path.endswith(".html"):
-                    markdown_rel_path = page_rel_path[:-5] + ".md"
-                else:
-                    markdown_rel_path = f"{page_rel_path}.md"
-                markdown_file = domain_dir / markdown_rel_path
-                markdown_file.parent.mkdir(parents=True, exist_ok=True)
-                markdown_file.write_text(
-                    self._render_markdown_frontmatter(
-                        source_url=doc.uri,
-                        title=doc.name or "",
-                        markdown_content=doc.content or "",
-                    ),
-                    encoding="utf-8",
-                )
-
-            (domain_dir / "manifests" / "pages.json").write_text(
-                json.dumps(pages_manifest, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            (domain_dir / "manifests" / "assets.json").write_text(
-                json.dumps(asset_map, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            (domain_dir / "manifests" / "failed_assets.json").write_text(
-                json.dumps(sorted(failed_assets), ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            total_assets += len(asset_map)
-            total_failed_assets += len(failed_assets)
-            logger.info(f"Domain {domain_key} complete: {len(asset_map)} assets mirrored, {len(failed_assets)} failed")
-
-        summary_msg = (
-            f"Link rewriting complete: {rewritten_pages} pages updated, "
-            f"{total_assets} assets mirrored, {total_failed_assets} assets failed"
-        )
-        logger.info(summary_msg)
-        self._log_info_task(
-            task_id,
-            summary_msg
-        )
 
     @staticmethod
     def _detect_source_language(pages: list[dict]) -> str:

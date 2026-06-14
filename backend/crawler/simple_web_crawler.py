@@ -31,8 +31,6 @@ class SimpleCrawlResult:
     url: str
     title: str
     content: str
-    html_content: str
-    clean_html: str
     links: list[str]
     success: bool
     error: Optional[str] = None
@@ -103,13 +101,6 @@ class SimpleWebCrawler:
         except Exception:
             return False
 
-    def _clean_html(self, html: str) -> str:
-        """Remove navigation/layout elements from raw HTML for clean preview."""
-        soup = BeautifulSoup(html, "lxml")
-        for tag in soup(["script", "style", "nav", "header", "footer", "aside"]):
-            tag.decompose()
-        return str(soup)
-
     def _extract_content(self, html: str, url: str) -> tuple[str, str, list[str]]:
         """Extract title, markdown content and links from HTML"""
         soup = BeautifulSoup(html, "lxml")
@@ -118,7 +109,7 @@ class SimpleWebCrawler:
         title_tag = soup.find("title")
         title = title_tag.get_text(strip=True) if title_tag else ""
 
-        # Remove navigation/layout elements (keep in sync with _clean_html)
+        # Remove navigation/layout elements
         for tag in soup(["script", "style", "nav", "header", "footer", "aside"]):
             tag.decompose()
 
@@ -158,11 +149,6 @@ class SimpleWebCrawler:
                     links.append(clean_url)
 
         return title, markdown_content, links
-
-    def extract_links_from_html(self, html: str, base_url: str) -> list[str]:
-        """Extract same-domain links from stored HTML (used for resuming interrupted crawls)."""
-        _, _, links = self._extract_content(html, base_url)
-        return links
 
     def _check_markdown_alternate(self, html: str, base_url: str) -> Optional[str]:
         """Check if HTML has an alternate markdown link and return its absolute URL."""
@@ -216,27 +202,21 @@ class SimpleWebCrawler:
                 md_response = self.session.get(md_url, timeout=10)
                 md_response.raise_for_status()
                 title, content, links = self._extract_from_markdown(md_response.text, url)
-                clean_html = self._clean_html(html_content)
                 return SimpleCrawlResult(
                     url=url,
                     title=title,
                     content=content,
-                    html_content=html_content,
-                    clean_html=clean_html,
                     links=links,
                     success=True,
                 )
             except Exception as e:
                 logger.warning(f"Failed to fetch markdown alternate {md_url}: {e}, falling back to HTML")
 
-        clean_html = self._clean_html(html_content)
-        title, content, links = self._extract_content(clean_html, url)
+        title, content, links = self._extract_content(html_content, url)
         return SimpleCrawlResult(
             url=url,
             title=title,
             content=content,
-            html_content=html_content,
-            clean_html=clean_html,
             links=links,
             success=True,
         )
@@ -340,7 +320,7 @@ class SimpleWebCrawler:
             except Exception as e:
                 failed_urls.add(url)
                 result = SimpleCrawlResult(
-                    url=url, title="", content="", html_content="", clean_html="",
+                    url=url, title="", content="",
                     links=[], success=False, error=str(e),
                 )
                 logger.warning(f"Failed to crawl {url}: {e}")

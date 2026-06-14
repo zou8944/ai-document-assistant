@@ -43,7 +43,6 @@ export interface Document {
   created_at: string
   updated_at: string
   error_message?: string
-  html_content?: string
   source_path?: string
 }
 
@@ -411,13 +410,6 @@ export class DocumentAssistantAPI {
     }>>(
       `/api/v1/collections/${encodeURIComponent(collectionId)}/readme`
     )
-  }
-
-  /**
-   * Get the URL for previewing a crawled document's HTML
-   */
-  getDocumentPreviewUrl(collectionId: string, documentId: string): string {
-    return `${this.baseURL}/api/v1/collections/${encodeURIComponent(collectionId)}/documents/${encodeURIComponent(documentId)}/preview`
   }
 
   /**

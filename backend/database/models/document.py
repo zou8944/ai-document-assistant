@@ -119,15 +119,6 @@ class Document(Base):
         server_default="",
         doc="Document content (Markdown, used for RAG)"
     )
-    html_content: Mapped[Optional[str]] = mapped_column(
-        Text,
-        doc="Raw HTML content for link recovery (crawled pages only)"
-    )
-    clean_html: Mapped[Optional[str]] = mapped_column(
-        Text,
-        doc="Cleaned HTML content with nav/aside/header/footer removed for preview (crawled pages only)"
-    )
-
     # Task tracking
     source_task_id: Mapped[Optional[str]] = mapped_column(
         String(32),

@@ -4,8 +4,6 @@ Document processing service for handling files and web content.
 
 import logging
 import mimetypes
-import re
-from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import Response
@@ -199,84 +197,6 @@ class DocumentService:
             content=document.content.encode("utf-8") if document.content else b"",
             media_type=document.mime_type or "text/plain",
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-        )
-
-    @staticmethod
-    def _source_path_to_page_rel_path(source_path: str) -> str:
-        """Map URL source_path to local HTML path under pages/."""
-        clean = source_path.split("?", 1)[0].split("#", 1)[0].strip().lstrip("/")
-        if not clean:
-            return "pages/index.html"
-
-        suffix = Path(clean).suffix.lower()
-        if suffix in {".html", ".htm"}:
-            return f"pages/{clean}"
-        return f"pages/{clean}.html"
-
-    def _compute_preview_base_href(self, document: DocumentDTO, collection_id: str) -> str | None:
-        """Compute the <base> href for previewing a crawled page in the browser."""
-        if not document.source_path:
-            return None
-
-        page_rel_path = self._source_path_to_page_rel_path(document.source_path)
-        page_dir = str(Path(page_rel_path).parent)
-        if page_dir == ".":
-            page_dir = ""
-
-        base = f"/api/v1/collections/{collection_id}/static/"
-        if page_dir:
-            base += page_dir + "/"
-        return base
-
-    @staticmethod
-    def _inject_base_tag(html: str, base_href: str) -> str:
-        """Inject or replace a <base> tag in the HTML."""
-        base_tag = f'<base href="{base_href}">'
-
-        # If a <base> tag already exists, replace its href attribute
-        if re.search(r"<base\b", html, re.IGNORECASE):
-            return re.sub(
-                r"<base\b[^>]*>",
-                base_tag,
-                html,
-                count=1,
-                flags=re.IGNORECASE,
-            )
-
-        # Try to insert after <head> tag
-        head_match = re.search(r"<head\b[^>]*>", html, re.IGNORECASE)
-        if head_match:
-            insert_pos = head_match.end()
-            return html[:insert_pos] + "\n" + base_tag + html[insert_pos:]
-
-        # Try to insert after <html> tag (wrap with <head>)
-        html_match = re.search(r"<html\b[^>]*>", html, re.IGNORECASE)
-        if html_match:
-            insert_pos = html_match.end()
-            return html[:insert_pos] + "\n<head>\n" + base_tag + "\n</head>" + html[insert_pos:]
-
-        # Fallback: prepend to the beginning
-        return base_tag + "\n" + html
-
-    async def preview_document(self, collection_id: str, document_id: str) -> Optional[Response]:
-        """Return rewritten HTML content for offline preview (crawled pages only)"""
-        document = self.doc_repo.get_by_id(document_id)
-
-        if not document or document.collection_id != collection_id:
-            return None
-
-        if not document.clean_html:
-            return None
-
-        base_href = self._compute_preview_base_href(document, collection_id)
-        if base_href:
-            html = self._inject_base_tag(document.clean_html, base_href)
-        else:
-            html = document.clean_html
-
-        return Response(
-            content=html.encode("utf-8"),
-            media_type="text/html",
         )
 
     async def get_document_content(
