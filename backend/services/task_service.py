@@ -1579,12 +1579,14 @@ class TaskService:
         return trie
 
     @classmethod
-    def _prune_trie(cls, trie: dict, min_group_size: int, depth: int = 0, max_depth: int = 3) -> list[dict]:
+    def _prune_trie(cls, trie: dict, min_group_size: int, depth: int = 0, max_depth: int = 3, index_page: dict | None = None) -> list[dict]:
         """Prune trie into nested CategoryNode list.
 
         - Merge single-child chains (e.g. sdk -> ios -> ui becomes "sdk/ios/ui")
-        - Nodes with < min_group_size pages are merged into "Other"
+        - Nodes with < min_group_size pages are merged into "Other" (or "详情" if index_page is set)
         - Depth capped at max_depth
+        - index_page: if set (LCP matched a page path exactly), that page sits at category level
+          and remaining pages go into a "详情" subcategory instead of "Other"
         """
         nodes: list[dict] = []
 
@@ -1645,7 +1647,15 @@ class TaskService:
                 final_nodes.append(node)
 
         if other_pages:
-            final_nodes.append({"category": "Other", "pages": other_pages, "children": []})
+            if index_page is not None:
+                # Index page sits at category level; remaining pages form "详情"
+                final_nodes.append({
+                    "category": "详情",
+                    "pages": other_pages,
+                    "children": [],
+                })
+            else:
+                final_nodes.append({"category": "Other", "pages": other_pages, "children": []})
 
         return final_nodes
 
@@ -1684,19 +1694,34 @@ class TaskService:
 
         Algorithm:
         1. Find longest common path prefix (LCP), strip it
-        2. Build trie from relative paths
-        3. Prune trie: merge single-child chains, collapse small groups, cap depth at 3
+        2. If a page's path exactly matches LCP, extract it as "index page"
+        3. Build trie from remaining relative paths
+        4. Prune trie: merge single-child chains, collapse small groups, cap depth at 3
         """
         if not pages:
             return []
 
         paths = [p.get("path", "") for p in pages]
         lcp_segments = cls._longest_common_prefix(paths)
+        lcp_str = "/" + "/".join(lcp_segments) if lcp_segments else ""
+
+        # Detect index page: a page whose path exactly matches the LCP
+        # Only meaningful when there are other pages to organize under it
+        index_page: dict | None = None
+        remaining_pages: list[dict] = []
+        if len(pages) > 1:
+            for page in pages:
+                if page["path"].strip("/") == lcp_str.strip("/") and not index_page:
+                    index_page = page
+                else:
+                    remaining_pages.append(page)
+
+        work_pages = remaining_pages if index_page else pages
 
         # Strip LCP from each page's path to get relative paths
         offset = len(lcp_segments)
         pages_with_rel: list[dict] = []
-        for page in pages:
+        for page in work_pages:
             norm = page["path"].strip("/")
             segments = norm.split("/") if norm else []
             rel_segments = segments[offset:]
@@ -1725,7 +1750,13 @@ class TaskService:
                 trie["__root_pages__"].append(page)
 
         # Prune trie into nested groups
-        groups = cls._prune_trie(trie, min_group_size)
+        groups = cls._prune_trie(trie, min_group_size, index_page=index_page)
+
+        # If index page was extracted, wrap trie results in a parent category
+        if index_page:
+            clean_index = {k: v for k, v in index_page.items() if k != "_rel_path"}
+            cat_name = lcp_segments[-1] if lcp_segments else "Root"
+            groups = [{"category": cat_name, "pages": [clean_index], "children": groups}]
 
         # Clean up _rel_path from pages in output
         def clean_pages(nodes: list[dict]) -> list[dict]:

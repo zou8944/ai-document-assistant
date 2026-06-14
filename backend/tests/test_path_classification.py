@@ -168,6 +168,60 @@ class TestBuildNestedPathGroups:
             assert "title" in p
             assert "_rel_path" not in p
 
+    def test_index_page_at_category_level(self):
+        """When a page path exactly matches LCP, it becomes the index page at category level."""
+        pages = [
+            {"id": "1", "path": "/docs/AppDataTransfer/CancellationResponse", "title": "Cancel"},
+            {"id": "2", "path": "/docs/AppDataTransfer/JobSubmission", "title": "Job"},
+            {"id": "3", "path": "/docs/AppDataTransfer", "title": "AppDataTransfer"},
+        ]
+        groups = TaskService._build_nested_path_groups(pages, min_group_size=2)
+        # LCP = /docs/AppDataTransfer, index page = page 3
+        # Remaining pages: CancellationResponse, JobSubmission -> "详情" subcategory
+        assert len(groups) == 1
+        cat = groups[0]
+        assert cat["category"] == "AppDataTransfer"
+        # Index page should be in the category's pages
+        page_ids = [p["id"] for p in cat["pages"]]
+        assert "3" in page_ids
+        # Child pages should be in "详情" subcategory
+        assert len(cat["children"]) == 1
+        detail = cat["children"][0]
+        assert detail["category"] == "详情"
+        detail_ids = [p["id"] for p in detail["pages"]]
+        assert "1" in detail_ids
+        assert "2" in detail_ids
+
+    def test_no_index_page_when_lcp_not_exact_match(self):
+        """When no page path matches LCP exactly, no index page is extracted."""
+        pages = [
+            {"id": "1", "path": "/docs/sdk/ios/a", "title": "A"},
+            {"id": "2", "path": "/docs/sdk/ios/b", "title": "B"},
+            {"id": "3", "path": "/docs/sdk/android/a", "title": "C"},
+            {"id": "4", "path": "/docs/sdk/android/b", "title": "D"},
+        ]
+        groups = TaskService._build_nested_path_groups(pages, min_group_size=2)
+        # LCP = /docs/sdk, no page matches it -> no index page
+        cat_names = [g["category"] for g in groups]
+        assert "详情" not in cat_names
+        assert "Other" not in cat_names
+
+    def test_index_page_only_child(self):
+        """Index page with a single child page."""
+        pages = [
+            {"id": "1", "path": "/docs/Feature/Detail", "title": "Detail"},
+            {"id": "2", "path": "/docs/Feature", "title": "Feature"},
+        ]
+        groups = TaskService._build_nested_path_groups(pages, min_group_size=2)
+        assert len(groups) == 1
+        cat = groups[0]
+        assert cat["category"] == "Feature"
+        page_ids = [p["id"] for p in cat["pages"]]
+        assert "2" in page_ids  # index page
+        # Single child -> "详情"
+        assert len(cat["children"]) == 1
+        assert cat["children"][0]["category"] == "详情"
+
 
 class TestEvaluatePathQuality:
     def test_good_quality(self):
