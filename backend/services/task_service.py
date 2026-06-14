@@ -2092,11 +2092,17 @@ Return ONLY a JSON array in this exact format:
                 self._log_err_task(task_id, f"Page title translation failed: {e}")
 
         # Step 4: Build categories JSON (recursive for nested structures)
+        # "详情" is a Chinese label used internally; map to "Detail" for English output
+        detail_label_zh = "详情"
+        detail_label_en = "Detail" if source_language == "en" else "详情"
+
         def build_category_json(nodes: list[dict], is_zh: bool = False) -> list[dict]:
             result = []
             for g in nodes:
                 cat_name = g["category"]
-                if is_zh:
+                if cat_name == detail_label_zh:
+                    cat_name = detail_label_zh if is_zh else detail_label_en
+                elif is_zh:
                     cat_name = category_names_zh.get(cat_name, cat_name)
                 cat_pages = []
                 for p in g.get("pages", []):
