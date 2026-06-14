@@ -622,18 +622,17 @@ Format:
             logger.warning(f"Failed to parse category name translation result: {raw}")
             return {}
 
-    async def translate_page_titles(self, pages: list[dict]) -> dict[str, str]:
-        """Translate page titles to Chinese. Returns {{path: zh_title}} mapping."""
-        pages_text = "\n".join(f"- {p['path']}: {p['title']}" for p in pages)
+    async def _translate_titles_batch(self, titles: list[str]) -> list[str]:
+        """Translate a batch of titles. Returns translated array in same order."""
+        titles_text = "\n".join(f"- {t}" for t in titles)
         prompt = f"""Translate the following page titles into natural Chinese.
-Respond with ONLY a JSON object mapping each path to its Chinese title.
+Respond with ONLY a JSON array of Chinese translations in the same order.
 
-Pages:
-{pages_text}
+Titles:
+{titles_text}
 
 Format:
-{{"/path": "中文标题", ...}}"""
-        logger.info(f"[translate_page_titles] pages={len(pages)}")
+["中文标题1", "中文标题2", ...]"""
         raw = await self._invoke_crawl_llm(prompt)
         cleaned = raw.strip()
         if cleaned.startswith("```"):
@@ -641,33 +640,57 @@ Format:
             cleaned = re.sub(r"\n?```$", "", cleaned)
             cleaned = cleaned.strip()
         try:
-            return json.loads(cleaned)
+            result: list[str] = json.loads(cleaned)
+            if not isinstance(result, list):
+                raise ValueError("Expected array")
+            return result
         except (json.JSONDecodeError, ValueError):
-            logger.warning(f"Failed to parse page title translation result: {raw}")
-            return {}
+            logger.warning(f"Failed to parse title translation result: {raw}")
+            return []
 
     async def translate_all_page_titles(self, pages: list[dict]) -> dict[str, str]:
-        """Translate all page titles to Chinese in batches.
+        """Translate all page titles to Chinese.
 
-        Returns {{path: zh_title}} mapping. Failures in individual batches
-        are logged but do not block other batches.
+        Deduplicates titles globally, translates in batches of 80,
+        then maps back to paths. Returns {path: zh_title} mapping.
         """
-        batch_size = 35
-        results: dict[str, str] = {}
-        total_batches = (len(pages) + batch_size - 1) // batch_size
+        # Build title -> [paths] mapping for dedup
+        title_to_paths: dict[str, list[str]] = {}
+        for p in pages:
+            title = p.get("title", "").strip()
+            path = p["path"]
+            if not title:
+                continue
+            title_to_paths.setdefault(title, []).append(path)
 
-        for i in range(0, len(pages), batch_size):
-            batch = pages[i:i + batch_size]
+        unique_titles = list(title_to_paths.keys())
+        batch_size = 80
+        translated: dict[str, str] = {}
+        total_batches = (len(unique_titles) + batch_size - 1) // batch_size
+
+        for i in range(0, len(unique_titles), batch_size):
+            batch = unique_titles[i:i + batch_size]
             batch_num = i // batch_size + 1
             try:
-                batch_result = await self.translate_page_titles(batch)
-                results.update(batch_result)
-                logger.info(f"[translate_all_page_titles] batch {batch_num}/{total_batches} done, translated {len(batch_result)} titles")
+                batch_result = await self._translate_titles_batch(batch)
+                if len(batch_result) == len(batch):
+                    for en, zh in zip(batch, batch_result):
+                        translated[en] = zh
+                else:
+                    logger.warning(f"[translate_all_page_titles] batch {batch_num} length mismatch: got {len(batch_result)}, expected {len(batch)}")
             except Exception as e:
                 logger.warning(f"[translate_all_page_titles] batch {batch_num}/{total_batches} failed: {e}")
 
-        logger.info(f"[translate_all_page_titles] total translated {len(results)}/{len(pages)} titles")
-        return results
+        # Map translated titles back to all paths
+        result: dict[str, str] = {}
+        for title, paths in title_to_paths.items():
+            zh_title = translated.get(title)
+            if zh_title:
+                for path in paths:
+                    result[path] = zh_title
+
+        logger.info(f"[translate_all_page_titles] pages={len(pages)}, unique={len(unique_titles)}, translated={len(result)}")
+        return result
 
     # ==================== Incremental Category Merge ====================
 
