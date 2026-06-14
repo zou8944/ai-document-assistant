@@ -155,17 +155,31 @@ class LLMService:
     # ==================== README Generation (Split into independent calls) ====================
 
     @staticmethod
-    def _build_groups_text(groups: list[dict], max_per_group: int = 5) -> str:
-        """Build compact group summary for prompts."""
-        group_lines = []
+    def _build_groups_text(groups: list[dict], max_per_group: int = 5, indent: int = 0) -> str:
+        """Build compact group summary for prompts. Handles nested structures."""
+        group_lines: list[str] = []
+        prefix = "  " * indent
         for g in groups:
             cat = g["category"]
-            group_pages = g["pages"]
+            group_pages = g.get("pages", [])
+            children = g.get("children", [])
             sample = group_pages[:max_per_group]
-            page_lines = "\n".join(f"    - {p['path']}: {p['title']}" for p in sample)
-            more = f"    ... and {len(group_pages) - max_per_group} more pages" if len(group_pages) > max_per_group else ""
-            group_lines.append(f"- {cat} ({len(group_pages)} pages)\n{page_lines}{more}")
+            page_lines = "\n".join(f"{prefix}    - {p['path']}: {p['title']}" for p in sample)
+            more = f"\n{prefix}    ... and {len(group_pages) - max_per_group} more pages" if len(group_pages) > max_per_group else ""
+            child_text = ""
+            if children:
+                child_text = "\n" + LLMService._build_groups_text(children, max_per_group, indent + 1)
+            group_lines.append(f"{prefix}- {cat} ({len(group_pages)} pages)\n{page_lines}{more}{child_text}")
         return "\n".join(group_lines)
+
+    @staticmethod
+    def _count_all_groups(groups: list[dict]) -> int:
+        """Count total number of groups in nested structure."""
+        count = 0
+        for g in groups:
+            count += 1
+            count += LLMService._count_all_groups(g.get("children", []))
+        return count
 
     async def generate_readme_content(self, groups: list[dict], language: str = "en", total_pages: int = 0) -> str:
         """Generate README markdown. For 'zh' generates Chinese, otherwise English.
@@ -175,7 +189,7 @@ class LLMService:
         - 30-100 pages: up to 20 per group
         - > 100 pages: up to 15 per group (further reduced if many groups)
         """
-        num_groups = len(groups)
+        num_groups = self._count_all_groups(groups)
         if total_pages < 30:
             max_per_group = total_pages  # effectively unlimited
         elif total_pages <= 100:
@@ -195,9 +209,15 @@ class LLMService:
             prompt = f"""You are analyzing a documentation website. Given the grouped page data below,
 generate a navigation guide README in Chinese. Respond with ONLY the Markdown content, no JSON wrapper.
 
+The data is hierarchical — groups may have sub-groups. Use different heading levels to reflect the hierarchy:
+- Top-level groups use ## headings
+- Sub-groups use ### headings
+- Sub-sub-groups use #### headings
+
 Rules:
 - Start with an h1 title and a short overview paragraph in blockquote (>)
 - "## 文档目录" section (at the TOP): list all groups as anchor links: [分类名](#分类名)
+  - Use indentation to show hierarchy in the table of contents
   - Use the exact group name as the anchor (no slug conversion)
 - "## 整体介绍" section (second): write 3-5 natural paragraphs describing:
   - What topics this documentation site covers overall
@@ -205,8 +225,7 @@ Rules:
   - Guidance for different users (beginners, advanced users, developers) on where to start
   - A brief overview of each group's content and how groups relate to each other
   - Use doc:///path links to point to specific key pages
-- The groups below are already ordered from beginner-friendly to advanced; preserve this order in the table of contents and section headings
-- Then list each group as a ## heading with page links underneath
+- Then list each group using the appropriate heading level based on its nesting depth
 - Under each group, start with a 1-2 sentence description of the group's theme
 - Then list the representative pages as Markdown links: [页面标题](doc:///path)
 - Include a brief description after each link (em dash separator)
@@ -220,9 +239,15 @@ Groups:
             prompt = f"""You are analyzing a documentation website. Given the grouped page data below,
 generate a navigation guide README in English. Respond with ONLY the Markdown content, no JSON wrapper.
 
+The data is hierarchical — groups may have sub-groups. Use different heading levels to reflect the hierarchy:
+- Top-level groups use ## headings
+- Sub-groups use ### headings
+- Sub-sub-groups use #### headings
+
 Rules:
 - Start with an h1 title and a short overview paragraph in blockquote (>)
 - "## Table of Contents" section (at the TOP): list all groups as anchor links: [Group Name](#Group Name)
+  - Use indentation to show hierarchy in the table of contents
   - Use the exact group name as the anchor (no slug conversion)
 - "## Overview" section (second): write 3-5 natural paragraphs describing:
   - What topics this documentation site covers overall
@@ -230,8 +255,7 @@ Rules:
   - Guidance for different users (beginners, advanced users, developers) on where to start
   - A brief overview of each group's content and how groups relate to each other
   - Use doc:///path links to point to specific key pages
-- The groups below are already ordered from beginner-friendly to advanced; preserve this order in the table of contents and section headings
-- Then list each group as a ## heading with page links underneath
+- Then list each group using the appropriate heading level based on its nesting depth
 - Under each group, start with a 1-2 sentence description of the group's theme
 - Then list the representative pages as Markdown links: [Page Title](doc:///path)
 - Include a brief description after each link (em dash separator)

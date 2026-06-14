@@ -33,6 +33,8 @@ import { toast } from '../../hooks/useToast'
 import {
   parseCategories,
   findCategoryForPath,
+  countPages,
+  type CategoryNode,
 } from '../../utils/categoryParser'
 
 interface KnowledgeBaseManagementProps {
@@ -139,7 +141,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
 
   // Recategorize modal state
   const [recategorizeModalOpen, setRecategorizeModalOpen] = useState(false)
-  const [recategorizeMode, setRecategorizeMode] = useState('ai')
+  const [recategorizeMode, setRecategorizeMode] = useState('auto')
 
   // Delete task modal state
   const [deleteTaskModalOpen, setDeleteTaskModalOpen] = useState(false)
@@ -155,22 +157,34 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   // Parse Chinese categories for display
   const categoriesZh = useMemo(() => parseCategories(categoriesJsonZh), [categoriesJsonZh])
 
-  // Build category name mapping: en -> zh
+  // Build category name mapping: en full path -> zh full path (recursive)
   const categoryNameMap = useMemo(() => {
     const map = new Map<string, string>()
     if (!isBilingual) return map
-    for (const enCat of categories) {
-      const zhCat = categoriesZh.find(c => c.pages.length > 0 && enCat.pages.some(ep => c.pages.some(zp => zp.path === ep.path)))
-      if (zhCat) {
-        map.set(enCat.category, zhCat.category)
+
+    function buildMap(enNodes: CategoryNode[], zhNodes: CategoryNode[], parentPath: string) {
+      for (const enCat of enNodes) {
+        const enFullPath = parentPath ? `${parentPath}/${enCat.category}` : enCat.category
+        // Find matching zh node by page path overlap
+        const zhCat = zhNodes.find(c =>
+          c.pages.length > 0 && enCat.pages.some(ep => c.pages.some(zp => zp.path === ep.path))
+        ) || zhNodes.find(c => c.category === enCat.category)
+        if (zhCat) {
+          const zhFullPath = parentPath ? `${parentPath}/${zhCat.category}` : zhCat.category
+          map.set(enFullPath, zhFullPath)
+          if (enCat.children?.length && zhCat.children?.length) {
+            buildMap(enCat.children, zhCat.children, enFullPath)
+          }
+        }
       }
     }
+    buildMap(categories, categoriesZh, '')
     return map
   }, [categories, categoriesZh, isBilingual])
 
-  // README doc count
+  // README doc count (recursive)
   const readmeDocCount = useMemo(() => {
-    return categories.reduce((sum, cat) => sum + cat.pages.length, 0)
+    return categories.reduce((sum, cat) => sum + countPages(cat), 0)
   }, [categories])
 
   // Find selected document
@@ -185,7 +199,7 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     return findCategoryForPath(categories, selectedDoc.source_path)
   }, [selectedDoc, categories])
 
-  // Group -> docs mapping
+  // Group -> docs mapping (supports nested categories with full path keys)
   const groupDocsMap = useMemo(() => {
     const docByPath = new Map<string, MappedDoc>()
     for (const d of documents) {
@@ -194,28 +208,46 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
 
     const map = new Map<string, MappedDoc[]>()
 
-    // Per-category groups: preserve cat.pages order
-    for (const cat of categories) {
-      const docs: MappedDoc[] = []
-      for (const p of cat.pages) {
-        const d = docByPath.get(p.path)
-        if (d) docs.push(d)
+    // Recursively build docs for each category node
+    function buildGroupDocs(nodes: CategoryNode[], parentPath: string) {
+      for (const cat of nodes) {
+        const fullPath = parentPath ? `${parentPath}/${cat.category}` : cat.category
+        const docs: MappedDoc[] = []
+        // Direct pages at this level
+        for (const p of cat.pages) {
+          const d = docByPath.get(p.path)
+          if (d) docs.push(d)
+        }
+        map.set(fullPath, docs)
+        if (cat.children?.length) {
+          buildGroupDocs(cat.children, fullPath)
+        }
       }
-      map.set(cat.category, docs)
     }
+    buildGroupDocs(categories, '')
 
     // 'all' view: uncategorized (lex sorted) first, then grouped in order
-    const coveredPaths = new Set(categories.flatMap(c => c.pages.map(p => p.path)))
+    const allCoveredPaths = new Set<string>()
+    function collectPaths(nodes: CategoryNode[]) {
+      for (const n of nodes) {
+        for (const p of n.pages) allCoveredPaths.add(p.path)
+        if (n.children) collectPaths(n.children)
+      }
+    }
+    collectPaths(categories)
     const uncategorized = documents
-      .filter(d => !d.source_path || !coveredPaths.has(d.source_path))
+      .filter(d => !d.source_path || !allCoveredPaths.has(d.source_path))
       .sort((a, b) => (a.source_path ?? a.name).localeCompare(b.source_path ?? b.name))
-    const groupedFlat = categories.flatMap(cat => map.get(cat.category) ?? [])
+    const groupedFlat = categories.flatMap(cat => {
+      const fullPath = cat.category
+      return map.get(fullPath) ?? []
+    })
     map.set('all', [...uncategorized, ...groupedFlat])
 
     return map
   }, [documents, categories])
 
-  // Search results grouped by category
+  // Search results grouped by category (nested)
   const searchGroupedDocs = useMemo(() => {
     if (!searchResults) return null
     const docByPath = new Map<string, MappedDoc>()
@@ -225,21 +257,35 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
 
     const map = new Map<string, MappedDoc[]>()
 
-    for (const cat of categories) {
-      const docs: MappedDoc[] = []
-      for (const p of cat.pages) {
-        const d = docByPath.get(p.path)
-        if (d) docs.push(d)
-      }
-      if (docs.length > 0) {
-        map.set(cat.category, docs)
+    function buildSearchDocs(nodes: CategoryNode[], parentPath: string) {
+      for (const cat of nodes) {
+        const fullPath = parentPath ? `${parentPath}/${cat.category}` : cat.category
+        const docs: MappedDoc[] = []
+        for (const p of cat.pages) {
+          const d = docByPath.get(p.path)
+          if (d) docs.push(d)
+        }
+        if (docs.length > 0) {
+          map.set(fullPath, docs)
+        }
+        if (cat.children?.length) {
+          buildSearchDocs(cat.children, fullPath)
+        }
       }
     }
+    buildSearchDocs(categories, '')
 
-    // 'all' search view: same ordering logic
-    const coveredPaths = new Set(categories.flatMap(c => c.pages.map(p => p.path)))
+    // 'all' search view
+    const allCoveredPaths = new Set<string>()
+    function collectPaths(nodes: CategoryNode[]) {
+      for (const n of nodes) {
+        for (const p of n.pages) allCoveredPaths.add(p.path)
+        if (n.children) collectPaths(n.children)
+      }
+    }
+    collectPaths(categories)
     const uncategorized = searchResults
-      .filter(d => !d.source_path || !coveredPaths.has(d.source_path))
+      .filter(d => !d.source_path || !allCoveredPaths.has(d.source_path))
       .sort((a, b) => (a.source_path ?? a.name).localeCompare(b.source_path ?? b.name))
     const groupedFlat = categories.flatMap(cat => map.get(cat.category) ?? [])
     map.set('all', [...uncategorized, ...groupedFlat])
@@ -250,10 +296,13 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   // Visible groups (when searching, only show groups with results)
   const visibleCategories = useMemo(() => {
     if (!searchResults) return categories
-    return categories.filter(cat => {
+    // Filter top-level categories; include if they or any descendant has results
+    function hasResults(cat: CategoryNode): boolean {
       const docs = searchGroupedDocs?.get(cat.category)
-      return docs && docs.length > 0
-    })
+      if (docs && docs.length > 0) return true
+      return cat.children?.some(child => hasResults(child)) ?? false
+    }
+    return categories.filter(cat => hasResults(cat))
   }, [searchResults, categories, searchGroupedDocs])
 
   // Load data
@@ -846,10 +895,20 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
   const showReader = selectedDoc !== null
   const showReadme = selectedDocId === null && readmeContent !== null
 
-  // Get display name for category
-  const getDisplayCategory = useCallback((enName: string) => {
-    if (!isBilingual || displayLanguage === 'source') return enName
-    return categoryNameMap.get(enName) || enName
+  // Get display name for category (enFullPath -> display name)
+  const getDisplayCategory = useCallback((enFullPath: string) => {
+    if (!isBilingual || displayLanguage === 'source') {
+      // Return just the local name (last segment) for display
+      const parts = enFullPath.split('/')
+      return parts[parts.length - 1]
+    }
+    const zhFullPath = categoryNameMap.get(enFullPath)
+    if (zhFullPath) {
+      const parts = zhFullPath.split('/')
+      return parts[parts.length - 1]
+    }
+    const parts = enFullPath.split('/')
+    return parts[parts.length - 1]
   }, [isBilingual, displayLanguage, categoryNameMap])
 
   // Render a document item in sidebar
@@ -1284,52 +1343,67 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
               )}
             </div>
 
-            {/* Category Groups */}
+            {/* Category Groups (recursive tree) */}
             {visibleCategories.map(cat => {
-              const isExpanded = expandedGroups.has(cat.category)
-              const isHighlighted = selectedDocCategory === cat.category
-              const docs = searchResults !== null
-                ? (searchGroupedDocs?.get(cat.category) ?? [])
-                : (groupDocsMap.get(cat.category) ?? [])
-              return (
-                <div key={cat.category}>
-                  <button
-                    onClick={() => toggleGroup(cat.category)}
-                    className={clsx(
-                      'w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors',
-                      isHighlighted && !searchQuery
-                        ? 'bg-blue-50/30 text-blue-600'
-                        : 'text-ink/80 hover:bg-gray-50/80'
+              // Recursive renderer for category nodes
+              const renderCategoryTreeNode = (node: CategoryNode, fullPath: string, depth: number): React.ReactNode => {
+                const hasChildren = node.children && node.children.length > 0
+                const isExpanded = expandedGroups.has(fullPath)
+                const isHighlighted = selectedDocCategory === fullPath
+                const directDocs = searchResults !== null
+                  ? (searchGroupedDocs?.get(fullPath) ?? [])
+                  : (groupDocsMap.get(fullPath) ?? [])
+                const totalCount = countPages(node)
+
+                return (
+                  <div key={fullPath}>
+                    <button
+                      onClick={() => toggleGroup(fullPath)}
+                      className={clsx(
+                        'w-full flex items-center justify-between py-2.5 text-sm transition-colors',
+                        isHighlighted && !searchQuery
+                          ? 'bg-blue-50/30 text-blue-600'
+                          : 'text-ink/80 hover:bg-gray-50/80'
+                      )}
+                      style={{ paddingLeft: `${16 + depth * 16}px`, paddingRight: '16px' }}
+                    >
+                      <span className="flex items-center gap-2 min-w-0">
+                        {isExpanded ? (
+                          <ChevronDownIcon className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                        ) : (
+                          <ChevronRightIcon className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                        )}
+                        <span className="truncate">{getDisplayCategory(fullPath)}</span>
+                      </span>
+                      <span className={clsx(
+                        'text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 ml-2',
+                        isHighlighted && !searchQuery ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-ink/50'
+                      )}>
+                        {totalCount}
+                      </span>
+                    </button>
+                    {isExpanded && (
+                      <div className="pb-1">
+                        {/* Render children first */}
+                        {hasChildren && node.children!.map(child => {
+                          const childFullPath = `${fullPath}/${child.category}`
+                          return renderCategoryTreeNode(child, childFullPath, depth + 1)
+                        })}
+                        {/* Then render direct docs at this level */}
+                        {directDocs.length > 0 && directDocs.map(renderDocItem)}
+                        {/* Empty state */}
+                        {!hasChildren && directDocs.length === 0 && (
+                          <div className="px-8 py-2 text-xs text-gray-400">
+                            暂无文档
+                          </div>
+                        )}
+                      </div>
                     )}
-                  >
-                    <span className="flex items-center gap-2 min-w-0">
-                      {isExpanded ? (
-                        <ChevronDownIcon className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                      ) : (
-                        <ChevronRightIcon className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                      )}
-                      <span className="truncate">{getDisplayCategory(cat.category)}</span>
-                    </span>
-                    <span className={clsx(
-                      'text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 ml-2',
-                      isHighlighted && !searchQuery ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-ink/50'
-                    )}>
-                      {docs.length}
-                    </span>
-                  </button>
-                  {isExpanded && (
-                    <div className="pb-1">
-                      {docs.length === 0 ? (
-                        <div className="px-8 py-2 text-xs text-gray-400">
-                          暂无文档
-                        </div>
-                      ) : (
-                        docs.map(renderDocItem)
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
+                  </div>
+                )
+              }
+
+              return renderCategoryTreeNode(cat, cat.category, 0)
             })}
 
             {/* Search empty state */}
@@ -1461,23 +1535,34 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                   <input
                     type="radio"
                     name="recategorizeMode"
-                    value="ai"
-                    checked={recategorizeMode === 'ai'}
+                    value="auto"
+                    checked={recategorizeMode === 'auto'}
                     onChange={(e) => setRecategorizeMode(e.target.value)}
                     className="w-4 h-4 text-accent"
                   />
-                  <span className="text-sm text-ink/80">AI 智能分类</span>
+                  <span className="text-sm text-ink/80">自动</span>
                 </label>
                 <label className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors">
                   <input
                     type="radio"
                     name="recategorizeMode"
-                    value="path_prefix"
-                    checked={recategorizeMode === 'path_prefix'}
+                    value="path_only"
+                    checked={recategorizeMode === 'path_only'}
                     onChange={(e) => setRecategorizeMode(e.target.value)}
                     className="w-4 h-4 text-accent"
                   />
-                  <span className="text-sm text-ink/80">按路径前缀分类</span>
+                  <span className="text-sm text-ink/80">仅路径</span>
+                </label>
+                <label className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors">
+                  <input
+                    type="radio"
+                    name="recategorizeMode"
+                    value="ai_only"
+                    checked={recategorizeMode === 'ai_only'}
+                    onChange={(e) => setRecategorizeMode(e.target.value)}
+                    className="w-4 h-4 text-accent"
+                  />
+                  <span className="text-sm text-ink/80">仅 AI</span>
                 </label>
               </div>
             </div>

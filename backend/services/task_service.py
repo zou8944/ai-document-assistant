@@ -6,14 +6,12 @@ import asyncio
 import hashlib
 import json
 import logging
-import posixpath
+import mimetypes
 import queue
 import threading
 import uuid
-from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -1118,7 +1116,7 @@ class TaskService:
         self.update_url_task_progress(task_id, stats)
 
         # Determine stages dynamically based on user options
-        categorize_mode = input_params.get("categorize_mode", "ai")
+        categorize_mode = input_params.get("categorize_mode", "auto")
         generate_readme = input_params.get("generate_readme", True)
         active_stages = ["crawl", "vectorize"]
         if categorize_mode != "skip":
@@ -1527,62 +1525,394 @@ class TaskService:
         return "en"
 
     @staticmethod
-    def _build_path_groups(pages: list[dict], min_group_size: int = 3) -> list[dict]:
+    @staticmethod
+    def _longest_common_prefix(paths: list[str]) -> list[str]:
+        """Find the longest common path prefix (list of segments).
+
+        For ["/docs/sdk/ios/ui", "/docs/sdk/android/ui"] returns ["docs", "sdk"].
+        For ["/guide/intro", "/api/ref"] returns [].
         """
-        Cluster pages by URL path prefix (first-level directory).
+        if not paths:
+            return []
 
-        Pages are grouped by their top-level directory (e.g., /docs/, /api/).
-        Pages at root level or in small groups (< min_group_size) are
-        merged into an "Other" group. Guarantees 100% coverage.
+        split_paths = []
+        for p in paths:
+            norm = p.strip("/")
+            split_paths.append(norm.split("/") if norm else [])
 
-        Returns groups in the frontend CategoryGroup format.
-        """
-        prefix_pages: defaultdict[str, list[dict]] = defaultdict(list)
+        if not split_paths:
+            return []
 
+        prefix: list[str] = []
+        for segments in zip(*split_paths):
+            if len(set(segments)) == 1:
+                prefix.append(segments[0])
+            else:
+                break
+        return prefix
+
+    @staticmethod
+    def _build_trie(pages: list[dict]) -> dict:
+        """Build a trie from pages using their relative paths (after LCP stripping)."""
+        trie: dict = {}
         for page in pages:
-            path = page["path"]
-            # Normalize to start with /
-            if not path.startswith("/"):
-                path = "/" + path
-
-            # Remove trailing slash, get directory part
-            path = path.rstrip("/")
-            dir_part = posixpath.dirname(path)
-
-            if dir_part in ("", "/"):
-                prefix_pages["Other"].append(page)
+            path = page.get("path", "")
+            norm = path.strip("/")
+            segments = norm.split("/") if norm else []
+            node = trie
+            for seg in segments:
+                if seg not in node:
+                    node[seg] = {"_pages": [], "_children": {}}
+                node = node[seg]["_children"]
+            # Attach page at the terminal node's parent's _pages
+            # Walk back to attach at the correct level
+            node_ref = trie
+            for seg in segments[:-1]:
+                node_ref = node_ref[seg]["_children"]
+            if segments:
+                node_ref[segments[-1]]["_pages"].append(page)
             else:
-                parts = dir_part.strip("/").split("/")
-                first_level = parts[0]
-                prefix_pages[first_level].append(page)
+                # Root-level page (empty path)
+                if "__root_pages__" not in trie:
+                    trie["__root_pages__"] = []
+                trie["__root_pages__"].append(page)
+        return trie
 
-        result: list[dict] = []
-        other_pages: list[dict] = []
+    @classmethod
+    def _prune_trie(cls, trie: dict, min_group_size: int, depth: int = 0, max_depth: int = 3) -> list[dict]:
+        """Prune trie into nested CategoryNode list.
 
-        for prefix, group_pages in prefix_pages.items():
-            if prefix == "Other":
-                other_pages.extend(group_pages)
-            elif len(group_pages) >= min_group_size:
-                result.append({
-                    "category": prefix,
-                    "pages": group_pages,
+        - Merge single-child chains (e.g. sdk -> ios -> ui becomes "sdk/ios/ui")
+        - Nodes with < min_group_size pages are merged into "Other"
+        - Depth capped at max_depth
+        """
+        nodes: list[dict] = []
+
+        for key, subtree in trie.items():
+            if key == "__root_pages__":
+                continue
+
+            direct_pages = subtree.get("_pages", [])
+            child_trie = subtree.get("_children", {})
+
+            # Merge single-child chains: if this node has no direct pages
+            # and exactly one child, concatenate names
+            if not direct_pages and len(child_trie) == 1:
+                child_key = next(iter(child_trie))
+                merged_name = f"{key}/{child_key}"
+                merged_subtree = child_trie[child_key]
+                # Continue merging if the merged node also has no pages and one child
+                while not merged_subtree.get("_pages", []) and len(merged_subtree.get("_children", {})) == 1:
+                    next_key = next(iter(merged_subtree["_children"]))
+                    merged_name = f"{merged_name}/{next_key}"
+                    merged_subtree = merged_subtree["_children"][next_key]
+                # Build a virtual subtree for the merged chain
+                virtual = {merged_name: merged_subtree}
+                child_nodes = cls._prune_trie(virtual, min_group_size, depth, max_depth)
+                if child_nodes:
+                    nodes.extend(child_nodes)
+                continue
+
+            if depth >= max_depth:
+                # At max depth, collect all pages under this node
+                all_pages = list(direct_pages)
+                cls._collect_all_pages(child_trie, all_pages)
+                if all_pages:
+                    nodes.append({"category": key, "pages": all_pages, "children": []})
+                continue
+
+            # Recurse into children
+            child_nodes = cls._prune_trie(child_trie, min_group_size, depth + 1, max_depth)
+
+            if direct_pages or child_nodes:
+                nodes.append({
+                    "category": key,
+                    "pages": direct_pages,
+                    "children": child_nodes,
                 })
+
+        # Merge "Other" pages: small groups and root-level pages
+        other_pages: list[dict] = []
+        root_pages = trie.get("__root_pages__", [])
+        other_pages.extend(root_pages)
+
+        final_nodes: list[dict] = []
+        for node in nodes:
+            total = cls._count_pages(node)
+            if total < min_group_size:
+                other_pages.extend(cls._flatten_pages(node))
             else:
-                other_pages.extend(group_pages)
+                final_nodes.append(node)
 
         if other_pages:
-            result.append({
-                "category": "Other",
-                "pages": other_pages,
-            })
+            final_nodes.append({"category": "Other", "pages": other_pages, "children": []})
 
-        # Keep "Other" at the end, otherwise preserve natural order
-        other = [g for g in result if g["category"] == "Other"]
-        non_other = [g for g in result if g["category"] != "Other"]
-        return non_other + other
+        return final_nodes
 
-    async def _categorize_collection(self, task_id: str, collection_id: str, categorize_mode: str = "ai"):
-        """Categorize pages and store results for later README generation."""
+    @staticmethod
+    def _collect_all_pages(trie: dict, result: list[dict]) -> None:
+        """Recursively collect all pages from a trie subtree."""
+        for key, subtree in trie.items():
+            if key == "__root_pages__":
+                result.extend(subtree)
+                continue
+            result.extend(subtree.get("_pages", []))
+            child_trie = subtree.get("_children", {})
+            if child_trie:
+                TaskService._collect_all_pages(child_trie, result)
+
+    @staticmethod
+    def _count_pages(node: dict) -> int:
+        """Count total pages in a nested CategoryNode (including children)."""
+        count = len(node.get("pages", []))
+        for child in node.get("children", []):
+            count += TaskService._count_pages(child)
+        return count
+
+    @staticmethod
+    def _flatten_pages(node: dict) -> list[dict]:
+        """Collect all pages from a nested CategoryNode (including children)."""
+        pages = list(node.get("pages", []))
+        for child in node.get("children", []):
+            pages.extend(TaskService._flatten_pages(child))
+        return pages
+
+    @classmethod
+    def _build_nested_path_groups(cls, pages: list[dict], min_group_size: int = 3) -> list[dict]:
+        """
+        Cluster pages by URL path prefix with nested multi-level grouping.
+
+        Algorithm:
+        1. Find longest common path prefix (LCP), strip it
+        2. Build trie from relative paths
+        3. Prune trie: merge single-child chains, collapse small groups, cap depth at 3
+        """
+        if not pages:
+            return []
+
+        paths = [p.get("path", "") for p in pages]
+        lcp_segments = cls._longest_common_prefix(paths)
+
+        # Strip LCP from each page's path to get relative paths
+        offset = len(lcp_segments)
+        pages_with_rel: list[dict] = []
+        for page in pages:
+            norm = page["path"].strip("/")
+            segments = norm.split("/") if norm else []
+            rel_segments = segments[offset:]
+            rel_path = "/".join(rel_segments)
+            pages_with_rel.append({**page, "_rel_path": rel_path})
+
+        # Build trie using relative paths
+        trie: dict = {}
+        for page in pages_with_rel:
+            rel = page["_rel_path"]
+            segments = rel.split("/") if rel else []
+            node = trie
+            for seg in segments:
+                if seg not in node:
+                    node[seg] = {"_pages": [], "_children": {}}
+                node = node[seg]["_children"]
+            # Attach page at terminal node
+            if segments:
+                parent = trie
+                for seg in segments[:-1]:
+                    parent = parent[seg]["_children"]
+                parent[segments[-1]]["_pages"].append(page)
+            else:
+                if "__root_pages__" not in trie:
+                    trie["__root_pages__"] = []
+                trie["__root_pages__"].append(page)
+
+        # Prune trie into nested groups
+        groups = cls._prune_trie(trie, min_group_size)
+
+        # Clean up _rel_path from pages in output
+        def clean_pages(nodes: list[dict]) -> list[dict]:
+            result = []
+            for node in nodes:
+                clean_node = {
+                    "category": node["category"],
+                    "pages": [{k: v for k, v in p.items() if k != "_rel_path"} for p in node.get("pages", [])],
+                    "children": clean_pages(node.get("children", [])),
+                }
+                result.append(clean_node)
+            return result
+
+        return clean_pages(groups)
+
+    def _log_groups(self, groups: list[dict], task_id: str, indent: int = 0) -> None:
+        """Log nested group structure for debugging."""
+        prefix = "  " * indent
+        for g in groups:
+            count = self._count_pages(g)
+            child_count = len(g.get("children", []))
+            if child_count > 0:
+                self._log_info_task(task_id, f"{prefix}Group '{g['category']}': {count} pages, {child_count} sub-groups")
+                self._log_groups(g.get("children", []), task_id, indent + 1)
+            else:
+                self._log_info_task(task_id, f"{prefix}Group '{g['category']}': {count} pages")
+
+    @staticmethod
+    def _collect_category_names(groups: list[dict]) -> list[str]:
+        """Collect all category names from nested structure."""
+        names: list[str] = []
+        for g in groups:
+            names.append(g["category"])
+            names.extend(TaskService._collect_category_names(g.get("children", [])))
+        return names
+
+    async def _refine_with_ai(self, path_groups: list[dict], pages: list[dict], task_id: str) -> list[dict]:
+        """Use AI to refine path-based classification.
+
+        Passes the path grouping result as context to the LLM, asking it to
+        merge overly granular groups, split overly large ones, and improve naming.
+        """
+        # Build a summary of the path groups for the AI
+        def summarize_groups(groups: list[dict], indent: int = 0) -> list[str]:
+            lines: list[str] = []
+            prefix = "  " * indent
+            for g in groups:
+                count = self._count_pages(g)
+                children = g.get("children", [])
+                if children:
+                    lines.append(f"{prefix}{g['category']}/ ({count} pages, {len(children)} sub-groups):")
+                    lines.extend(summarize_groups(children, indent + 1))
+                else:
+                    sample = [p["title"] for p in g.get("pages", [])[:3]]
+                    sample_str = ", ".join(sample)
+                    lines.append(f"{prefix}{g['category']}/ ({count} pages) — e.g. {sample_str}")
+            return lines
+
+        groups_summary = "\n".join(summarize_groups(path_groups))
+
+        prompt = f"""You are refining a documentation classification that was generated by URL path analysis.
+
+Current path-based groups:
+{groups_summary}
+
+Total pages: {len(pages)}
+
+Instructions:
+1. If some groups are too granular (few pages), merge them with related parent or sibling groups
+2. If some groups are too large (>20 pages), consider splitting them into meaningful sub-groups
+3. Improve category names to be more descriptive if the path segments are unclear (e.g., "sdk" -> "SDK", "ref" -> "Reference")
+4. Keep the hierarchical structure — use "children" for sub-groups
+5. Maximum 3 levels of nesting
+6. Every page must be in exactly one group
+7. Pages that don't fit anywhere go in "Other"
+
+Return ONLY a JSON array in this exact format:
+[
+  {{
+    "category": "Group Name",
+    "pages": [
+      {{"id": "page_id", "path": "/path", "title": "Title"}}
+    ],
+    "children": [
+      {{
+        "category": "Sub Group",
+        "pages": [...],
+        "children": []
+      }}
+    ]
+  }}
+]"""
+
+        self._log_info_task(task_id, f"Sending path groups to AI for refinement ({len(groups_summary)} chars)...")
+        raw = await self.llm_service._invoke_crawl_llm(prompt, max_tokens=self.config.llm.max_tokens)
+
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            import re
+            cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
+            cleaned = re.sub(r"\n?```$", "", cleaned)
+            cleaned = cleaned.strip()
+
+        try:
+            import json as json_lib
+            result = json_lib.loads(cleaned)
+            if isinstance(result, list) and len(result) > 0:
+                # Validate coverage: ensure all pages are accounted for
+                all_ids = {p["id"] for p in pages}
+                covered_ids: set[str] = set()
+
+                def collect_ids(nodes: list[dict]) -> None:
+                    for n in nodes:
+                        for p in n.get("pages", []):
+                            if "id" in p:
+                                covered_ids.add(p["id"])
+                        collect_ids(n.get("children", []))
+
+                collect_ids(result)
+                missing = all_ids - covered_ids
+                if missing:
+                    self._log_info_task(task_id, f"AI refinement missing {len(missing)} pages, falling back to path groups")
+                    return path_groups
+                self._log_info_task(task_id, f"AI refinement produced {len(result)} top-level groups")
+                return result
+        except Exception as e:
+            self._log_err_task(task_id, f"AI refinement failed: {e}, using path groups")
+
+        return path_groups
+
+    @staticmethod
+    def _evaluate_path_quality(groups: list[dict], total_pages: int) -> tuple[bool, str]:
+        """Evaluate whether path-based classification is good enough.
+
+        Checks three dimensions:
+        - Coverage: non-"Other" page ratio >= 70%
+        - Group count: 3-15 groups
+        - Balance: largest group < 50% of total pages
+
+        Returns (passed, reason).
+        """
+        if total_pages == 0:
+            return False, "no pages"
+
+        non_other_count = 0
+        group_counts: list[int] = []
+
+        for g in groups:
+            count = TaskService._count_pages(g)
+            if g["category"] != "Other":
+                non_other_count += count
+                group_counts.append(count)
+
+        coverage = non_other_count / total_pages if total_pages > 0 else 0
+        num_groups = len(group_counts)
+        max_group = max(group_counts) if group_counts else 0
+        max_ratio = max_group / total_pages if total_pages > 0 else 0
+
+        reasons: list[str] = []
+        passed = True
+
+        if coverage < 0.7:
+            passed = False
+            reasons.append(f"coverage {coverage:.0%} < 70%")
+        if num_groups < 3:
+            passed = False
+            reasons.append(f"only {num_groups} groups (need >= 3)")
+        if num_groups > 15:
+            passed = False
+            reasons.append(f"too many groups: {num_groups} > 15")
+        if max_ratio >= 0.5:
+            passed = False
+            reasons.append(f"largest group {max_ratio:.0%} >= 50%")
+
+        if not reasons:
+            return True, f"OK: {num_groups} groups, coverage {coverage:.0%}, max group {max_ratio:.0%}"
+        return passed, "; ".join(reasons)
+
+    async def _categorize_collection(self, task_id: str, collection_id: str, categorize_mode: str = "auto"):
+        """Categorize pages and store results for later README generation.
+
+        categorize_mode:
+        - "auto": path-first, AI refine if quality is poor
+        - "path_only": path classification only, no LLM
+        - "ai_only": AI classification only
+        - "skip": no categorization
+        """
         self._log_info_task(task_id, "Categorizing collection pages...")
         docs = self.doc_repo.get_by_collection(collection_id, exclude_statuses=["not_found"])
         crawled = [d for d in docs if d.source_path]
@@ -1597,69 +1927,103 @@ class TaskService:
         source_language = self._detect_source_language(pages)
         self._log_info_task(task_id, f"Detected source language: {source_language}")
 
+        # Normalize legacy mode names
         if categorize_mode == "path_prefix":
-            # Path-prefix based grouping — no LLM calls
-            self._log_info_task(task_id, "Categorizing pages by path prefix...")
-            groups = self._build_path_groups(pages)
-            self._log_info_task(task_id, f"Built {len(groups)} path groups from {len(pages)} pages")
-            for g in groups:
-                self._log_info_task(task_id, f"  Group '{g['category']}': {len(g['pages'])} pages")
-            category_names_zh = {}
-            page_titles_zh = {}
-        else:
-            # Step 1: AI smart grouping (failure propagates - no fallback)
+            categorize_mode = "auto"
+
+        groups: list[dict] = []
+
+        if categorize_mode == "path_only":
+            # Path-only: no LLM calls
+            self._log_info_task(task_id, "Categorizing pages by path prefix (nested)...")
+            groups = self._build_nested_path_groups(pages)
+            self._log_info_task(task_id, f"Built {len(groups)} nested path groups from {len(pages)} pages")
+            self._log_groups(groups, task_id)
+
+        elif categorize_mode == "ai_only":
+            # AI-only classification
             self._log_info_task(task_id, "Categorizing pages with AI...")
             groups = await self.llm_service.categorize_pages(pages)
+            # Wrap flat AI result into nested format
+            groups = [{"category": g["category"], "pages": g["pages"], "children": []} for g in groups]
             self._log_info_task(task_id, f"Built {len(groups)} AI groups from {len(pages)} pages")
-            for g in groups:
-                self._log_info_task(task_id, f"  Group '{g['category']}': {len(g['pages'])} pages")
+            self._log_groups(groups, task_id)
 
-            # Step 2: Reorder by complexity (beginner -> advanced)
+            # Reorder by complexity
             self._log_info_task(task_id, "Ordering categories by complexity...")
-            groups = await self.llm_service.order_categories_by_complexity(groups)
+            flat_for_order = [{"category": g["category"], "pages": g["pages"]} for g in groups]
+            ordered_flat = await self.llm_service.order_categories_by_complexity(flat_for_order)
+            # Re-apply ordering to nested structure
+            order_map = {g["category"]: g["pages"] for g in ordered_flat}
+            for g in groups:
+                if g["category"] in order_map:
+                    g["pages"] = order_map[g["category"]]
             self._log_info_task(task_id, f"Categories reordered: {[g['category'] for g in groups]}")
 
-            # Step 3: Translate if English source (errors are logged but not fatal)
-            category_names_zh: dict[str, str] = {}
-            page_titles_zh: dict[str, str] = {}
+        else:  # "auto" (default)
+            # Step 1: Path classification
+            self._log_info_task(task_id, "Categorizing pages by path prefix (nested)...")
+            path_groups = self._build_nested_path_groups(pages)
+            self._log_info_task(task_id, f"Built {len(path_groups)} nested path groups from {len(pages)} pages")
+            self._log_groups(path_groups, task_id)
 
-            if source_language == "en":
-                try:
-                    self._log_info_task(task_id, "Translating category names...")
-                    category_names_zh = await self.llm_service.translate_category_names(
-                        [g["category"] for g in groups]
-                    )
-                    self._log_info_task(task_id, f"Category names translated: {len(category_names_zh)}")
-                except Exception as e:
-                    self._log_err_task(task_id, f"Category name translation failed: {e}")
+            # Step 2: Evaluate quality
+            passed, reason = self._evaluate_path_quality(path_groups, len(pages))
+            self._log_info_task(task_id, f"Path quality check: {'PASS' if passed else 'FAIL'} — {reason}")
 
-                try:
-                    self._log_info_task(task_id, f"Translating all {len(pages)} page titles...")
-                    page_titles_zh = await self.llm_service.translate_all_page_titles(pages)
-                    self._log_info_task(task_id, f"Page titles translated: {len(page_titles_zh)}")
-                except Exception as e:
-                    self._log_err_task(task_id, f"Page title translation failed: {e}")
+            if passed:
+                groups = path_groups
+                self._log_info_task(task_id, "Using path-based classification")
+            else:
+                # AI refine: pass path result as hint
+                self._log_info_task(task_id, "Path classification insufficient, refining with AI...")
+                groups = await self._refine_with_ai(path_groups, pages, task_id)
 
-        # Step 4: Build categories JSON
-        categories_for_json = []
-        categories_zh_for_json = []
-        for g in groups:
-            cat_name = g["category"]
-            cat_name_zh = category_names_zh.get(cat_name, cat_name)
+        # Translate if English source
+        category_names_zh: dict[str, str] = {}
+        page_titles_zh: dict[str, str] = {}
 
-            cat_pages = []
-            cat_pages_zh = []
-            for p in g["pages"]:
-                path = p["path"]
-                title = p["title"]
-                title_zh = page_titles_zh.get(path, title)
+        if source_language == "en":
+            # Collect flat category names for translation
+            flat_cat_names = self._collect_category_names(groups)
+            try:
+                self._log_info_task(task_id, "Translating category names...")
+                category_names_zh = await self.llm_service.translate_category_names(flat_cat_names)
+                self._log_info_task(task_id, f"Category names translated: {len(category_names_zh)}")
+            except Exception as e:
+                self._log_err_task(task_id, f"Category name translation failed: {e}")
 
-                cat_pages.append({"path": path, "title": title, "description": ""})
-                cat_pages_zh.append({"path": path, "title": title_zh, "description": ""})
+            try:
+                self._log_info_task(task_id, f"Translating all {len(pages)} page titles...")
+                page_titles_zh = await self.llm_service.translate_all_page_titles(pages)
+                self._log_info_task(task_id, f"Page titles translated: {len(page_titles_zh)}")
+            except Exception as e:
+                self._log_err_task(task_id, f"Page title translation failed: {e}")
 
-            categories_for_json.append({"category": cat_name, "pages": cat_pages})
-            if source_language == "en":
-                categories_zh_for_json.append({"category": cat_name_zh, "pages": cat_pages_zh})
+        # Step 4: Build categories JSON (recursive for nested structures)
+        def build_category_json(nodes: list[dict], is_zh: bool = False) -> list[dict]:
+            result = []
+            for g in nodes:
+                cat_name = g["category"]
+                if is_zh:
+                    cat_name = category_names_zh.get(cat_name, cat_name)
+                cat_pages = []
+                for p in g.get("pages", []):
+                    path = p["path"]
+                    title = p["title"]
+                    if is_zh:
+                        title = page_titles_zh.get(path, title)
+                    cat_pages.append({"path": path, "title": title, "description": ""})
+                children = build_category_json(g.get("children", []), is_zh)
+                result.append({
+                    "category": cat_name,
+                    "pages": cat_pages,
+                    "children": children,
+                })
+            return result
+
+        categories_for_json = build_category_json(groups, is_zh=False)
+        categories_zh_for_json = build_category_json(groups, is_zh=True) if source_language == "en" else []
 
         categories_json = json_lib.dumps(categories_for_json, ensure_ascii=False)
         categories_json_zh = json_lib.dumps(categories_zh_for_json, ensure_ascii=False) if source_language == "en" else ""
@@ -1691,11 +2055,15 @@ class TaskService:
         count = self.doc_repo.mark_categorized(collection_id)
         logger.info(f"Marked {count} documents as categorized in {collection_id}")
 
-    async def _categorize_incremental(self, task_id: str, collection_id: str, categorize_mode: str = "ai"):
+    async def _categorize_incremental(self, task_id: str, collection_id: str, categorize_mode: str = "auto"):
         """Incrementally categorize: only process new (uncategorized) documents, merge with existing."""
+        # Normalize legacy mode
         if categorize_mode == "path_prefix":
-            # Path prefix mode: just rebuild from scratch (no LLM cost)
-            self._log_info_task(task_id, "Path prefix mode: rebuilding categories from all docs")
+            categorize_mode = "auto"
+
+        # Path-based modes: just rebuild from scratch (path classification is fast, no LLM cost)
+        if categorize_mode in ("path_only", "auto"):
+            self._log_info_task(task_id, f"Mode '{categorize_mode}': rebuilding categories from all docs")
             await self._categorize_collection(task_id, collection_id, categorize_mode)
             self._mark_categorized(collection_id)
             return
@@ -1815,7 +2183,15 @@ class TaskService:
 
         groups = json_lib.loads(categories_json)
         source_language = collection.source_language or "en"
-        total_pages = sum(len(g.get("pages", [])) for g in groups)
+
+        def count_all_pages(nodes: list[dict]) -> int:
+            total = 0
+            for n in nodes:
+                total += len(n.get("pages", []))
+                total += count_all_pages(n.get("children", []))
+            return total
+
+        total_pages = count_all_pages(groups)
 
         if total_pages == 0:
             self._log_info_task(task_id, "No pages in categories, skipping README generation")
@@ -1866,7 +2242,7 @@ class TaskService:
 
         # Use collection's saved categorize_mode, default to ai
         collection = self.collection_service.collection_repo.get_by_id(collection_id)
-        categorize_mode = collection.categorize_mode if collection and collection.categorize_mode else "ai"
+        categorize_mode = collection.categorize_mode if collection and collection.categorize_mode else "auto"
 
         # Stage: categorize — clear all marks and re-categorize from scratch
         self._update_stage(task_id, "categorize")
@@ -1889,7 +2265,7 @@ class TaskService:
         input_params: dict[str, Any]
     ):
         """Re-categorize all documents without re-crawling or regenerating README."""
-        categorize_mode = input_params.get("categorize_mode", "ai")
+        categorize_mode = input_params.get("categorize_mode", "auto")
         self._log_info_task(task_id, f"Starting recategorization with mode: {categorize_mode}")
 
         # Stage: categorize — clear all marks and re-categorize from scratch

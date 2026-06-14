@@ -29,7 +29,7 @@ export const UrlInputDialog: React.FC<UrlInputDialogProps> = ({
 }) => {
   const [urls, setUrls] = useState<string[]>([''])
   const [recursivePrefixes, setRecursivePrefixes] = useState<string[]>([''])
-  const [categorizeMode, setCategorizeMode] = useState<string>('ai')
+  const [categorizeMode, setCategorizeMode] = useState<string>('auto')
   const [generateReadme, setGenerateReadme] = useState<boolean>(true)
   const [errors, setErrors] = useState<string[]>([])
 
@@ -232,23 +232,34 @@ export const UrlInputDialog: React.FC<UrlInputDialogProps> = ({
                 <input
                   type="radio"
                   name="categorizeMode"
-                  value="ai"
-                  checked={categorizeMode === 'ai'}
+                  value="auto"
+                  checked={categorizeMode === 'auto'}
                   onChange={(e) => setCategorizeMode(e.target.value)}
                   className="w-4 h-4 text-accent"
                 />
-                <span className="text-sm text-ink/80">AI 智能分类</span>
+                <span className="text-sm text-ink/80">自动（路径优先 + AI 兜底）</span>
               </label>
               <label className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50/50 transition-colors">
                 <input
                   type="radio"
                   name="categorizeMode"
-                  value="path_prefix"
-                  checked={categorizeMode === 'path_prefix'}
+                  value="path_only"
+                  checked={categorizeMode === 'path_only'}
                   onChange={(e) => setCategorizeMode(e.target.value)}
                   className="w-4 h-4 text-accent"
                 />
-                <span className="text-sm text-ink/80">按路径前缀分类</span>
+                <span className="text-sm text-ink/80">仅路径分类</span>
+              </label>
+              <label className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50/50 transition-colors">
+                <input
+                  type="radio"
+                  name="categorizeMode"
+                  value="ai_only"
+                  checked={categorizeMode === 'ai_only'}
+                  onChange={(e) => setCategorizeMode(e.target.value)}
+                  className="w-4 h-4 text-accent"
+                />
+                <span className="text-sm text-ink/80">仅 AI 分类</span>
               </label>
             </div>
           </div>

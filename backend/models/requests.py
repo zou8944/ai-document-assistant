@@ -76,7 +76,7 @@ class IngestUrlsRequest(BaseModel):
     # New format
     url_configs: Optional[list[UrlConfig]] = Field(None, description="Multiple URL configs with independent prefixes")
     # Categorization options
-    categorize_mode: str = Field(default="ai", description="Categorization mode: ai or path_prefix")
+    categorize_mode: str = Field(default="auto", description="Categorization mode: auto, path_only, ai_only, or skip")
     generate_readme: bool = Field(default=True, description="Whether to generate README after ingestion")
 
     @model_validator(mode="after")
@@ -91,7 +91,7 @@ class IngestUrlsRequest(BaseModel):
 
 class RecategorizeRequest(BaseModel):
     """Request model for recategorizing a collection"""
-    categorize_mode: str = Field(default="ai", description="Categorization mode: ai or path_prefix")
+    categorize_mode: str = Field(default="auto", description="Categorization mode: auto, path_only, ai_only, or skip")
 
 
 class CreateChatRequest(BaseModel):
