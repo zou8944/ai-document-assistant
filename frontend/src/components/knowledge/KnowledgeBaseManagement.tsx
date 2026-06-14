@@ -19,6 +19,8 @@ import {
   StopIcon,
   EllipsisVerticalIcon,
   XCircleIcon,
+  Squares2X2Icon,
+  DocumentTextIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { useAppStore } from '../../store/appStore'
@@ -1043,14 +1045,14 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                     onClick={handleRecategorize}
                     className="w-full flex items-center gap-2 px-4 py-2 text-sm text-ink/80 hover:bg-gray-50 transition-colors"
                   >
-                    <ArrowPathIcon className="w-4 h-4" />
+                    <Squares2X2Icon className="w-4 h-4" />
                     重新分类
                   </button>
                   <button
                     onClick={handleRegenerateReadme}
                     className="w-full flex items-center gap-2 px-4 py-2 text-sm text-ink/80 hover:bg-gray-50 transition-colors"
                   >
-                    <DocumentIcon className="w-4 h-4" />
+                    <DocumentTextIcon className="w-4 h-4" />
                     重新生成 README
                   </button>
                   <button
