@@ -672,6 +672,24 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
     }
   }
 
+  const handleReindex = async () => {
+    setShowActionsMenu(false)
+    if (!currentKb) return
+    try {
+      const response = await apiClient.reindexCollection(currentKb.id)
+      const taskData = extractData(response)
+      setSelectedTaskId(taskData.task_id)
+      setTaskLogs([])
+      setIsStreaming(true)
+      apiClient.cancelRequests()
+      streamTaskProgress(taskData.task_id)
+      loadTasks()
+    } catch (error) {
+      console.error('重新索引失败:', error)
+      toast.error('重新索引失败: ' + (error as Error).message)
+    }
+  }
+
   const handleConfirmDelete = async () => {
     if (!currentKb) return
     if (confirmName !== currentKb.name) {
@@ -1034,6 +1052,13 @@ export const KnowledgeBaseManagement: React.FC<KnowledgeBaseManagementProps> = (
                   >
                     <DocumentIcon className="w-4 h-4" />
                     重新生成 README
+                  </button>
+                  <button
+                    onClick={handleReindex}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-ink/80 hover:bg-gray-50 transition-colors"
+                  >
+                    <ArrowPathIcon className="w-4 h-4" />
+                    重新索引
                   </button>
                   <div className="border-t border-gray-100 my-1" />
                   <button
