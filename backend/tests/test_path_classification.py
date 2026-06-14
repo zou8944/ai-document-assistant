@@ -116,9 +116,9 @@ class TestBuildNestedPathGroups:
     def test_single_page(self):
         pages = [{"id": "1", "path": "/docs/guide/intro", "title": "Intro"}]
         groups = TaskService._build_nested_path_groups(pages, min_group_size=2)
-        # Single page -> Other
+        # Single page -> LCP segment name instead of "Other"
         assert len(groups) == 1
-        assert groups[0]["category"] == "Other"
+        assert groups[0]["category"] == "intro"
 
     def test_single_chain_merged(self):
         """Single-child chains should be merged (e.g., sdk -> ios -> ui becomes 'sdk/ios/ui')."""
@@ -129,9 +129,9 @@ class TestBuildNestedPathGroups:
         ]
         groups = TaskService._build_nested_path_groups(pages, min_group_size=2)
         # LCP = /docs/sdk/ios/ui, so relative paths are just "a", "b", "c"
-        # All at root level -> Other
+        # All at root level -> renamed to LCP segment "ui" instead of "Other"
         assert len(groups) == 1
-        assert groups[0]["category"] == "Other"
+        assert groups[0]["category"] == "ui"
 
     def test_nested_children_structure(self):
         """Groups should have proper children structure."""
@@ -221,6 +221,110 @@ class TestBuildNestedPathGroups:
         # Single child -> "详情"
         assert len(cat["children"]) == 1
         assert cat["children"][0]["category"] == "详情"
+
+    def test_other_renamed_to_lcp_segment_when_no_index(self):
+        """When all pages collapse into 'Other' with no index page, use LCP segment name."""
+        pages = [
+            {"id": "1", "path": "/cn/help/managing-alternative-distribution/submit-for-notarization", "title": "Submit"},
+            {"id": "2", "path": "/cn/help/managing-alternative-distribution/wawegawet", "title": "Other page"},
+        ]
+        groups = TaskService._build_nested_path_groups(pages, min_group_size=3)
+        assert len(groups) == 1
+        # Should NOT be "Other" — should be the LCP segment name
+        assert groups[0]["category"] != "Other"
+        assert groups[0]["category"] == "managing-alternative-distribution"
+        assert len(groups[0]["pages"]) == 2
+
+    def test_index_page_with_single_child_is_details(self):
+        """Index page + 1 child: child goes to '详情', not 'Other'."""
+        pages = [
+            {"id": "1", "path": "/cn/help/managing-alternative-distribution/submit-for-notarization", "title": "Submit"},
+            {"id": "2", "path": "/cn/help/managing-alternative-distribution", "title": "Managing"},
+        ]
+        groups = TaskService._build_nested_path_groups(pages, min_group_size=3)
+        assert len(groups) == 1
+        cat = groups[0]
+        assert cat["category"] == "managing-alternative-distribution"
+        page_ids = [p["id"] for p in cat["pages"]]
+        assert "2" in page_ids  # index page at category level
+        assert len(cat["children"]) == 1
+        assert cat["children"][0]["category"] == "详情"
+        detail_ids = [p["id"] for p in cat["children"][0]["pages"]]
+        assert "1" in detail_ids
+
+    def test_nested_other_renamed_to_details_with_index(self):
+        """Nested small groups inside an index page category should be '详情', not 'Other'."""
+        pages = [
+            {"id": "idx", "path": "/docs/API", "title": "API Index"},
+            # Sub-group A: 3 pages (>= min_group_size) -> keeps its own name
+            {"id": "a1", "path": "/docs/API/reference/get", "title": "Get"},
+            {"id": "a2", "path": "/docs/API/reference/post", "title": "Post"},
+            {"id": "a3", "path": "/docs/API/reference/put", "title": "Put"},
+            # Sub-group B: 1 page (< min_group_size) -> should go to "详情", not "Other"
+            {"id": "b1", "path": "/docs/API/changelog", "title": "Changelog"},
+        ]
+        groups = TaskService._build_nested_path_groups(pages, min_group_size=3)
+        assert len(groups) == 1
+        cat = groups[0]
+        assert cat["category"] == "API"
+        # Index page at category level
+        assert any(p["id"] == "idx" for p in cat["pages"])
+        child_names = [c["category"] for c in cat["children"]]
+        assert "Other" not in child_names
+        # "reference" group survives, "changelog" goes to "详情"
+        assert "reference" in child_names
+        assert "详情" in child_names
+
+    def test_nested_other_renamed_to_parent_key_without_index(self):
+        """Without index page, nested 'Other' should be renamed to parent trie key.
+        When parent_key equals the node's own key, pages should merge up (no duplicate names)."""
+        # Simulates: pages under /help/reference/reporting/ with many small sub-groups
+        # LCP = /help/reference, trie key = reporting, children are too small → collapse
+        pages = [
+            {"id": "r1", "path": "/help/reference/reporting/app-review", "title": "App Review"},
+            {"id": "r2", "path": "/help/reference/reporting/app-store-icon", "title": "Icon"},
+            {"id": "r3", "path": "/help/reference/reporting/app-ratings", "title": "Ratings"},
+            {"id": "r4", "path": "/help/reference/reporting/pre-release", "title": "Pre-release"},
+        ]
+        groups = TaskService._build_nested_path_groups(pages, min_group_size=3)
+        # LCP = /help/reference, trie key = reporting (all pages share reporting/)
+        # All children are < min_group_size → collapse, merged into parent's pages
+        assert len(groups) == 1
+        assert groups[0]["category"] == "reporting"
+        # Pages should be directly under reporting, not in a child with same name
+        assert len(groups[0]["pages"]) == 4
+        assert len(groups[0]["children"]) == 0
+        # No "Other" or duplicate names
+        all_names = self._collect_all_categories(groups)
+        assert "Other" not in all_names
+
+    def test_multi_level_other_renamed(self):
+        """Realistic: reference with multiple child groups, nested small groups renamed."""
+        pages = [
+            # reporting sub-group: 3 pages at different depths
+            {"id": "r1", "path": "/help/reference/reporting/app-review/details", "title": "Details"},
+            {"id": "r2", "path": "/help/reference/reporting/app-store-icon/spec", "title": "Spec"},
+            {"id": "r3", "path": "/help/reference/reporting/app-ratings/summary", "title": "Summary"},
+            # account-management sub-group: 3 pages
+            {"id": "a1", "path": "/help/reference/account-management/roles", "title": "Roles"},
+            {"id": "a2", "path": "/help/reference/account-management/manage", "title": "Manage"},
+            {"id": "a3", "path": "/help/reference/account-management/transfer", "title": "Transfer"},
+        ]
+        groups = TaskService._build_nested_path_groups(pages, min_group_size=3)
+        # LCP = /help/reference, trie has reporting + account-management
+        cat_names = [g["category"] for g in groups]
+        assert "reporting" in cat_names or "reference" in cat_names
+        # No "Other" anywhere
+        all_names = self._collect_all_categories(groups)
+        assert "Other" not in all_names
+
+    @staticmethod
+    def _collect_all_categories(groups: list[dict]) -> list[str]:
+        names = []
+        for g in groups:
+            names.append(g["category"])
+            names.extend(TestBuildNestedPathGroups._collect_all_categories(g.get("children", [])))
+        return names
 
 
 class TestEvaluatePathQuality:

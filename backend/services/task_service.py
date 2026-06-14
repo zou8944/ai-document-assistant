@@ -1579,14 +1579,15 @@ class TaskService:
         return trie
 
     @classmethod
-    def _prune_trie(cls, trie: dict, min_group_size: int, depth: int = 0, max_depth: int = 3, index_page: dict | None = None) -> list[dict]:
+    def _prune_trie(cls, trie: dict, min_group_size: int, depth: int = 0, max_depth: int = 3, index_page: dict | None = None, parent_key: str | None = None) -> list[dict]:
         """Prune trie into nested CategoryNode list.
 
         - Merge single-child chains (e.g. sdk -> ios -> ui becomes "sdk/ios/ui")
-        - Nodes with < min_group_size pages are merged into "Other" (or "详情" if index_page is set)
+        - Nodes with < min_group_size pages are merged into "详情" (if index_page), parent key name, or "Other"
         - Depth capped at max_depth
         - index_page: if set (LCP matched a page path exactly), that page sits at category level
           and remaining pages go into a "详情" subcategory instead of "Other"
+        - parent_key: the trie key of the parent node, used to name leftover pages
         """
         nodes: list[dict] = []
 
@@ -1610,7 +1611,7 @@ class TaskService:
                     merged_subtree = merged_subtree["_children"][next_key]
                 # Build a virtual subtree for the merged chain
                 virtual = {merged_name: merged_subtree}
-                child_nodes = cls._prune_trie(virtual, min_group_size, depth, max_depth)
+                child_nodes = cls._prune_trie(virtual, min_group_size, depth, max_depth, index_page=index_page, parent_key=key)
                 if child_nodes:
                     nodes.extend(child_nodes)
                 continue
@@ -1624,13 +1625,22 @@ class TaskService:
                 continue
 
             # Recurse into children
-            child_nodes = cls._prune_trie(child_trie, min_group_size, depth + 1, max_depth)
+            child_nodes = cls._prune_trie(child_trie, min_group_size, depth + 1, max_depth, index_page=index_page, parent_key=key)
 
             if direct_pages or child_nodes:
+                # If a child has the same category as this node, merge its pages up
+                # to avoid redundant parent-child with identical names
+                merged_pages = list(direct_pages)
+                filtered_children = []
+                for child in child_nodes:
+                    if child["category"] == key and not child.get("children"):
+                        merged_pages.extend(child.get("pages", []))
+                    else:
+                        filtered_children.append(child)
                 nodes.append({
                     "category": key,
-                    "pages": direct_pages,
-                    "children": child_nodes,
+                    "pages": merged_pages,
+                    "children": filtered_children,
                 })
 
         # Merge "Other" pages: small groups and root-level pages
@@ -1647,15 +1657,34 @@ class TaskService:
                 final_nodes.append(node)
 
         if other_pages:
+            # Determine the category name for leftover pages
             if index_page is not None:
-                # Index page sits at category level; remaining pages form "详情"
+                leftover_name = "详情"
+            elif parent_key is not None:
+                leftover_name = parent_key
+            else:
+                non_special = [k for k in trie if k != "__root_pages__"]
+                if len(non_special) == 1:
+                    leftover_name = non_special[0]
+                else:
+                    leftover_name = "Other"
+
+            # If the leftover name matches an existing node, merge pages into it
+            # to avoid redundant parent-child with identical names
+            merged_into = False
+            if leftover_name != "详情":
+                for node in final_nodes:
+                    if node["category"] == leftover_name:
+                        node["pages"].extend(other_pages)
+                        merged_into = True
+                        break
+
+            if not merged_into:
                 final_nodes.append({
-                    "category": "详情",
+                    "category": leftover_name,
                     "pages": other_pages,
                     "children": [],
                 })
-            else:
-                final_nodes.append({"category": "Other", "pages": other_pages, "children": []})
 
         return final_nodes
 
@@ -1751,6 +1780,12 @@ class TaskService:
 
         # Prune trie into nested groups
         groups = cls._prune_trie(trie, min_group_size, index_page=index_page)
+
+        # Post-process: eliminate redundant "Other" subcategory
+        if not index_page and len(groups) == 1 and groups[0]["category"] == "Other":
+            # No index page, everything collapsed into "Other" → use LCP segment name
+            cat_name = lcp_segments[-1] if lcp_segments else "Other"
+            groups[0]["category"] = cat_name
 
         # If index page was extracted, wrap trie results in a parent category
         if index_page:

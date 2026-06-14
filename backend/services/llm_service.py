@@ -600,15 +600,17 @@ Respond with ONLY the translated Markdown content.
 
     async def translate_category_names(self, group_names: list[str]) -> dict[str, str]:
         """Translate group names to Chinese. Returns {{en_name: zh_name}} mapping."""
-        names_text = "\n".join(f"- {n}" for n in group_names)
+        # Preprocess: replace hyphens with spaces so the LLM can translate URL segments
+        preprocessed = [n.replace("-", " ") for n in group_names]
+        names_text = "\n".join(f"- {n}" for n in preprocessed)
         prompt = f"""Translate the following group names into concise natural Chinese (2-6 characters each).
-Respond with ONLY a JSON object mapping each English name to Chinese.
+Respond with ONLY a JSON object mapping each name to Chinese.
 
 Group names:
 {names_text}
 
 Format:
-{{"GroupName": "分组中文名", ...}}"""
+{{"group name": "分组中文名", ...}}"""
         logger.info(f"[translate_category_names] names={len(group_names)}")
         raw = await self._invoke_crawl_llm(prompt)
         cleaned = raw.strip()
@@ -617,7 +619,10 @@ Format:
             cleaned = re.sub(r"\n?```$", "", cleaned)
             cleaned = cleaned.strip()
         try:
-            return json.loads(cleaned)
+            result = json.loads(cleaned)
+            # Map preprocessed keys back to original names
+            pre_to_orig = dict(zip(preprocessed, group_names))
+            return {pre_to_orig.get(k, k): v for k, v in result.items()}
         except (json.JSONDecodeError, ValueError):
             logger.warning(f"Failed to parse category name translation result: {raw}")
             return {}
