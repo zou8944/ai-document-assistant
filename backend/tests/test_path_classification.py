@@ -318,6 +318,37 @@ class TestBuildNestedPathGroups:
         all_names = self._collect_all_categories(groups)
         assert "Other" not in all_names
 
+    def test_index_page_at_trie_level_not_lcp(self):
+        """Index page detection should work at any trie level, not just LCP.
+
+        Simulates: /documentation/AppStoreConnectAPI (index) + sub-pages,
+        with LCP = /documentation (because other top-level segments exist).
+        """
+        pages = [
+            # Index page at trie level
+            {"id": "idx", "path": "/documentation/AppStoreConnectAPI", "title": "API Index"},
+            # Sub-pages
+            {"id": "s1", "path": "/documentation/AppStoreConnectAPI/creating-api-keys", "title": "Creating Keys"},
+            {"id": "s2", "path": "/documentation/AppStoreConnectAPI/analytics", "title": "Analytics"},
+            {"id": "s3", "path": "/documentation/AppStoreConnectAPI/certificates", "title": "Certificates"},
+            # Other top-level segment (forces LCP to be just /documentation)
+            {"id": "other", "path": "/documentation/StoreKit/overview", "title": "StoreKit"},
+        ]
+        groups = TaskService._build_nested_path_groups(pages, min_group_size=3)
+        # Should have AppStoreConnectAPI and StoreKit groups
+        cat_names = [g["category"] for g in groups]
+        assert "AppStoreConnectAPI" in cat_names
+        # AppStoreConnectAPI should have index page + "详情" child
+        api_group = next(g for g in groups if g["category"] == "AppStoreConnectAPI")
+        page_ids = [p["id"] for p in api_group["pages"]]
+        assert "idx" in page_ids  # index page at category level
+        assert len(api_group["children"]) == 1
+        assert api_group["children"][0]["category"] == "详情"
+        detail_ids = [p["id"] for p in api_group["children"][0]["pages"]]
+        assert "s1" in detail_ids
+        assert "s2" in detail_ids
+        assert "s3" in detail_ids
+
     @staticmethod
     def _collect_all_categories(groups: list[dict]) -> list[str]:
         names = []

@@ -1628,20 +1628,45 @@ class TaskService:
             child_nodes = cls._prune_trie(child_trie, min_group_size, depth + 1, max_depth, index_page=index_page, parent_key=key)
 
             if direct_pages or child_nodes:
-                # If a child has the same category as this node, merge its pages up
-                # to avoid redundant parent-child with identical names
-                merged_pages = list(direct_pages)
-                filtered_children = []
+                # Merge same-name child pages into a flat list
+                same_name_pages: list[dict] = []
+                other_children: list[dict] = []
                 for child in child_nodes:
                     if child["category"] == key and not child.get("children"):
-                        merged_pages.extend(child.get("pages", []))
+                        same_name_pages.extend(child.get("pages", []))
                     else:
-                        filtered_children.append(child)
-                nodes.append({
-                    "category": key,
-                    "pages": merged_pages,
-                    "children": filtered_children,
-                })
+                        other_children.append(child)
+
+                if not direct_pages:
+                    # No direct pages: merge same-name children into this node's pages
+                    nodes.append({
+                        "category": key,
+                        "pages": same_name_pages,
+                        "children": other_children,
+                    })
+                else:
+                    # Has direct pages (index page at trie level).
+                    # Check if children are all individually small by looking at the
+                    # original child_trie key count vs. resulting child_nodes count.
+                    # If child_trie had many keys but they all collapsed into fewer
+                    # child_nodes (via parent_key merge), the originals were all small.
+                    child_trie_keys = [k for k in child_trie if k != "__root_pages__"]
+                    all_merged = len(child_trie_keys) > len(child_nodes)
+                    all_children = same_name_pages + [p for c in other_children for p in cls._flatten_pages(c)]
+                    if all_merged and all_children:
+                        # All children were individually small → wrap in "详情"
+                        nodes.append({
+                            "category": key,
+                            "pages": direct_pages,
+                            "children": [{"category": "详情", "pages": all_children, "children": []}],
+                        })
+                    else:
+                        # Children are large enough to be their own sub-groups
+                        nodes.append({
+                            "category": key,
+                            "pages": direct_pages,
+                            "children": child_nodes,
+                        })
 
         # Merge "Other" pages: small groups and root-level pages
         other_pages: list[dict] = []
