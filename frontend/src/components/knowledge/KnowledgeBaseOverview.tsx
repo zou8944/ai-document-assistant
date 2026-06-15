@@ -535,7 +535,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
                 <div className="border-t border-white/40 px-4 py-3 bg-gray-50/50 flex space-x-2">
                   <button
                     onClick={() => handleManageClick(collection.id)}
-                    className="flex-1 flex items-center justify-center space-x-1 py-2 px-3 min-h-[44px] bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition-colors text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                    className="flex-1 h-11 min-w-0 flex items-center justify-center space-x-1 px-3 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition-colors text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                   >
                     <CogIcon className="w-3 h-3" />
                     <span>管理</span>
@@ -543,7 +543,7 @@ export const KnowledgeBaseOverview: React.FC<KnowledgeBaseOverviewProps> = ({
 
                   <button
                     onClick={() => handleChatClick(collection.id)}
-                    className="w-full flex items-center justify-center space-x-1 py-2 px-3 min-h-[44px] bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                    className="flex-1 h-11 min-w-0 flex items-center justify-center space-x-1 px-3 bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                   >
                     <ChatBubbleLeftRightIcon className="w-3 h-3" />
                     <span>聊天</span>
