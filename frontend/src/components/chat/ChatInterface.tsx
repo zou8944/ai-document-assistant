@@ -5,7 +5,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { toast } from '../../hooks/useToast'
 import {
-  Cog6ToothIcon,
+  FolderPlusIcon,
   PaperAirplaneIcon,
   StopIcon,
   CpuChipIcon,
@@ -258,8 +258,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
               onClick={() => setShowKnowledgeBaseSelector(true)}
               className="flex items-center space-x-1 text-sm text-muted hover:text-accent transition-colors"
             >
-              <Cog6ToothIcon className="w-4 h-4" />
-              <span>管理知识库</span>
+              <FolderPlusIcon className="w-4 h-4" />
+              <span>添加知识库</span>
             </button>
           )}
         </div>
