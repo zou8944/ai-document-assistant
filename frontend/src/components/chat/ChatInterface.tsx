@@ -29,6 +29,71 @@ import SourceReferences from './SourceReferences'
 import AgentTrace from './AgentTrace'
 import DotsLoader from '../common/DotsLoader'
 
+/**
+ * Derive a stable, name-driven avatar (initials + gradient).
+ * - CJK names → first 1–2 characters
+ * - Latin names → uppercase initials (1–2 chars)
+ * - Color is hashed from the name so the same KB always shows the same avatar.
+ */
+const getKbAvatar = (name: string | undefined): { initials: string; gradient: string; textColor: string } | null => {
+  if (!name) return null
+  const trimmed = name.trim()
+  if (!trimmed) return null
+
+  let initials: string
+  if (/[㐀-鿿]/.test(trimmed)) {
+    // CJK: take up to first 2 characters for a chunkier look in a tiny circle
+    initials = trimmed.slice(0, 2)
+  } else {
+    const words = trimmed.split(/[\s_-]+/).filter(Boolean)
+    if (words.length >= 2) {
+      initials = (words[0][0] + words[1][0]).toUpperCase()
+    } else {
+      initials = trimmed.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || trimmed.slice(0, 2).toUpperCase()
+    }
+  }
+
+  // djb2-style hash → hue in [0, 360)
+  let hash = 5381
+  for (let i = 0; i < trimmed.length; i++) {
+    hash = ((hash << 5) + hash + trimmed.charCodeAt(i)) & 0xffffffff
+  }
+  const hue = Math.abs(hash) % 360
+  const hue2 = (hue + 28) % 360
+  const gradient = `linear-gradient(135deg, hsl(${hue} 72% 82%) 0%, hsl(${hue2} 68% 68%) 100%)`
+  const textColor = `hsl(${hue} 45% 22%)`
+  return { initials, gradient, textColor }
+}
+
+const BotAvatar: React.FC<{ className?: string; title?: string; seed: ReturnType<typeof getKbAvatar> }> = ({ className, title, seed }) => {
+  if (!seed) {
+    return (
+      <div className={clsx('w-7 h-7 rounded-full bg-accent/10 text-accent flex items-center justify-center', className)}>
+        <CpuChipIcon className="w-3.5 h-3.5" />
+      </div>
+    )
+  }
+  return (
+    <div
+      className={clsx('w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-semibold tracking-wide select-none', className)}
+      style={{
+        background: seed.gradient,
+        color: seed.textColor,
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.55), 0 1px 2px rgba(15,23,42,0.08)',
+      }}
+      title={title}
+      aria-label={title}
+    >
+      <span
+        aria-hidden
+        className="absolute inset-0 rounded-full pointer-events-none"
+        style={{ boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.35)' }}
+      />
+      <span className="relative">{seed.initials}</span>
+    </div>
+  )
+}
+
 interface DocumentMention {
   id: string
   name: string
@@ -237,6 +302,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
   const kbNames = getKnowledgeBaseNames()
   const isBoundChat = currentChat.boundCollectionId != null
 
+  // Bot avatar is driven by the chat's first knowledge base (falls back to chip icon).
+  const primaryKbId = currentChat.knowledgeBaseIds[0]
+  const primaryKb = primaryKbId ? knowledgeBases.find(k => k.id === primaryKbId) : undefined
+  const botAvatar = getKbAvatar(primaryKb?.name)
+
   return (
     <div className={clsx('h-full flex flex-col', className)}>
       {/* Header */}
@@ -300,10 +370,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
               ) : (
                 /* AI message - left aligned with bubble */
                 <div className="flex space-x-4 group">
-                  <div className="flex-shrink-0">
-                    <div className="w-7 h-7 rounded-full bg-accent/10 text-accent flex items-center justify-center">
-                      <CpuChipIcon className="w-3.5 h-3.5" />
-                    </div>
+                  <div className="flex-shrink-0 relative">
+                    <BotAvatar seed={botAvatar} title={primaryKb?.name} />
                   </div>
                   <div className="flex-1 min-w-0">
                     {msg.agentState && (
@@ -350,10 +418,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
           {isStreaming && (
             <div className="px-6 py-3.5">
               <div className="flex space-x-4">
-                <div className="flex-shrink-0">
-                  <div className="w-7 h-7 rounded-full bg-accent/10 text-accent flex items-center justify-center">
-                    <CpuChipIcon className="w-3.5 h-3.5" />
-                  </div>
+                <div className="flex-shrink-0 relative">
+                  <BotAvatar seed={botAvatar} title={primaryKb?.name} />
                 </div>
                 <div className="flex-1 min-w-0">
                   {processingStatus && (
@@ -386,10 +452,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
           {isLoading && !isStreaming && (
             <div className="px-6 py-3.5">
               <div className="flex space-x-4">
-                <div className="flex-shrink-0">
-                  <div className="w-7 h-7 rounded-full bg-accent/10 text-accent flex items-center justify-center">
-                    <CpuChipIcon className="w-3.5 h-3.5" />
-                  </div>
+                <div className="flex-shrink-0 relative">
+                  <BotAvatar seed={botAvatar} title={primaryKb?.name} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <DotsLoader className="py-2" />
