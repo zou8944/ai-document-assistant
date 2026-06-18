@@ -13,6 +13,7 @@
  */
 
 import React, { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 
@@ -81,12 +82,13 @@ export const Modal: React.FC<ModalProps> = ({
   }, [open])
 
   if (!open) return null
+  if (typeof document === 'undefined') return null
 
   const handleBackdropClick = () => {
     if (dismissible) onClose()
   }
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in"
       onClick={handleBackdropClick}
@@ -144,7 +146,8 @@ export const Modal: React.FC<ModalProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
