@@ -51,6 +51,7 @@ export interface UseChatReturn {
   stopGeneration: () => void
   loadMessages: () => Promise<void>
   loadOlderMessages: () => Promise<void>
+  clearMessages: () => Promise<void>
   hasMoreOlder: boolean
   isLoadingOlder: boolean
 }
@@ -625,6 +626,21 @@ export const useChat = (chatId: string | null): UseChatReturn => {
     }
   }, [chatId, isLoading, apiClient, handleStreamEvent, handleStreamError])
 
+  const clearMessages = useCallback(async () => {
+    if (!chatId) return
+    try {
+      await apiClient.clearChatMessages(chatId)
+      setMessages([])
+      totalRef.current = 0
+      loadedRef.current = 0
+      setHasMoreOlder(false)
+      setIsLoadingOlder(false)
+    } catch (error) {
+      console.error('清空消息失败:', error)
+      toast.error('清空消息失败: ' + (error as Error).message)
+    }
+  }, [chatId, apiClient])
+
   return {
     messages,
     isLoading,
@@ -636,6 +652,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
     stopGeneration,
     loadMessages,
     loadOlderMessages,
+    clearMessages,
     hasMoreOlder,
     isLoadingOlder,
   }

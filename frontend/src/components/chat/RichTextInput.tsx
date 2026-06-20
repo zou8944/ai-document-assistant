@@ -6,6 +6,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { DocumentIcon } from '@heroicons/react/24/outline'
 import { Document } from '../../services/apiClient'
 import AtDocumentSelector from './AtDocumentSelector'
+import SlashCommandSelector, { SlashCommand, SlashCommandSelectorHandle } from './SlashCommandSelector'
 
 interface DocumentMention {
   id: string
@@ -18,6 +19,8 @@ interface RichTextInputProps {
   value: string
   onChange: (value: string, mentions: DocumentMention[], selectedDocumentIds: string[]) => void
   onKeyDown?: (e: React.KeyboardEvent) => void
+  onSlashCommand?: (commandId: string) => void
+  slashCommands?: SlashCommand[]
   placeholder?: string
   disabled?: boolean
   className?: string
@@ -27,11 +30,16 @@ export const RichTextInput: React.FC<RichTextInputProps> = ({
   value,
   onChange,
   onKeyDown,
+  onSlashCommand,
+  slashCommands,
   placeholder,
   disabled,
   className
 }) => {
   const [isAtSelectorVisible, setIsAtSelectorVisible] = useState(false)
+  const [isSlashMenuVisible, setIsSlashMenuVisible] = useState(false)
+  const [slashSearchTerm, setSlashSearchTerm] = useState('')
+  const slashSelectorRef = useRef<SlashCommandSelectorHandle>(null)
   const [atSearchTerm, setAtSearchTerm] = useState('')
   const [atPosition, setAtPosition] = useState({ top: 0, left: 0 })
   const [atStartIndex, setAtStartIndex] = useState(-1)
@@ -71,6 +79,16 @@ export const RichTextInput: React.FC<RichTextInputProps> = ({
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value
     const cursorPosition = e.target.selectionStart || 0
+
+    // 检查是否输入了斜杠命令
+    const slashMatch = newValue.match(/^\/(\S*)$/)
+    if (slashMatch && slashCommands && slashCommands.length > 0) {
+      setSlashSearchTerm(slashMatch[1])
+      setIsSlashMenuVisible(true)
+      setIsAtSelectorVisible(false)
+    } else {
+      setIsSlashMenuVisible(false)
+    }
 
     // 检查是否输入了@
     const beforeCursor = newValue.slice(0, cursorPosition)
@@ -148,8 +166,20 @@ export const RichTextInput: React.FC<RichTextInputProps> = ({
     setIsAtSelectorVisible(false)
   }
 
+  // 处理斜杠命令选择
+  const handleSlashSelect = (commandId: string) => {
+    setIsSlashMenuVisible(false)
+    onSlashCommand?.(commandId)
+  }
+
   // 处理键盘事件
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // 转发给斜杠命令选择器
+    if (isSlashMenuVisible) {
+      const handled = slashSelectorRef.current?.handleKeyDown(e)
+      if (handled) return
+    }
+
     if (isAtSelectorVisible && ['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(e.key)) {
       // 让AtDocumentSelector处理这些按键
       return
@@ -249,6 +279,16 @@ export const RichTextInput: React.FC<RichTextInputProps> = ({
         onClose={() => setIsAtSelectorVisible(false)}
         searchTerm={atSearchTerm}
         position={atPosition}
+      />
+
+      {/* 斜杠命令选择器 */}
+      <SlashCommandSelector
+        ref={slashSelectorRef}
+        isVisible={isSlashMenuVisible}
+        commands={slashCommands || []}
+        searchTerm={slashSearchTerm}
+        onSelect={handleSlashSelect}
+        onClose={() => setIsSlashMenuVisible(false)}
       />
     </div>
   )

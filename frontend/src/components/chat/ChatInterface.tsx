@@ -136,9 +136,22 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
     sendMessage,
     stopGeneration,
     loadOlderMessages,
+    clearMessages,
     hasMoreOlder,
     isLoadingOlder,
   } = useChat(currentChat?.id || null)
+
+  const SLASH_COMMANDS = [
+    { id: 'clear', label: '/clear', description: '清空当前会话的所有对话历史' },
+  ]
+
+  const handleSlashCommand = async (commandId: string) => {
+    if (commandId === 'clear') {
+      setMessage('')
+      await clearMessages()
+      toast.success('对话历史已清空')
+    }
+  }
 
   // Smart auto-scroll: instant jump on chat switch, smooth only for new messages
   useEffect(() => {
@@ -494,6 +507,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
               <RichTextInput
                 value={message}
                 onChange={handleRichTextChange}
+                onSlashCommand={handleSlashCommand}
+                slashCommands={SLASH_COMMANDS}
                 onKeyDown={(e) => {
                   // IME composition: CJK users press Enter to confirm a candidate.
                   // Without this guard the half-typed word is sent prematurely.

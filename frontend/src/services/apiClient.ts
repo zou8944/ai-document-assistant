@@ -782,6 +782,15 @@ export class DocumentAssistantAPI {
   }
 
   /**
+   * Clear all messages in a chat (keeps the chat itself)
+   */
+  async clearChatMessages(chatId: string): Promise<APIResponse<{ chat_id: string, deleted_count: number }>> {
+    return this.request<APIResponse<{ chat_id: string, deleted_count: number }>>(`/api/v1/chats/${encodeURIComponent(chatId)}/messages`, {
+      method: 'DELETE',
+    })
+  }
+
+  /**
    * Reorder chats (full-list mode). Submit the complete list of chat ids
    * in their new display order; backend rewrites sort_order accordingly.
    */

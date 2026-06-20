@@ -112,6 +112,15 @@ class ChatService:
         self.chat_message_repo.delete_by_chat(chat_id)
         return self.chat_repo.delete(chat_id)
 
+    async def clear_chat_messages(self, chat_id: str) -> int:
+        """Delete all messages in a chat but keep the chat itself."""
+        chat = self.chat_repo.get_by_id(chat_id)
+        if not chat:
+            return -1
+        deleted = self.chat_message_repo.delete_by_chat(chat_id)
+        self.chat_repo.update_message_count(chat_id)
+        return deleted
+
     async def reorder_chats(self, ordered_ids: list[str]) -> int:
         """Reorder chats by rewriting sort_order based on the given full id list.
 

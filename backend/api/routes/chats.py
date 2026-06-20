@@ -164,6 +164,25 @@ async def reorder_chats(request_data: ReorderChatsRequest, request: Request):
     return {"reordered": count}
 
 
+@router.delete("/chats/{chat_id}/messages")
+async def clear_chat_messages(chat_id: str, request: Request):
+    """
+    Delete all messages in a chat (keeps the chat itself).
+    """
+    chat_service = get_app_state(request).chat_service
+    deleted = await chat_service.clear_chat_messages(chat_id)
+
+    if deleted < 0:
+        raise HTTPNotFoundException(f"Chat '{chat_id}' not found")
+
+    logger.info(f"Cleared {deleted} messages from chat {chat_id}")
+
+    return {
+        "chat_id": chat_id,
+        "deleted_count": deleted
+    }
+
+
 @router.get("/chats/{chat_id}/messages")
 async def get_chat_messages(
     chat_id: str,
