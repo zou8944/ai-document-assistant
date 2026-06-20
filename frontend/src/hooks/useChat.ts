@@ -12,6 +12,7 @@ import {
 } from '../services/apiClient'
 import { AgentMessageState } from '../types/agent'
 import { toast } from './useToast'
+import { useAppStore } from '../store/appStore'
 
 export interface Message {
   id: string
@@ -247,6 +248,14 @@ export const useChat = (chatId: string | null): UseChatReturn => {
               agentState: finalAgentState,
             }
             setMessages((prev) => [...prev, aiMessage])
+            // Sync sidebar message count: +2 for user message + AI response
+            if (chatId) {
+              const store = useAppStore.getState()
+              const current = store.chatSessions.find(c => c.id === chatId)
+              if (current) {
+                store.updateChatSession(chatId, { messageCount: current.messageCount + 2 })
+              }
+            }
           }
         }
 
@@ -275,6 +284,14 @@ export const useChat = (chatId: string | null): UseChatReturn => {
               agentState: { ...agentState, status: 'error' as const },
             }
             setMessages((prev) => [...prev, aiMessage])
+          }
+          // Sync sidebar message count: backend persists user + error messages
+          if (chatId) {
+            const store = useAppStore.getState()
+            const current = store.chatSessions.find(c => c.id === chatId)
+            if (current) {
+              store.updateChatSession(chatId, { messageCount: current.messageCount + 2 })
+            }
           }
         }
 
@@ -430,6 +447,10 @@ export const useChat = (chatId: string | null): UseChatReturn => {
           const newState = { ...state, steps: updatedSteps }
           streamingAgentStateRef.current = newState
           setStreamingAgentState(newState)
+        }
+        // Sync chat name if chat_info tool renamed it
+        if (event.data?.name === 'chat_info' && event.data?.structured?.new_name && chatId) {
+          useAppStore.getState().updateChatSession(chatId, { name: event.data.structured.new_name })
         }
         break
       }
@@ -635,6 +656,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
       loadedRef.current = 0
       setHasMoreOlder(false)
       setIsLoadingOlder(false)
+      useAppStore.getState().updateChatSession(chatId, { messageCount: 0 })
     } catch (error) {
       console.error('清空消息失败:', error)
       toast.error('清空消息失败: ' + (error as Error).message)
