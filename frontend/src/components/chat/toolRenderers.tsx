@@ -204,6 +204,24 @@ const startAnswerRenderer: ToolRenderer = {
 }
 
 /* ------------------------------------------------------------------ */
+/* chat_info                                                          */
+/* ------------------------------------------------------------------ */
+
+const chatInfoRenderer: ToolRenderer = {
+  title: (step) => {
+    const newName: string | undefined = getProp(step.toolInput, 'new_name', undefined)
+    if (newName) {
+      return <>修改会话标题为「{truncate(newName, 30)}」</>
+    }
+    return <>查看会话信息</>
+  },
+  summary: (step) => {
+    if (step.toolPreview?.includes('已更新为')) return step.toolPreview
+    return null
+  },
+}
+
+/* ------------------------------------------------------------------ */
 /* Registry                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -217,6 +235,7 @@ export const toolRenderers: Record<string, ToolRenderer> = {
   citations: citationsRenderer,
   cite_sources: citationsRenderer,
   start_answer: startAnswerRenderer,
+  chat_info: chatInfoRenderer,
 }
 
 /**
