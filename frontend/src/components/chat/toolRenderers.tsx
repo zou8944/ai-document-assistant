@@ -204,6 +204,20 @@ const startAnswerRenderer: ToolRenderer = {
 }
 
 /* ------------------------------------------------------------------ */
+/* list_chats                                                         */
+/* ------------------------------------------------------------------ */
+
+const listChatsRenderer: ToolRenderer = {
+  title: () => <>查看所有会话</>,
+  summary: (step) => {
+    const m = step.toolPreview?.match(/共有 (\d+) 个聊天会话/)
+    if (m) return `共 ${m[1]} 个会话`
+    if (step.toolPreview?.includes('暂无')) return '暂无会话'
+    return null
+  },
+}
+
+/* ------------------------------------------------------------------ */
 /* chat_info                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -236,6 +250,7 @@ export const toolRenderers: Record<string, ToolRenderer> = {
   cite_sources: citationsRenderer,
   start_answer: startAnswerRenderer,
   chat_info: chatInfoRenderer,
+  list_chats: listChatsRenderer,
 }
 
 /**

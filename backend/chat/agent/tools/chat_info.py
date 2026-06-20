@@ -1,4 +1,4 @@
-"""Agent tool for reading and updating the current chat session info."""
+"""Agent tools for reading and updating chat session info."""
 
 from chat.agent.tools.base import Tool, ToolContext, ToolResult
 from models.dto import ChatDTO
@@ -69,5 +69,38 @@ class ChatInfoTool(Tool):
                 content=f"会话标题已更新为: {new_name}",
                 structured={"new_name": new_name},
             )
+        except Exception as exc:
+            return ToolResult(content=f"Error: {exc}", is_error=True)
+
+
+class ListChatsTool(Tool):
+    """List all chat sessions."""
+
+    name = "list_chats"
+    description = (
+        "列出所有聊天会话，包括会话名称、消息数量、创建时间等信息。"
+        "当用户询问有哪些会话、或想要了解其他会话的情况时使用。"
+    )
+    input_schema = {
+        "type": "object",
+        "properties": {},
+    }
+    preserve_in_compact = True
+
+    async def run(self, ctx: ToolContext, **kwargs) -> ToolResult:
+        repo = ChatRepository()
+        try:
+            chats = repo.get_all_ordered()
+            if not chats:
+                return ToolResult(content="暂无聊天会话。")
+
+            lines = [f"共有 {len(chats)} 个聊天会话："]
+            for chat in chats:
+                marker = " ← 当前" if chat.id == ctx.chat_id else ""
+                name = chat.name or "(未命名)"
+                msg_count = chat.message_count or 0
+                lines.append(f"- {name} | 消息数: {msg_count} | id: {chat.id}{marker}")
+
+            return ToolResult(content="\n".join(lines))
         except Exception as exc:
             return ToolResult(content=f"Error: {exc}", is_error=True)

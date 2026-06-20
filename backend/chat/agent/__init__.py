@@ -6,7 +6,7 @@ from chat.agent.registry import ToolRegistry
 from chat.agent.runtime import AgentRuntime
 from chat.agent.tools.answer import StartAnswerTool
 from chat.agent.tools.base import AgentDeps, Tool, ToolContext, ToolResult
-from chat.agent.tools.chat_info import ChatInfoTool
+from chat.agent.tools.chat_info import ChatInfoTool, ListChatsTool
 from chat.agent.tools.citations import CiteSourcesTool
 from chat.agent.tools.collections import (
     GetCollectionOverviewTool,
@@ -47,4 +47,5 @@ def build_default_registry(deps: AgentDeps) -> ToolRegistry:
     registry.register(CiteSourcesTool())
     registry.register(StartAnswerTool())
     registry.register(ChatInfoTool())
+    registry.register(ListChatsTool())
     return registry
