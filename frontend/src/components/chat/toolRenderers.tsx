@@ -124,6 +124,26 @@ const getDocumentRenderer: ToolRenderer = {
 }
 
 /* ------------------------------------------------------------------ */
+/* list_documents                                                     */
+/* ------------------------------------------------------------------ */
+
+const listDocumentsRenderer: ToolRenderer = {
+  title: (step) => {
+    const search: string | undefined = getProp(step.toolInput, 'search', undefined)
+    if (search) {
+      return <>浏览文档（筛选「{truncate(search, 30)}」）</>
+    }
+    return <>浏览文档列表</>
+  },
+  summary: (step) => {
+    const m = step.toolPreview?.match(/共 (\d+) 篇文档/)
+    if (m) return `共 ${m[1]} 篇文档`
+    if (step.toolPreview?.includes('未找到')) return '未找到文档'
+    return null
+  },
+}
+
+/* ------------------------------------------------------------------ */
 /* get_document_summary                                               */
 /* ------------------------------------------------------------------ */
 
@@ -244,6 +264,7 @@ export const toolRenderers: Record<string, ToolRenderer> = {
   grep_documents: grepDocumentsRenderer,
   get_document: getDocumentRenderer,
   get_document_summary: getDocumentSummaryRenderer,
+  list_documents: listDocumentsRenderer,
   list_collections: listCollectionsRenderer,
   get_collection_overview: getCollectionOverviewRenderer,
   citations: citationsRenderer,

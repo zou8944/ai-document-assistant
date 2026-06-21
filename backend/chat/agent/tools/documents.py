@@ -137,3 +137,66 @@ class GetDocumentSummaryTool(Tool):
         ]
 
         return ToolResult(content="\n".join(lines))
+
+
+class ListDocumentsTool(Tool):
+    """List documents in a collection."""
+
+    name = "list_documents"
+    description = (
+        "列出指定知识库中的文档，支持按名称筛选和分页。"
+        "当用户问'有哪些文档'、'列一下文档'或想浏览知识库内容时使用。"
+    )
+    input_schema = {
+        "type": "object",
+        "properties": {
+            "collection_id": {
+                "type": "string",
+                "description": "知识库 ID。不传则列出当前会话绑定的所有知识库中的文档。",
+            },
+            "search": {
+                "type": "string",
+                "description": "按文档名称模糊筛选（可选）。",
+            },
+            "offset": {"type": "integer", "default": 0},
+            "limit": {"type": "integer", "default": 30},
+        },
+    }
+    preserve_in_compact = True
+
+    async def run(self, ctx: ToolContext, **kwargs) -> ToolResult:
+        collection_id = kwargs.get("collection_id")
+        search = kwargs.get("search")
+        offset = kwargs.get("offset", 0)
+        limit = kwargs.get("limit", 30)
+
+        try:
+            # Determine which collections to query
+            if collection_id:
+                collection_ids = [collection_id]
+            else:
+                collection_ids = ctx.collection_ids
+
+            if not collection_ids:
+                return ToolResult(content="当前会话未绑定任何知识库。", is_error=True)
+
+            all_docs: list = []
+            for cid in collection_ids:
+                docs = ctx.deps.document_repo.get_by_collection(
+                    cid, exclude_statuses=["failed"], search=search,
+                    offset=offset, limit=limit,
+                )
+                for doc in docs:
+                    status_icon = {"indexed": "✓", "processing": "⏳", "pending": "○"}.get(
+                        doc.status or "", "?"
+                    )
+                    all_docs.append(f"  {status_icon} {doc.name} (id: {doc.id})")
+
+            if not all_docs:
+                return ToolResult(content="未找到任何文档。")
+
+            lines = [f"共 {len(all_docs)} 篇文档："]
+            lines.extend(all_docs)
+            return ToolResult(content="\n".join(lines))
+        except Exception as exc:
+            return ToolResult(content=f"Error: {exc}", is_error=True)

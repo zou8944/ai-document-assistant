@@ -12,7 +12,7 @@ from chat.agent.tools.collections import (
     GetCollectionOverviewTool,
     ListCollectionsTool,
 )
-from chat.agent.tools.documents import GetDocumentSummaryTool, GetDocumentTool
+from chat.agent.tools.documents import GetDocumentSummaryTool, GetDocumentTool, ListDocumentsTool
 from chat.agent.tools.search import GrepDocumentsTool, SearchDocumentsTool
 from chat.agent.trace import TranscriptWriter
 from models.config import AgentConfig
@@ -44,6 +44,7 @@ def build_default_registry(deps: AgentDeps) -> ToolRegistry:
     registry.register(GrepDocumentsTool())
     registry.register(GetDocumentTool())
     registry.register(GetDocumentSummaryTool())
+    registry.register(ListDocumentsTool())
     registry.register(CiteSourcesTool())
     registry.register(StartAnswerTool())
     registry.register(ChatInfoTool())
