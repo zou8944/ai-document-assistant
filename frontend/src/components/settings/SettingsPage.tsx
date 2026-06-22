@@ -259,10 +259,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
   }
 
   return (
-    <div className={clsx('h-full overflow-y-auto', className)}>
-      <div className="max-w-5xl mx-auto p-6 space-y-6">
+    <div className={clsx('h-full flex flex-col', className)}>
+      <div className="max-w-5xl w-full mx-auto flex flex-col flex-1 min-h-0 p-6">
         {/* Header */}
-        <div className="flex items-center space-x-3">
+        <div className="flex-shrink-0 flex items-center space-x-3 mb-6">
           <Cog6ToothIcon className="w-8 h-8 text-accent" />
           <div>
             <h1 className="text-2xl font-bold text-ink">设置</h1>
@@ -270,9 +270,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
           </div>
         </div>
 
-        <div className="flex gap-6">
+        <div className="flex gap-6 flex-1 min-h-0">
           {/* Left nav */}
-          <nav className="flex-shrink-0 w-44 space-y-1">
+          <nav className="flex-shrink-0 w-44 space-y-1 pt-1">
             {SECTIONS.map((section) => {
               const Icon = section.icon
               const colors = colorMap[section.color]
@@ -295,7 +295,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
           </nav>
 
           {/* Right content */}
-          <div className="flex-1 space-y-6">
+          <div className="flex-1 space-y-6 overflow-y-auto min-h-0">
             {SECTIONS.filter((s) => s.id === activeSection).map((section) => {
               const Icon = section.icon
               const colors = colorMap[section.color]
