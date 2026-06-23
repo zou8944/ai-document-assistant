@@ -525,19 +525,19 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
             {isLoading || isStreaming ? (
               <button
                 onClick={stopGeneration}
-                className="flex-shrink-0 bg-ink text-white p-3 rounded-xl transition-colors active:scale-95 transition-transform duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                className="self-end flex-shrink-0 bg-ink text-white p-2 rounded-xl transition-colors active:scale-95 transition-transform duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                 aria-label="停止生成"
               >
-                <StopIcon className="w-5 h-5" />
+                <StopIcon className="w-4 h-4" />
               </button>
             ) : (
               <button
                 onClick={handleSendMessage}
                 disabled={!getRealUserInput(message).trim()}
-                className="flex-shrink-0 bg-accent hover:bg-accent-hover disabled:bg-warm-border text-white p-3 rounded-xl transition-colors disabled:cursor-not-allowed active:scale-95 transition-transform duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                className="self-end flex-shrink-0 bg-accent hover:bg-accent-hover disabled:bg-warm-border text-white p-2 rounded-xl transition-colors disabled:cursor-not-allowed active:scale-95 transition-transform duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                 aria-label="发送消息"
               >
-                <PaperAirplaneIcon className="w-5 h-5" />
+                <PaperAirplaneIcon className="w-4 h-4" />
               </button>
             )}
           </div>
