@@ -19,7 +19,9 @@ export const SourceReferences: React.FC<SourceReferencesProps> = ({ sources }) =
     <div className="mt-4 pt-3 border-t border-warm-border">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center space-x-1 text-meta-xs text-muted hover:text-ink transition-colors"
+        aria-expanded={isExpanded}
+        aria-label={isExpanded ? '收起参考来源' : '展开参考来源'}
+        className="flex items-center space-x-1 text-meta-xs text-muted hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 rounded"
       >
         <span>参考来源 ({sources.length})</span>
         {isExpanded ? (
