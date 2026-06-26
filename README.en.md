@@ -49,27 +49,22 @@ ai-document-assistant/
 ## Quick Start (Docker)
 
 ```bash
-# 1. Configure AI environment variables
-cp .env.deploy.example .env.deploy
-# Edit .env.deploy — at minimum fill in CRAWL_API_KEY and AGENT_API_KEY
+# 1. Deploy
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
-# 2. Deploy
-make deploy-local
-
-# 3. Open the app
-open http://ai-assist.zou8944.com
+# 2. Open the app
+open http://localhost
+# On first launch, complete the setup wizard in the browser
 ```
-
-On first deploy, `ai-assist.zou8944.com` is automatically added to `/etc/hosts`. You can change the domain and port in [frontend/nginx.conf](frontend/nginx.conf) and [docker-compose.yml](docker-compose.yml).
 
 Service Ports:
 
 | Service | Port | Notes |
 |---------|------|-------|
-| Frontend | 80 | Accessible via Nginx |
-| Backend API | 18888 | Internal, not exposed externally |
-| ChromaDB | 18000 | For external access if needed |
-| PostgreSQL | 15432 | For external access if needed |
+| Frontend | 5174 | App entry point, served by Nginx |
+| Backend API | 51741 | For debugging only; normal access goes through frontend proxy |
+
+> PostgreSQL and ChromaDB are only exposed within the Docker internal network, not on the host. The backend connects to them via service names `postgres` / `chroma`.
 
 ## Local Development
 
@@ -103,25 +98,7 @@ cd backend
 cp .env.example .env
 ```
 
-Edit `.env` and fill in the required values:
-
-```env
-# Crawl LLM (any OpenAI-compatible API, e.g. SiliconFlow)
-CRAWL_API_KEY=your_api_key_here
-CRAWL_BASE_URL=https://api.siliconflow.cn/v1
-CRAWL_MODEL=gpt-4o
-
-# Chat Agent LLM (Anthropic Claude)
-AGENT_API_KEY=your_anthropic_api_key_here
-AGENT_MODEL=claude-sonnet-4-20250514
-
-# Embedding model (OpenAI-compatible)
-EMBEDDING_API_KEY=your_api_key_here
-EMBEDDING_BASE_URL=https://api.openai.com/v1
-EMBEDDING_MODEL=text-embedding-ada-002
-```
-
-Keep the database and Chroma connection settings at their defaults (pointing to `localhost`).
+Only database connection settings are needed in `.env` (defaults work for local dev). AI configuration (Crawl / Agent / Embedding) is managed through the **frontend settings UI** after the backend starts, stored in the database.
 
 ### Step 3: Install Dependencies & Start Backend
 
@@ -167,30 +144,25 @@ Opens the backend in a new terminal window and starts the frontend in the curren
 
 ## Environment Variables
 
+### AI Configuration (via Frontend Settings UI)
+
+All AI-related settings (Crawl / Agent / Embedding API keys, models, URLs) are managed through the **frontend settings interface** and stored in the database. No manual env var editing needed.
+
 ### Deployment (Docker)
 
-Deployment config lives in `.env.deploy` at the project root. Template: [.env.deploy.example](.env.deploy.example). **AI config only** — database and Chroma settings are hardcoded in docker-compose.yml.
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `CRAWL_API_KEY` | Yes | Crawl-stage LLM API Key |
-| `CRAWL_BASE_URL` | Yes | Crawl-stage API Base URL |
-| `AGENT_API_KEY` | Yes | Chat Agent LLM API Key (Anthropic) |
-| `EMBEDDING_API_KEY` | Yes | Embedding API Key |
-| `EMBEDDING_BASE_URL` | Yes | Embedding API Base URL |
-| `LOG_LEVEL` | No | Default `info` |
+Database and Chroma settings are hardcoded in docker-compose.yml. AI configuration is completed through the frontend settings UI. Just run the setup wizard in the browser after first launch.
 
 ### Local Development
 
-See [backend/.env.example](backend/.env.example). Includes database connection settings in addition to the AI config above.
+Only database connection settings are needed in [backend/.env](backend/.env):
 
-| Variable | Description |
-|----------|-------------|
-| `POSTGRES_HOST` | Use `localhost` for local dev |
-| `POSTGRES_PORT` | Default `5432` |
-| `POSTGRES_USER` | Default `postgres` |
-| `POSTGRES_PASSWORD` | Default `postgres` |
-| `POSTGRES_DB` | Default `ai_document_assistant` |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `POSTGRES_HOST` | `localhost` | PostgreSQL host |
+| `POSTGRES_PORT` | `5432` | PostgreSQL port |
+| `POSTGRES_USER` | `postgres` | Database user |
+| `POSTGRES_PASSWORD` | `postgres` | Database password |
+| `POSTGRES_DB` | `ai_document_assistant` | Database name |
 
 ## Docker Commands
 
@@ -277,14 +249,14 @@ See [DEBUG_GUIDE.md](DEBUG_GUIDE.md). VS Code debug configs are pre-set — pres
 
 **Port already in use**
 ```bash
-lsof -i :80   # or :18888 / :18000 / :15432
+lsof -i :5174   # or :51741
 # Update port mappings in docker-compose.yml
 ```
 
 **Backend fails to start**
 ```bash
 docker compose logs backend
-curl http://localhost:18888/api/v1/health
+curl http://localhost:51741/api/v1/health
 ```
 
 **ChromaDB connection fails**

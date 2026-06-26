@@ -49,27 +49,22 @@ ai-document-assistant/
 ## 快速开始（Docker）
 
 ```bash
-# 1. 配置 AI 环境变量
-cp .env.deploy.example .env.deploy
-# 编辑 .env.deploy，至少填写 CRAWL_API_KEY 和 AGENT_API_KEY
+# 1. 部署
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
-# 2. 部署
-make deploy-local
-
-# 3. 访问应用
-open http://ai-assist.zou8944.com
+# 2. 访问应用
+open http://localhost
+# 首次访问会弹出设置引导，配置 AI API Key 等参数
 ```
-
-首次部署会自动将 `ai-assist.zou8944.com` 写入 `/etc/hosts`。部署时使用的域名和端口可在 [frontend/nginx.conf](frontend/nginx.conf) 和 [docker-compose.yml](docker-compose.yml) 中修改。
 
 服务端口：
 
 | 服务 | 端口 | 说明 |
 |------|------|------|
-| 前端 | 80 | 通过 nginx 访问 |
-| 后端 API | 18888 | 内部使用，不对外暴露 |
-| ChromaDB | 18000 | 如需外部连接 |
-| PostgreSQL | 15432 | 如需外部连接 |
+| 前端 | 5174 | 应用入口，通过 nginx 访问 |
+| 后端 API | 51741 | 仅供调试，正常访问走前端代理 |
+
+> PostgreSQL 和 ChromaDB 仅在 Docker 内部网络中暴露，不占用宿主机端口。后端通过服务名 `postgres` / `chroma` 直连。
 
 ## 本地开发
 
@@ -107,25 +102,7 @@ cd backend
 cp .env.example .env
 ```
 
-编辑 `.env`，填入以下必填项：
-
-```env
-# 爬取阶段 LLM（兼容 OpenAI 接口的第三方服务均可，如 SiliconFlow）
-CRAWL_API_KEY=your_api_key_here
-CRAWL_BASE_URL=https://api.siliconflow.cn/v1
-CRAWL_MODEL=gpt-4o
-
-# 聊天 Agent LLM（Anthropic Claude）
-AGENT_API_KEY=your_anthropic_api_key_here
-AGENT_MODEL=claude-sonnet-4-20250514
-
-# Embedding 模型（兼容 OpenAI 接口）
-EMBEDDING_API_KEY=your_api_key_here
-EMBEDDING_BASE_URL=https://api.openai.com/v1
-EMBEDDING_MODEL=text-embedding-ada-002
-```
-
-其余数据库和 Chroma 连接项保持 `.env.example` 中的默认值即可（本地开发指向 `localhost`）。
+`.env` 中只需配置数据库连接信息（默认值即可，本地开发指向 `localhost`）。AI 相关配置（Crawl / Agent / Embedding）在后端启动后通过**前端设置界面**配置，存储在数据库中。
 
 ### 第三步：安装依赖并启动后端
 
@@ -171,30 +148,25 @@ make dev
 
 ## 环境变量
 
+### AI 配置（通过前端设置界面管理）
+
+AI 相关配置（Crawl / Agent / Embedding 的 API Key、模型、地址等）**通过前端设置界面配置**，存储在数据库中，无需手动编辑环境变量。
+
 ### 部署（Docker）
 
-部署专用配置位于项目根目录的 `.env.deploy`，模板见 [.env.deploy.example](.env.deploy.example)。**只包含 AI 相关配置**，数据库和 Chroma 配置已硬编码在 docker-compose.yml 中：
-
-| 变量 | 必填 | 说明 |
-|------|------|------|
-| `CRAWL_API_KEY` | 是 | 爬取阶段 LLM API Key |
-| `CRAWL_BASE_URL` | 是 | 爬取阶段 API Base URL |
-| `AGENT_API_KEY` | 是 | 聊天 Agent LLM API Key（Anthropic） |
-| `EMBEDDING_API_KEY` | 是 | Embedding API Key |
-| `EMBEDDING_BASE_URL` | 是 | Embedding API Base URL |
-| `LOG_LEVEL` | 否 | 默认 `info` |
+数据库和 Chroma 配置已硬编码在 docker-compose.yml 中，AI 配置通过前端设置界面完成。首次启动后在浏览器中完成设置引导即可。
 
 ### 本地开发
 
-开发环境配置见 [backend/.env.example](backend/.env.example)，除 AI 配置外还包含数据库连接信息：
+本地开发只需在 [backend/.env](backend/.env) 中配置数据库连接：
 
-| 变量 | 说明 |
-|------|------|
-| `POSTGRES_HOST` | 本地开发填 `localhost` |
-| `POSTGRES_PORT` | 默认 `5432` |
-| `POSTGRES_USER` | 默认 `postgres` |
-| `POSTGRES_PASSWORD` | 默认 `postgres` |
-| `POSTGRES_DB` | 默认 `ai_document_assistant` |
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `POSTGRES_HOST` | `localhost` | PostgreSQL 地址 |
+| `POSTGRES_PORT` | `5432` | PostgreSQL 端口 |
+| `POSTGRES_USER` | `postgres` | 数据库用户 |
+| `POSTGRES_PASSWORD` | `postgres` | 数据库密码 |
+| `POSTGRES_DB` | `ai_document_assistant` | 数据库名 |
 
 ## Docker 常用命令
 
@@ -280,14 +252,14 @@ cat backup.sql | docker compose exec -T postgres psql -U postgres ai_document_as
 
 **端口被占用**
 ```bash
-lsof -i :80   # 或 :18888 / :18000 / :15432
+lsof -i :5174   # 或 :51741
 # 修改 docker-compose.yml 中的端口映射
 ```
 
 **后端启动失败**
 ```bash
 docker compose logs backend
-curl http://localhost:18888/api/v1/health
+curl http://localhost:51741/api/v1/health
 ```
 
 **ChromaDB 连接失败**
