@@ -1,5 +1,7 @@
 # AI Document Assistant
 
+简体中文 | [English](./README.en.md)
+
 基于 React + Python 的 AI 文档阅读助手，支持本地文件处理和网站内容抓取，提供智能问答功能。
 
 > **Vibe Coding 项目** — 本项目主要通过 AI 辅助编程（Claude Code）完成，代码由 AI 生成并经人工审查，非纯手工编写。
@@ -71,28 +73,101 @@ open http://ai-assist.zou8944.com
 
 ## 本地开发
 
+### 环境要求
+
+| 依赖 | 版本 | 用途 |
+|------|------|------|
+| Docker & Docker Compose | - | 运行 PostgreSQL 和 ChromaDB |
+| Python | >= 3.9 | 后端运行时 |
+| [uv](https://docs.astral.sh/uv/) | - | Python 依赖管理（替代 pip） |
+| Node.js | >= 18 | 前端构建与开发 |
+| npm | - | 前端依赖管理（随 Node.js 安装） |
+
+### 第一步：启动基础服务
+
+使用 Docker Compose 启动 PostgreSQL 和 ChromaDB：
+
 ```bash
-# 启动依赖服务（PostgreSQL + ChromaDB）
 docker compose up postgres chroma -d
-
-# 后端
-cd backend
-cp .env.example .env
-# 编辑 .env 填入 CRAWL_API_KEY、AGENT_API_KEY 和 EMBEDDING_API_KEY
-uv sync
-uv run python api_server.py
-
-# 前端（另开终端）
-cd frontend
-npm install
-npm run dev
-# 访问 http://localhost:5173
 ```
 
-或使用 `make dev` 一键启动（macOS）：
+验证服务是否正常运行：
+
+```bash
+docker compose ps
+# 应看到 postgres (healthy) 和 chroma 两个容器
+```
+
+### 第二步：配置后端
+
+```bash
+cd backend
+
+# 从模板创建 .env 文件
+cp .env.example .env
+```
+
+编辑 `.env`，填入以下必填项：
+
+```env
+# 爬取阶段 LLM（兼容 OpenAI 接口的第三方服务均可，如 SiliconFlow）
+CRAWL_API_KEY=your_api_key_here
+CRAWL_BASE_URL=https://api.siliconflow.cn/v1
+CRAWL_MODEL=gpt-4o
+
+# 聊天 Agent LLM（Anthropic Claude）
+AGENT_API_KEY=your_anthropic_api_key_here
+AGENT_MODEL=claude-sonnet-4-20250514
+
+# Embedding 模型（兼容 OpenAI 接口）
+EMBEDDING_API_KEY=your_api_key_here
+EMBEDDING_BASE_URL=https://api.openai.com/v1
+EMBEDDING_MODEL=text-embedding-ada-002
+```
+
+其余数据库和 Chroma 连接项保持 `.env.example` 中的默认值即可（本地开发指向 `localhost`）。
+
+### 第三步：安装依赖并启动后端
+
+```bash
+cd backend
+uv sync                           # 安装 Python 依赖
+uv run python api_server.py       # 启动后端服务，默认监听 8888 端口
+```
+
+后端启动成功后访问 `http://localhost:8888/api/v1/health` 应返回正常响应。
+
+### 第四步：启动前端
+
+另开一个终端：
+
+```bash
+cd frontend
+npm install          # 安装前端依赖
+npm run dev          # 启动 Vite 开发服务器
+```
+
+访问 `http://localhost:5173` 即可使用。
+
+### 一键启动（macOS）
+
 ```bash
 make dev
 ```
+
+此命令会在新终端窗口中启动后端，在当前终端启动前端。首次使用需授权终端 App 的 Automation 权限。
+
+### Makefile 常用命令
+
+| 命令 | 说明 |
+|------|------|
+| `make install` | 安装前后端所有依赖 |
+| `make dev` | 一键启动本地开发环境 |
+| `make dev-backend` | 仅启动后端 |
+| `make dev-frontend` | 仅启动前端 |
+| `make test` | 运行全部测试 |
+| `make lint` | 运行代码检查（ruff + black + tsc） |
+| `make migrate` | 执行数据库迁移 |
 
 ## 环境变量
 
