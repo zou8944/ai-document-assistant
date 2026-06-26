@@ -33,6 +33,16 @@ class LLMService:
     def __init__(self, config):
         self.config = config
 
+        # Defer initialization if API key is not configured (first launch)
+        if not config.llm.crawl.api_key:
+            logger.warning("Crawl API key not configured, LLMService will be unavailable until configured via settings UI")
+            self.embeddings = None
+            self.crawl_llm = None
+            self.document_summarizer = None
+            self.text_parser = StrOutputParser()
+            self._consecutive_failures = 0
+            return
+
         # Validate crawl provider (currently only openai is supported)
         self.config.llm.crawl.validate(supported_providers=["openai"])
 

@@ -86,9 +86,11 @@ class DocumentService:
         self.doc_repo = DocumentRepository()
         self.doc_chunk_repo = DocumentChunkRepository()
 
-        # Initialize embeddings
-        embeddings_kwargs = self.config.get_openai_embeddings_kwargs()
-        self.embeddings = OpenAIEmbeddings(**embeddings_kwargs)
+        # Initialize embeddings (deferred if API key not configured)
+        self.embeddings = None
+        if self.config.embedding.api_key:
+            embeddings_kwargs = self.config.get_openai_embeddings_kwargs()
+            self.embeddings = OpenAIEmbeddings(**embeddings_kwargs)
 
         # Batch processing settings
         self.max_embedding_batch_size = getattr(self.config, "embedding_batch_size", 64)
