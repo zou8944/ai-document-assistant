@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM docker.1ms.run/library/python:3.11-slim
 
 # 安装系统依赖
 RUN apt-get update && apt-get install -y \

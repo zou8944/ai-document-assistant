@@ -1,5 +1,5 @@
 # 构建阶段
-FROM node:18-alpine AS builder
+FROM docker.1ms.run/library/node:18-alpine AS builder
 
 WORKDIR /app
 
@@ -18,7 +18,7 @@ ENV NODE_ENV=${NODE_ENV}
 RUN npm run build
 
 # 生产阶段
-FROM nginx:alpine
+FROM docker.1ms.run/library/nginx:alpine
 
 # 复制构建产物
 COPY --from=builder /app/dist /usr/share/nginx/html

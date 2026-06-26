@@ -51,7 +51,7 @@ services:
 
   # PostgreSQL 数据库
   postgres:
-    image: postgres:16-alpine
+    image: docker.1ms.run/library/postgres:16-alpine
     container_name: ai-doc-assistant-postgres
     environment:
       - POSTGRES_USER=postgres
@@ -75,7 +75,7 @@ services:
 
   # Chroma 向量数据库
   chroma:
-    image: chromadb/chroma:latest
+    image: docker.1ms.run/chromadb/chroma:latest
     container_name: ai-doc-assistant-chroma
     environment:
       - ANONYMIZED_TELEMETRY=FALSE
