@@ -1,91 +1,173 @@
-### 🔄 项目认知与背景
-- **项目目标**: 构建一个 AI 文档阅读助手，能够通过本地文件、文件夹或指定的网站链接，抓取并学习相关文档内容，并允许用户针对这些内容进行提问。
-- **核心痛点**: 解决人工阅读大量文档时效率低下、容易遗漏关键信息的问题。
-- **关键特性**:
-    - 支持本地文件和文件夹作为数据源。
-    - 能够从一个初始 URL 开始，递归抓取同一域名下的所有页面。
-    - 基于 RAG 架构，提供精准的问答能力。
-- **技术方向**: 前端使用 React + Vite + Tailwind CSS 构建 Web 应用（Nginx 托管），后端使用 FastAPI + LangChain + ChromaDB，前后端通过 HTTP API 通信。
+# CLAUDE.md
 
-### 🧱 代码结构与模块化
-- **整体架构**: 采用前后端分离的桌面应用架构。
-    - **前端**: React + Vite + Tailwind CSS，负责用户界面与交互。
-    - **后端**: Python 服务（FastAPI + uvicorn），负责爬虫、数据处理、向量化和 RAG 检索。
-    - **通信**: 前后端通过 HTTP API 通信。
-- **后端模块划分**:
-    - `crawler/`: 包含使用 `Scrapy` 和 `requests/BeautifulSoup` 的网络爬虫模块，并具备简单的反爬措施。
-    - `data_processing/`: 负责文本处理，使用 LangChain 的 `RecursiveCharacterTextSplitter` 进行文本切分。
-    - `vector_store/`: 管理与 Chroma 向量数据库的交互，包括数据向量化和存储。
-    - `rag/`: 实现基于 LangChain 的 RAG 核心逻辑，包括自定义 Prompt 模板和缓存机制。
-    - `main.py` 或 `api.py`: 作为后端服务的入口，处理前端请求。
-- **前端模块划分**:
-    - `src/components`: 可复用的 React 组件。
-    - `src/pages`: 应用的主要页面，如主界面、设置页等。
-    - `src/services`: 与后端 Python 服务通信的逻辑。
-    - `src/store/`: 全局状态管理（Zustand）。
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-### 🧪 测试与可靠性
-- **后端测试**:
-    - 使用 `Pytest` 为后端 Python 服务编写单元测试。
-    - 对爬虫、文本切分、RAG 链等核心模块进行独立测试。
-    - 使用 `mock` 模拟外部依赖（如 LLM API、Chroma 服务）的行为。
-- **前端测试**:
-    - 使用 `Vitest` 和 `React Testing Library` 对 React 组件进行单元测试和集成测试。
-- **测试覆盖**: 确保核心功能至少包含预期成功、边界条件和失败处理的测试用例。
+## What This Project Is
 
-### 🎨 UI/UX 设计
-- **设计风格**: 遵循 `UI 设计指南.md` 中定义的 Apple Liquid Glass 风格，与 macOS HIG (人机界面指南) 保持一致，确保原生质感。
-- **核心原则**: 强调清晰、深度、简洁和一致性，界面聚焦于内容，提供流畅直观的交互。
-- **组件实现**: 使用 Tailwind CSS 实现指南中定义的半透明毛玻璃效果、柔和渐变、统一样式控件等。
+AI Document Assistant — a RAG-based document Q&A tool. Users upload files or crawl websites into collections, then chat with an AI agent that retrieves and cites source documents. Built as a web app (React + FastAPI) that also runs as an Electron desktop app.
 
-### ✅ 任务完成
-- **任务管理**: 在 `TASK.md` 中记录和跟踪开发任务。
-- **里程碑规划**:
-    1.  搭建 React + Vite + Tailwind CSS 的前端项目框架。
-    2.  实现前后端的 HTTP API 通信机制。
-    3.  完成后端的文件/文件夹数据读取功能。
-    4.  集成 `Scrapy` + `requests/BeautifulSoup` 实现网页抓取功能。
-    5.  集成 LangChain 实现文本切分、向量化和 Chroma 存储。
-    6.  构建完整的 RAG 问答流程，并提供 API 接口。
-    7.  在前端界面上实现文件选择、URL 输入和问答交互。
-    8.  实现后端缓存机制以优化响应速度。
+## Common Commands
 
-### 📎 风格与约定
-- **后端技术栈**:
-    - **语言**: Python 3.9+
-    - **包管理**: 使用 `uv`（而非 pip）。
-    - **核心库**: `LangChain`, `chroma-client`, `scrapy`, `pydantic`。
-    - **代码风格**: 遵循 PEP8 规范，使用 `black` + `ruff` 进行格式化与检查，并添加类型提示。
-- **前端技术栈**:
-    - **框架**: `React`, `Vite`
-    - **样式**: `Tailwind CSS`
-    - **语言**: `TypeScript`
-- **数据处理**:
-    - **文本切分**: 使用 LangChain 的 `RecursiveCharacterTextSplitter`，并根据文档特性调整 `chunk_size` 和 `chunk_overlap`。
-    - **向量化**: 选用合适的开源或商用 Embedding 模型。
-    - **向量存储**: 使用容器化部署的 `Chroma`。
-- **本地开发必备**:
-    - 启动依赖服务：`docker compose up postgres chroma -d`
-    - 后端运行需确保 `backend/` 目录在 Python 路径中（`PYTHONPATH=backend/` 或直接从 `backend/` 目录运行）
-    - 后端启动：`cd backend && uv run python api_server.py`
-    - 前端启动：`cd frontend && npm run dev`
-- **分支与提交**:
-    - 功能分支开发，通过 PR 合并到 main
-    - 提交信息遵循 Conventional Commits（`feat:` / `fix:` / `refactor:` / `chore:`）
-- **后端约定**:
-    - 使用 `uv` 管理 Python 依赖（`uv sync` / `uv run`）
-    - 列表类型使用 list 而不是 typing.List
-    - 字典类型使用 dict 而不是 typing.Dict
-    - 无论在代码中还是注释中，空行都不允许包含空白字符，否则会报 "Blank line contains whitespace"
-    - 不要使用相对路径导入，使用绝对路径
+### Local Development
+```bash
+# Start infrastructure (PostgreSQL + ChromaDB)
+docker compose up postgres chroma -d
 
-### 📚 文档与可解释性
-- **`README.md`**: 详细记录项目的设置和启动步骤，包括前端依赖安装、Python 环境配置以及如何启动 Chroma 容器。
-- **代码注释**: 为复杂逻辑（如 RAG 链、爬虫策略）添加清晰的注释，解释其工作原理和设计原因。
-- **Prompt 模板**: 将 RAG 使用的 Prompt 模板单独存放和管理，方便调试和优化。
-- **方案/需求文档**: 所有实施方案、需求、设计、改造类文档统一存放在项目内 `requirements/` 目录，文件名遵循「{编号} - {中文标题}.md」格式（编号从已有最大编号 +1 开始）。不要放在项目根目录、不要用英文 ALL_CAPS 文件名、不要放在系统全局路径（如 `~/.claude/plans/`）。写入前先 `ls requirements/` 确认下一编号。
+# Backend (from backend/)
+uv sync
+uv run python api_server.py               # starts on :8888
 
-### 🧠 AI 行为准则
-- **明确边界**: AI 助手应明确告知用户其知识范围仅限于提供的文档，避免回答范围外的问题。
-- **引用来源**: 在回答问题时，尽可能提供答案所依据的原文片段或来源链接，以提高可信度。
-- **持续学习**: 严格遵循本文档中定义的架构和技术选型，在开发过程中遇到模糊不清的地方时，应主动提问以获取明确信息。
+# Frontend (from frontend/)
+npm install
+npm run dev                                # starts on :5173, proxies /api to :8888
+
+# One-command start (macOS, opens backend in new terminal)
+make dev
+```
+
+### Docker Deployment
+```bash
+make deploy-local                          # builds and starts all containers
+# Access at http://localhost:5174
+# First launch: complete the setup wizard to configure API keys
+```
+
+### Testing
+```bash
+# Backend
+cd backend && uv run pytest tests/ -v
+uv run pytest tests/agent/test_runtime.py -v          # single file
+uv run pytest tests/agent/test_runtime.py::test_name -v  # single test
+
+# Frontend
+cd frontend && npm test
+npx vitest run src/components/chat/MarkdownContent.test.tsx  # single file
+```
+
+### Linting
+```bash
+# Backend (all from backend/)
+uv run ruff check .
+uv run black . --check
+uv run mypy .
+
+# Frontend (from frontend/)
+npm run lint
+npm run type-check
+
+# All at once
+make lint
+```
+
+### Database
+```bash
+# Migrations run automatically at backend startup
+# Manual migration
+cd backend && uv run alembic upgrade head
+
+# Generate new migration after model changes
+cd backend && uv run alembic revision --autogenerate -m "description"
+```
+
+## Architecture
+
+### Data Flow
+
+```
+Frontend (React/Zustand)
+    |  HTTP + SSE
+    v
+FastAPI routes (/api/v1/*)
+    |  AppState injected at lifespan
+    v
+Service Layer
+    |-- AgentChatService  <-- primary chat path (tool-use agent loop)
+    |-- ChatService       <-- CRUD only, no response generation
+    |-- TaskService       <-- background workers for ingestion
+    |-- CollectionService, DocumentService, LLMService
+    v
+Repository Layer (SQLAlchemy)
+    |-- PostgreSQL (metadata, settings, chat history)
+    |-- ChromaDB  (vector embeddings, linked via DocumentChunk.vector_id)
+```
+
+### Chat Pipeline (Agent-based, production path)
+
+The active chat path is in `backend/chat/agent/`. `AgentRuntime` runs an iterative tool-use loop:
+
+1. Receives user query + conversation history + collection IDs
+2. Calls LLM backend (`ClaudeToolBackend`, Anthropic only) with registered tools
+3. LLM autonomously invokes tools (search, grep, get document, list collections, etc.)
+4. Loop continues (up to 500 iterations) until LLM calls `StartAnswerTool`
+5. `LoopDetector` prevents infinite loops; `Compaction` manages context window pressure
+6. All events stream to frontend via SSE (`AGENT_START`, `TOOL_CALL`, `TOOL_RESULT`, `START_ANSWER`, etc.)
+
+A legacy RAG pipeline exists in `backend/rag/` but is no longer used for chat responses.
+
+### Key Backend Modules
+
+| Path | Role |
+|------|------|
+| `api/main.py` | FastAPI app, lifespan (migrations, config, service init) |
+| `api/state.py` | `AppState` dataclass holding all services |
+| `api/routes/` | 8 route modules, all under `/api/v1` |
+| `services/` | Business logic (LLM, tasks, collections, documents, chat) |
+| `chat/agent/` | Agent runtime, tool registry, LLM backends |
+| `chat/retrieval/` | Hybrid retrieval: vector + document + keyword indexes |
+| `chat/context/` | Query expansion |
+| `rag/` | Legacy RAG prompts and summarizer (still used by tasks) |
+| `repository/` | SQLAlchemy data access |
+| `database/models/` | ORM models |
+| `database/migrations/` | Alembic migrations (auto-run at startup) |
+| `vector_store/` | ChromaDB client (persistent local or HTTP) |
+| `crawler/` | Web crawling |
+| `data_processing/` | File reading, text splitting (LangChain RecursiveCharacterTextSplitter) |
+| `config.py` | Config loading: env vars → TOML file → DB settings |
+| `settings_util.py` | DB-backed settings with encryption for API keys |
+
+### Key Frontend Modules
+
+| Path | Role |
+|------|------|
+| `src/App.tsx` | Startup flow: health poll → config check → SetupWizard or MainLayout |
+| `src/store/appStore.ts` | Zustand global state (persist + devtools) |
+| `src/services/apiClient.ts` | Typed API client, `useAPIClient()` hook |
+| `src/components/chat/` | Chat UI, agent trace, markdown rendering, tool renderers |
+| `src/components/knowledge/` | Collection management, document viewer |
+| `src/components/settings/SetupWizard.tsx` | First-launch API key configuration |
+
+### Configuration
+
+AI settings (API keys, models, URLs) are stored in the PostgreSQL `settings` table and managed through the frontend settings UI. Sensitive values are encrypted at rest.
+
+On first launch, `settings_util.py` seeds default settings. The frontend checks `/api/v1/settings/status` and shows a setup wizard if critical keys are missing.
+
+`config.py` loads config in priority order: DB settings > TOML file > env vars > defaults. Env vars (`DOCKER_ENV=true` triggers env-based bootstrap) are only used for the initial Docker startup before the DB is ready.
+
+## Coding Conventions
+
+### Backend (Python 3.9+)
+- Package manager: `uv` (not pip). `uv sync` to install, `uv run` to execute.
+- Use `list` not `typing.List`, `dict` not `typing.Dict`
+- Absolute imports only, no relative imports
+- No trailing whitespace on blank lines (ruff enforces this)
+- Formatter: `black`, linter: `ruff`
+- Run from `backend/` directory (it must be on PYTHONPATH)
+
+### Frontend (TypeScript/React)
+- State: Zustand with persist + devtools middleware
+- Styling: Tailwind CSS, following `UI 设计指南.md` (Apple Liquid Glass style)
+- Path aliases: `@/components`, `@/services`, `@/styles`
+
+### Git
+- Conventional Commits: `feat:` / `fix:` / `refactor:` / `chore:` / `docs:` / `infra:`
+- Feature branches, merge to main via PR
+
+### Documentation
+- Requirements/design docs go in `requirements/` directory
+- Naming: `{next_number} - {中文标题}.md` (check `ls requirements/` for next number)
+- Do not place docs in project root or `~/.claude/plans/`
+
+## Vibe Coding
+
+This project is primarily built with AI-assisted programming (Claude Code). Code is AI-generated and human-reviewed.
