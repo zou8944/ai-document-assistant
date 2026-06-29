@@ -217,8 +217,6 @@ DEFAULT_SETTINGS: list[tuple[str, str, str, str, str, bool]] = [
     # ── 系统参数 ──
     ("SERVER_PORT", "8000", "number", "system",
      "后端服务监听的端口", False),
-    ("LOG_LEVEL", "info", "string", "system",
-     "服务端日志输出级别：DEBUG / INFO / WARNING / ERROR", False),
 ]
 
 

@@ -8,7 +8,6 @@ import {
   Cog6ToothIcon,
   DocumentArrowDownIcon,
   ChatBubbleLeftRightIcon,
-  ServerStackIcon,
   EyeIcon,
   EyeSlashIcon,
 } from '@heroicons/react/24/outline'
@@ -105,27 +104,6 @@ const SECTIONS: SectionDef[] = [
         fields: [
           { key: 'RAG_TOP_K', label: '检索文档数', type: 'number', description: '检索最相似文档片段的数量' },
           { key: 'AGENT_TEMPERATURE', label: 'AI 随机度', type: 'number', description: '值越低越稳定，越高越有创造性' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'system',
-    title: '系统配置',
-    subtitle: '系统运行相关参数',
-    icon: ServerStackIcon,
-    color: 'gray',
-    subsections: [
-      {
-        title: '系统参数',
-        category: 'system',
-        fields: [
-          { key: 'LOG_LEVEL', label: '日志级别', type: 'select', description: '控制后端服务的日志输出级别', options: [
-            { value: 'debug', label: 'Debug' },
-            { value: 'info', label: 'Info' },
-            { value: 'warning', label: 'Warning' },
-            { value: 'error', label: 'Error' },
-          ]},
         ],
       },
     ],
