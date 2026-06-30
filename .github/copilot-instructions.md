@@ -16,7 +16,7 @@ AI 文档阅读助手：聚合 本地文件 / 文件夹 / 网站 作为知识来
   - 启动入口：`api_server.py`
   - 服务层：`services/`（collection / document / query）
   - 数据模型：`models/`（Pydantic 请求/响应/流式）
-  - Docker 配置：`Dockerfile`, 通过环境变量配置（CRAWL_API_KEY, AGENT_API_KEY, EMBEDDING_API_KEY, CHROMA_HOST等）
+  - Docker 配置：`Dockerfile`, AI 配置通过前端设置界面管理，`LOG_LEVEL` 通过环境变量配置
 - 前端：`frontend/` (React + TS + Tailwind Web 应用)
   - 组件：`src/components/`
   - Docker 配置：`Dockerfile` + `nginx.conf`（Nginx提供静态文件服务和反向代理）
@@ -75,11 +75,13 @@ AI 文档阅读助手：聚合 本地文件 / 文件夹 / 网站 作为知识来
 
 
 ### 4.2 Docker 部署
-- 项目使用 Docker Compose 编排三个服务：frontend (Nginx)、backend (FastAPI)、chroma (向量数据库)。
-- 后端通过环境变量配置（`CRAWL_API_KEY`, `AGENT_API_KEY`, `EMBEDDING_API_KEY`, `CHROMA_HOST`, `DATA_DIR` 等）,优先级:环境变量 > 配置文件 > 默认值。
+- 项目使用 Docker Compose 编排四个服务：frontend (Nginx, :5174)、backend (FastAPI, :51741)、postgres、chroma。
+- AI 配置（API Key、模型等）通过前端设置界面管理，存储在数据库中。首次启动弹出设置引导。
+- `LOG_LEVEL` 通过环境变量配置，不在前端 UI 中。
+- PostgreSQL 和 ChromaDB 不暴露主机端口，后端通过 Docker 内部网络直连。
 - 前端通过 Nginx 提供静态文件服务,并反向代理 `/api/` 到后端服务。
-- 本地开发:后端使用 `uv run python api_server.py`,前端使用 `npm run dev`,Chroma 可用容器或本地客户端。
-- 生产部署:使用 `docker-compose up -d` 启动所有服务。
+- 本地开发:后端使用 `uv run python api_server.py`,前端使用 `npm run dev`,Chroma 用本地持久化存储。
+- 生产部署:使用 `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d` 启动所有服务。
 
 ### 4.3 后端服务管理
 - 后端服务健康检查：`/api/v1/health` 端点,前端通过定时轮询监控连接状态。

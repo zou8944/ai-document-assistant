@@ -138,11 +138,17 @@ A legacy RAG pipeline exists in `backend/rag/` but is no longer used for chat re
 
 ### Configuration
 
-AI settings (API keys, models, URLs) are stored in the PostgreSQL `settings` table and managed through the frontend settings UI. Sensitive values are encrypted at rest.
+AI settings (API keys, models, URLs) are stored in the PostgreSQL `settings` table and managed through the frontend settings UI. Sensitive values are encrypted at rest. `LOG_LEVEL` is configured via environment variable only (not in the UI).
 
 On first launch, `settings_util.py` seeds default settings. The frontend checks `/api/v1/settings/status` and shows a setup wizard if critical keys are missing.
 
 `config.py` loads config in priority order: DB settings > TOML file > env vars > defaults. Env vars (`DOCKER_ENV=true` triggers env-based bootstrap) are only used for the initial Docker startup before the DB is ready.
+
+### Docker Ports
+
+- Frontend (nginx): **5174** — app entry point
+- Backend API: **51741** — for debugging; normal access proxied through nginx
+- PostgreSQL and ChromaDB: **no host ports** — backend connects via Docker internal network
 
 ## Coding Conventions
 
