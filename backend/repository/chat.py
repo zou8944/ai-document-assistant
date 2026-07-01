@@ -189,6 +189,27 @@ class ChatMessageRepository(BaseRepository[ChatMessage, ChatMessageDTO]):
             ))[::-1]  # Reverse to get chronological order
             return [self.dto_class.from_orm(item) for item in entities]
 
+    def find_preceding_user_message(self, chat_id: str, assistant_message_id: str) -> Optional[ChatMessageDTO]:
+        """Find the user message immediately before the given assistant message."""
+        with session_context() as session:
+            # Get the assistant message to find its timestamp
+            assistant = session.get(ChatMessage, assistant_message_id)
+            if not assistant or assistant.chat_id != chat_id or assistant.role != "assistant":
+                return None
+
+            # Find the latest user message before this assistant message
+            entity = session.scalar(
+                select(ChatMessage)
+                .where(ChatMessage.chat_id == chat_id)
+                .where(ChatMessage.role == "user")
+                .where(ChatMessage.created_at < assistant.created_at)
+                .order_by(ChatMessage.created_at.desc())
+                .limit(1)
+            )
+            if entity is None:
+                return None
+            return self.dto_class.from_orm(entity)
+
     def delete_by_chat(self, chat_id: str) -> int:
         from sqlalchemy import delete
         with session_context() as session:

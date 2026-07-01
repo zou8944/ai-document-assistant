@@ -266,3 +266,88 @@ async def send_message_stream(
                 pass
 
     return EventSourceResponse(event_generator())
+
+
+@router.post("/chats/{chat_id}/messages/{message_id}/regenerate")
+async def regenerate_message(
+    chat_id: str,
+    message_id: str,
+    request: Request
+):
+    """
+    Regenerate an AI response: delete the assistant message, find the
+    preceding user message, and re-run the agent with the same query.
+    Returns the same SSE stream as send_message_stream.
+    """
+    app_state = get_app_state(request)
+    agent_service = app_state.agent_chat_service
+    chat_service = app_state.chat_service
+
+    if agent_service is None:
+        raise HTTPInternalServerErrorException("Agent chat service not initialized")
+
+    # Verify chat exists
+    chat = await chat_service.get_chat(chat_id)
+    if not chat:
+        raise HTTPNotFoundException(f"Chat '{chat_id}' not found")
+
+    # Find the assistant message to regenerate
+    assistant_msg = chat_service.chat_message_repo.get_by_id(message_id)
+    if not assistant_msg or assistant_msg.chat_id != chat_id:
+        raise HTTPNotFoundException(f"Message '{message_id}' not found")
+    if assistant_msg.role != "assistant":
+        raise HTTPBadRequestException("Can only regenerate assistant messages")
+
+    # Only the latest assistant message may be regenerated
+    latest_msg = chat_service.chat_message_repo.get_latest_by_chat(chat_id)
+    if not latest_msg or latest_msg.id != message_id:
+        raise HTTPBadRequestException("Can only regenerate the latest assistant message")
+
+    # Find the preceding user message
+    user_msg = chat_service.chat_message_repo.find_preceding_user_message(chat_id, message_id)
+    if not user_msg:
+        raise HTTPBadRequestException("No user message found before this assistant message")
+
+    user_query = user_msg.content
+
+    # Delete the assistant message (user message will be re-created by process())
+    chat_service.chat_message_repo.delete(message_id)
+    # Also delete the user message — process() will persist a fresh one
+    chat_service.chat_message_repo.delete(user_msg.id)
+    chat_service.chat_repo.update_message_count(chat_id)
+
+    async def event_generator():
+        stream_msg_id: str | None = None
+
+        async def disconnect_watcher():
+            while True:
+                if await request.is_disconnected():
+                    if stream_msg_id:
+                        token = get_cancel_token(chat_id, stream_msg_id)
+                        if token:
+                            token.cancel()
+                            logger.info("Cancelled regenerate chat %s message %s (client disconnect)", chat_id, stream_msg_id)
+                    break
+                await asyncio.sleep(0.1)
+
+        watcher_task = asyncio.create_task(disconnect_watcher())
+
+        try:
+            async for event in agent_service.process(
+                chat_id=chat_id,
+                query=user_query,
+            ):
+                if event.type.value == "agent_start" and stream_msg_id is None:
+                    stream_msg_id = event.data.get("message_id")
+                yield {
+                    "event": event.type.value,
+                    "data": json.dumps(event.data),
+                }
+        finally:
+            watcher_task.cancel()
+            try:
+                await watcher_task
+            except asyncio.CancelledError:
+                pass
+
+    return EventSourceResponse(event_generator())

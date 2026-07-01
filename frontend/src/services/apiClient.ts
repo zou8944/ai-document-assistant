@@ -920,6 +920,102 @@ export class DocumentAssistantAPI {
     }
   }
 
+  /**
+   * Regenerate an assistant message: deletes the old response and re-runs the agent
+   * with the same user query. Uses the same SSE streaming format as sendMessageStream.
+   */
+  async regenerateMessage(
+    chatId: string,
+    messageId: string,
+    onEvent: (event: SSEEvent) => void,
+    onError?: (error: Error) => void
+  ): Promise<void> {
+    this.abortController = new AbortController()
+
+    try {
+      const response = await fetch(
+        `${this.baseURL}/api/v1/chats/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(messageId)}/regenerate`,
+        {
+          method: 'POST',
+          headers: {
+            'Accept': 'text/event-stream',
+          },
+          signal: this.abortController.signal,
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+
+      if (!reader) {
+        throw new Error('Response body is not readable')
+      }
+
+      try {
+        let buffer = ''
+        let currentEvent = 'data'
+        let currentData: any = null
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+
+          buffer = lines.pop() || ''
+
+          for (const line of lines) {
+            if (line.trim() === '') {
+              if (currentData !== null) {
+                onEvent({ event: currentEvent, data: currentData })
+                currentData = null
+              }
+              currentEvent = 'data'
+              continue
+            }
+
+            if (line.startsWith('event:')) {
+              currentEvent = line.substring(6).trim()
+              continue
+            }
+
+            if (line.startsWith('data:')) {
+              const dataStr = line.substring(5).trim()
+              try {
+                currentData = JSON.parse(dataStr)
+              } catch {
+                currentData = dataStr
+              }
+              continue
+            }
+          }
+        }
+
+        if (currentData !== null) {
+          onEvent({ event: currentEvent, data: currentData })
+        }
+      } finally {
+        reader.releaseLock()
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return
+      }
+
+      const err = error instanceof Error ? error : new Error('Unknown error')
+      if (onError) {
+        onError(err)
+      } else {
+        throw err
+      }
+    }
+  }
+
 
   // Settings
   /**

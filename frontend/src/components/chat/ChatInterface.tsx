@@ -134,6 +134,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
     streamingAgentState,
     processingStatus,
     sendMessage,
+    regenerateMessage,
     stopGeneration,
     loadOlderMessages,
     clearMessages,
@@ -255,12 +256,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
     }
   }
 
-  // TODO: wire to regenerate API — find the last user message before this AI message
-  // and re-send it. The backend needs a regenerate endpoint or we re-use sendMessage
-  // with the previous user query. No regenerate function currently exists in
-  // services/apiClient.ts or store/appStore.ts.
-  const handleRegenerateMessage = (_messageId: string) => {
-    // intentionally a no-op until the regenerate flow is wired
+  const handleRegenerateMessage = (messageId: string) => {
+    regenerateMessage(messageId)
   }
 
   const handleRichTextChange = (value: string, mentions: DocumentMention[], mentionedDocIds: string[]) => {
@@ -356,7 +353,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
               <DotsLoader />
             </div>
           )}
-          {messages.map((msg) => (
+          {messages.map((msg, msgIdx) => {
+          // Only the last assistant message (and not while streaming) may be regenerated
+          const isLastAssistant = msg.type === 'assistant'
+            && !isStreaming
+            && messages.slice(msgIdx + 1).every(m => m.type !== 'assistant')
+          return (
             <div key={msg.id} className={clsx(
               'px-6 py-3.5',
               msg.type === 'user' ? 'animate-message-user' : 'animate-message-ai'
@@ -411,6 +413,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                             <ClipboardIcon className="w-4 h-4" />
                           )}
                         </button>
+                        {isLastAssistant && (
                         <button
                           onClick={() => handleRegenerateMessage(msg.id)}
                           className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 rounded-lg text-muted hover:text-ink hover:bg-white/60 transition-colors focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
@@ -418,13 +421,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ className }) => {
                         >
                           <ArrowPathIcon className="w-4 h-4" />
                         </button>
+                        )}
                       </div>
                     </div>
                   </div>
                 </div>
               )}
             </div>
-          ))}
+          )})}
 
           {/* Streaming content */}
           {isStreaming && (

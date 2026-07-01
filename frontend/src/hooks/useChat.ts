@@ -49,6 +49,7 @@ export interface UseChatReturn {
   streamingAgentState: AgentMessageState | null
   processingStatus: string | null
   sendMessage: (content: string, documentIds?: string[], documentNames?: string[]) => Promise<void>
+  regenerateMessage: (messageId: string) => Promise<void>
   stopGeneration: () => void
   loadMessages: () => Promise<void>
   loadOlderMessages: () => Promise<void>
@@ -647,6 +648,51 @@ export const useChat = (chatId: string | null): UseChatReturn => {
     }
   }, [chatId, isLoading, apiClient, handleStreamEvent, handleStreamError])
 
+  const regenerateMessage = useCallback(async (messageId: string) => {
+    if (isLoading || !chatId) return
+
+    // Find the assistant message and the preceding user message in the UI
+    const msgIndex = messages.findIndex(m => m.id === messageId)
+    if (msgIndex < 0 || messages[msgIndex].type !== 'assistant') return
+
+    // Find the preceding user message
+    let userMsgIndex = -1
+    for (let i = msgIndex - 1; i >= 0; i--) {
+      if (messages[i].type === 'user') {
+        userMsgIndex = i
+        break
+      }
+    }
+    if (userMsgIndex < 0) return
+
+    // Remove both messages from UI
+    setMessages(prev => [...prev.slice(0, userMsgIndex), ...prev.slice(msgIndex + 1)])
+
+    setIsLoading(true)
+    setIsStreaming(true)
+    setStreamingContent('')
+    setStreamingAgentState(null)
+    streamingContentRef.current = ''
+    streamingSourcesRef.current = []
+    streamingMessageIdRef.current = null
+    streamingAgentStateRef.current = null
+    setProcessingStatus(null)
+
+    try {
+      await apiClient.regenerateMessage(
+        chatId,
+        messageId,
+        handleStreamEvent,
+        handleStreamError
+      )
+    } catch (error) {
+      console.error('重新生成失败:', error)
+      setIsLoading(false)
+      setIsStreaming(false)
+      toast.error('重新生成失败: ' + (error as Error).message)
+    }
+  }, [chatId, isLoading, messages, apiClient, handleStreamEvent, handleStreamError])
+
   const clearMessages = useCallback(async () => {
     if (!chatId) return
     try {
@@ -671,6 +717,7 @@ export const useChat = (chatId: string | null): UseChatReturn => {
     streamingAgentState,
     processingStatus,
     sendMessage,
+    regenerateMessage,
     stopGeneration,
     loadMessages,
     loadOlderMessages,
