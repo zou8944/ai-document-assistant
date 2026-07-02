@@ -668,6 +668,13 @@ export const useChat = (chatId: string | null): UseChatReturn => {
     // Remove both messages from UI
     setMessages(prev => [...prev.slice(0, userMsgIndex), ...prev.slice(msgIndex + 1)])
 
+    // Sync sidebar count: we removed 2 messages; the `done` handler will add 2 back
+    const store = useAppStore.getState()
+    const current = store.chatSessions.find(c => c.id === chatId)
+    if (current) {
+      store.updateChatSession(chatId, { messageCount: Math.max(0, current.messageCount - 2) })
+    }
+
     setIsLoading(true)
     setIsStreaming(true)
     setStreamingContent('')
@@ -679,16 +686,24 @@ export const useChat = (chatId: string | null): UseChatReturn => {
     setProcessingStatus(null)
 
     try {
+      // Don't pass onError — let errors throw so the catch block
+      // shows the regenerate-specific toast instead of the generic one.
       await apiClient.regenerateMessage(
         chatId,
         messageId,
-        handleStreamEvent,
-        handleStreamError
+        handleStreamEvent
       )
     } catch (error) {
       console.error('重新生成失败:', error)
       setIsLoading(false)
       setIsStreaming(false)
+      setStreamingContent('')
+      setStreamingAgentState(null)
+      streamingContentRef.current = ''
+      streamingSourcesRef.current = []
+      streamingMessageIdRef.current = null
+      streamingAgentStateRef.current = null
+      setProcessingStatus(null)
       toast.error('重新生成失败: ' + (error as Error).message)
     }
   }, [chatId, isLoading, messages, apiClient, handleStreamEvent, handleStreamError])
