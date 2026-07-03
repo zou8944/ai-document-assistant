@@ -33,6 +33,7 @@ class AgentChatService:
         chat_message_repo: ChatMessageRepository,
         document_repo: DocumentRepository,
         collection_repo: CollectionRepository,
+        chunk_index=None,
     ):
         self.backend = backend
         self.config = config
@@ -40,6 +41,7 @@ class AgentChatService:
         self.chat_message_repo = chat_message_repo
         self.document_repo = document_repo
         self.collection_repo = collection_repo
+        self.chunk_index = chunk_index
 
     async def process(
         self,
@@ -100,6 +102,7 @@ class AgentChatService:
                 deps = AgentDeps(
                     collection_repo=self.collection_repo,
                     document_repo=self.document_repo,
+                    chunk_index=self.chunk_index,
                 )
                 registry = build_default_registry(deps)
                 runtime = AgentRuntime(

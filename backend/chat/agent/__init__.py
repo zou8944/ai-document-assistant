@@ -13,7 +13,7 @@ from chat.agent.tools.collections import (
     ListCollectionsTool,
 )
 from chat.agent.tools.documents import GetDocumentSummaryTool, GetDocumentTool, ListDocumentsTool
-from chat.agent.tools.search import GrepDocumentsTool, SearchDocumentsTool
+from chat.agent.tools.search import GrepDocumentsTool, SearchDocumentsTool, VectorSearchTool
 from chat.agent.trace import TranscriptWriter
 from models.config import AgentConfig
 
@@ -28,6 +28,7 @@ __all__ = [
     "GetCollectionOverviewTool",
     "SearchDocumentsTool",
     "GrepDocumentsTool",
+    "VectorSearchTool",
     "GetDocumentTool",
     "GetDocumentSummaryTool",
     "CiteSourcesTool",
@@ -42,6 +43,7 @@ def build_default_registry(deps: AgentDeps) -> ToolRegistry:
     registry.register(GetCollectionOverviewTool())
     registry.register(SearchDocumentsTool())
     registry.register(GrepDocumentsTool())
+    registry.register(VectorSearchTool())
     registry.register(GetDocumentTool())
     registry.register(GetDocumentSummaryTool())
     registry.register(ListDocumentsTool())

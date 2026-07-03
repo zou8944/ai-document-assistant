@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request
 from chat.agent import AgentConfig
 from chat.agent.llm.claude import ClaudeToolBackend
 from chat.agent_service import AgentChatService
+from chat.retrieval.chunk_index import ChunkIndex
 from models.config import AppConfig
 from repository.chat import ChatMessageRepository, ChatRepository
 from repository.collection import CollectionRepository
@@ -20,6 +21,7 @@ from services.collection_service import CollectionService
 from services.document_service import DocumentService
 from services.llm_service import LLMService
 from services.task_service import TaskService
+from vector_store.chroma_client import create_chroma_manager
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +66,21 @@ class AppState:
                     model="standard",
                     transcript_dir=config.agent.transcript_dir,
                 )
+
+                # Build ChunkIndex for vector semantic search (optional —
+                # degrades gracefully if embedding service is not configured)
+                chunk_index = None
+                if llm_service.embeddings is not None:
+                    try:
+                        chroma = create_chroma_manager()
+                        chunk_index = ChunkIndex(
+                            chroma_client=chroma,
+                            embedding_model=llm_service.embeddings,
+                        )
+                        logger.info("ChunkIndex initialized for agent vector search")
+                    except Exception as ci_err:
+                        logger.warning(f"Failed to initialize ChunkIndex: {ci_err}")
+
                 agent_chat_service = AgentChatService(
                     backend=agent_backend,
                     config=agent_config,
@@ -71,6 +88,7 @@ class AppState:
                     chat_message_repo=chat_message_repo,
                     document_repo=document_repo,
                     collection_repo=collection_repo,
+                    chunk_index=chunk_index,
                 )
                 logger.info("Agent chat service initialized successfully")
             except Exception as agent_err:

@@ -236,7 +236,7 @@ class AgentRuntime:
                     # Track which documents were visited this run so cite_sources
                     # can validate the LLM's claimed references.
                     if not out.is_error:
-                        if tu.name in ("search_documents", "grep_documents"):
+                        if tu.name in ("search_documents", "grep_documents", "vector_search"):
                             if out.structured and isinstance(
                                 out.structured.get("doc_ids"), list
                             ):

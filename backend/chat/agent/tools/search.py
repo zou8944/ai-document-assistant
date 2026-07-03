@@ -6,6 +6,83 @@ from chat.agent.tools._formatting import format_doc_summary, format_grep_match, 
 from chat.agent.tools.base import Tool, ToolContext, ToolResult
 
 
+class VectorSearchTool(Tool):
+    """Semantic vector search over document chunks."""
+
+    name = "vector_search"
+    description = (
+        "语义向量搜索：用自然语言描述你想找的内容，系统会返回语义最相关的文档片段。"
+        "适合概念性、同义词或模糊查询，比关键词搜索更能理解意图。"
+        "例如：「认证流程怎么工作」「性能优化相关的方法」。"
+    )
+    input_schema = {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "用自然语言描述你要搜索的内容",
+            },
+            "top_k": {
+                "type": "integer",
+                "default": 8,
+                "description": "返回的最大结果数",
+            },
+        },
+        "required": ["query"],
+    }
+    preserve_in_compact = False
+
+    async def run(self, ctx: ToolContext, **kwargs) -> ToolResult:
+        query: str = kwargs.get("query", "")
+        top_k: int = kwargs.get("top_k", 8)
+
+        if not query.strip():
+            return ToolResult(content="Error: query is empty", is_error=True)
+
+        if ctx.deps.chunk_index is None:
+            return ToolResult(
+                content="Error: vector search is not configured (embedding service unavailable).",
+                is_error=True,
+            )
+
+        try:
+            ctx.cancellation.raise_if_cancelled()
+            result = await ctx.deps.chunk_index.search(
+                query=query,
+                top_k=top_k,
+                collection_ids=ctx.collection_ids or None,
+            )
+        except Exception as exc:
+            return ToolResult(content=f"Error: {exc}", is_error=True)
+
+        # Enforce @ document filter
+        docs = result.documents
+        if ctx.document_ids:
+            allowed = set(ctx.document_ids)
+            docs = [d for d in docs if d.document_id in allowed]
+
+        if not docs:
+            return ToolResult(
+                content="No relevant chunks found. Try rephrasing your query or use search_documents for keyword-based search."
+            )
+
+        lines = [f"Found {len(docs)} semantically relevant chunks (query: \"{query}\"):"]
+        seen_doc_ids: set[str] = set()
+        for doc in docs:
+            preview = (doc.content or "")[:300]
+            lines.append(
+                f'[id={doc.document_id}, chunk={doc.chunk_index}, score={doc.relevance_score:.2f}] '
+                f'doc="{doc.document_name}"\n  {preview}'
+            )
+            if doc.document_id:
+                seen_doc_ids.add(doc.document_id)
+
+        return ToolResult(
+            content="\n".join(lines),
+            structured={"doc_ids": list(seen_doc_ids)},
+        )
+
+
 class SearchDocumentsTool(Tool):
     """Search documents by keywords across metadata fields."""
 
