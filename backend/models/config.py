@@ -153,6 +153,7 @@ class AgentConfig:
     transcript_dir: str = field(
         default_factory=lambda: str(AppConfig.get_transcript_dir())
     )
+    enable_transcript: bool = False
     model: str = "standard"  # frontend display label
 
     # Loop detector configuration

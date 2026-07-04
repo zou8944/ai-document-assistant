@@ -60,11 +60,14 @@ class AppState:
                     client=agent_client,
                     model=config.llm.agent.model,
                 )
+                from settings_util import get_setting_typed
+                enable_transcript = get_setting_typed("ENABLE_TRANSCRIPT")
                 agent_config = AgentConfig(
                     max_iterations=500,
                     context_window=200_000,
                     model="standard",
                     transcript_dir=config.agent.transcript_dir,
+                    enable_transcript=str(enable_transcript).lower() in ("true", "1", "yes") if enable_transcript else False,
                 )
 
                 # Build ChunkIndex for vector semantic search (optional —

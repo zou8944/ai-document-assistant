@@ -213,6 +213,8 @@ DEFAULT_SETTINGS: list[tuple[str, str, str, str, str, bool]] = [
      "回答问题时从知识库检索的最相似文档片段数量", False),
     ("AGENT_TEMPERATURE", "0.7", "number", "business",
      "AI 回复的随机程度，值越低越稳定，越高越有创造性", False),
+    ("ENABLE_TRANSCRIPT", "false", "boolean", "business",
+     "开启后，每次 AI 对话会生成详细的事件日志文件，用于调试和审计。日志保存在服务端 agent_transcripts 目录下", False),
 
     # ── 系统参数 ──
     ("SERVER_PORT", "8000", "number", "system",

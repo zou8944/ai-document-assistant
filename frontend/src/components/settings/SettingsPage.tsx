@@ -21,7 +21,7 @@ interface SettingsPageProps {
 interface FieldDef {
   key: string
   label: string
-  type: 'password' | 'text' | 'number' | 'select'
+  type: 'password' | 'text' | 'number' | 'select' | 'boolean'
   placeholder?: string
   description: string
   options?: { value: string; label: string }[]
@@ -104,6 +104,7 @@ const SECTIONS: SectionDef[] = [
         fields: [
           { key: 'RAG_TOP_K', label: '检索文档数', type: 'number', description: '检索最相似文档片段的数量' },
           { key: 'AGENT_TEMPERATURE', label: 'AI 随机度', type: 'number', description: '值越低越稳定，越高越有创造性' },
+          { key: 'ENABLE_TRANSCRIPT', label: '对话日志', type: 'boolean', description: '开启后，每次 AI 对话会生成详细的事件日志文件，用于调试和审计。日志保存在服务端 agent_transcripts 目录下' },
         ],
       },
     ],
@@ -294,6 +295,32 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
                         <div className="space-y-4">
                           {sub.fields.map((field) => (
                             <div key={field.key}>
+                              {field.type === 'boolean' ? (
+                                <div className="flex items-center justify-between py-1">
+                                  <div>
+                                    <span className="text-sm font-medium text-ink/80">{field.label}</span>
+                                    <p className="text-xs text-muted mt-0.5">{field.description}</p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={values[field.key] === 'true'}
+                                    onClick={() => handleChange(field.key, values[field.key] === 'true' ? 'false' : 'true')}
+                                    className={clsx(
+                                      'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
+                                      values[field.key] === 'true' ? 'bg-accent' : 'bg-gray-200'
+                                    )}
+                                  >
+                                    <span
+                                      className={clsx(
+                                        'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                                        values[field.key] === 'true' ? 'translate-x-5' : 'translate-x-0'
+                                      )}
+                                    />
+                                  </button>
+                                </div>
+                              ) : (
+                              <>
                               <label htmlFor={field.key} className="flex items-center space-x-2 text-sm font-medium text-ink/80 mb-1.5">
                                 <span>{field.label}</span>
                               </label>
@@ -340,6 +367,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
                               )}
 
                               <p className="text-xs text-ink/50 mt-1">{field.description}</p>
+                              </>
+                              )}
                             </div>
                           ))}
                         </div>

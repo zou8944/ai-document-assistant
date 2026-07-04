@@ -6,6 +6,7 @@ import logging
 import time
 import uuid
 from collections.abc import AsyncIterator
+from contextlib import nullcontext
 
 from chat.agent import AgentConfig, AgentDeps, AgentRuntime, build_default_registry
 from chat.agent.cancellation import CancellationToken
@@ -85,12 +86,14 @@ class AgentChatService:
         )
         placeholder_id = placeholder.id
 
-        transcript = TranscriptWriter(
-            self.config.transcript_dir, chat_id, message_id
-        )
+        transcript = None
+        if self.config.enable_transcript:
+            transcript = TranscriptWriter(
+                self.config.transcript_dir, chat_id, message_id
+            )
 
         try:
-            with transcript:
+            with transcript if transcript else nullcontext():
                 history = self._load_history(chat_id)
                 # Remove the current user message from history — runtime.append()
                 # adds it separately. Without this, the LLM sees a duplicate
