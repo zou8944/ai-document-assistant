@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline'
 import { useAPIClient, extractData } from '../../services/apiClient'
 import { markdownToHtml } from '../../utils/markdown'
+import { DocumentSearchBar } from './DocumentSearchBar'
 
 interface DocInfo {
   id: string
@@ -24,6 +25,7 @@ export const DocReader: React.FC<DocReaderProps> = ({ doc, collectionId }) => {
   const [markdownContent, setMarkdownContent] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showSearch, setShowSearch] = useState(false)
   const apiClient = useAPIClient()
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -45,8 +47,24 @@ export const DocReader: React.FC<DocReaderProps> = ({ doc, collectionId }) => {
   useEffect(() => {
     setMarkdownContent(null)
     setError(null)
+    setShowSearch(false)
     loadMarkdown()
   }, [doc.id, loadMarkdown])
+
+  // Cmd+F / Ctrl+F to open in-document search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+        // Only intercept if we have content to search
+        if (markdownContent) {
+          e.preventDefault()
+          setShowSearch(true)
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [markdownContent])
 
   const html = useMemo(() => {
     if (!markdownContent) return ''
@@ -121,7 +139,13 @@ export const DocReader: React.FC<DocReaderProps> = ({ doc, collectionId }) => {
       </div>
 
       {/* Content area */}
-      <div className="flex-1 overflow-auto bg-white">
+      <div className="flex-1 overflow-auto bg-white relative">
+        {showSearch && markdownContent && (
+          <DocumentSearchBar
+            containerRef={containerRef}
+            onClose={() => setShowSearch(false)}
+          />
+        )}
         {loading ? (
           <div
             role="status"

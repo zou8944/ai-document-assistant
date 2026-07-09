@@ -659,3 +659,15 @@
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
 }
+
+/* In-document search highlights (Cmd+F) */
+.doc-search-highlight {
+  background-color: #fef08a;
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.doc-search-highlight-active {
+  background-color: #f97316;
+  color: white;
+}
