@@ -1,37 +1,5 @@
 from dataclasses import dataclass
 from enum import Enum
-class QueryIntent(Enum):
-    CHITCHAT = "chitchat"
-    META = "meta"
-    OFF_TOPIC = "off_topic"
-    DIRECT_ANSWER = "direct_answer"
-    LOCATE = "locate"
-    RECOMMEND = "recommend"
-    SUMMARIZE = "summarize"
-    COMPARE = "compare"
-    PROCEDURE = "procedure"
-    SYNTHESIZE = "synthesize"
-    ANALYZE = "analyze"
-
-
-class ProcessingMode(Enum):
-    FAST = "fast"
-    STANDARD = "standard"
-    DEEP = "deep"
-
-
-@dataclass
-class RouterResult:
-    intent: QueryIntent
-    confidence: float
-    reason: str
-    suggested_mode: ProcessingMode
-    complexity_score: int
-    rewritten_queries: list[str]
-    requires_retrieval: bool = True
-    core_keywords: list[str] | None = None
-    semantic_expansions: list[str] | None = None
-    implicit_aspects: list[str] | None = None
 
 
 @dataclass
@@ -61,26 +29,6 @@ class CollectionInfo:
     categories: list[dict]
     document_count: int
     total_tokens: int
-
-
-@dataclass
-class EvaluationResult:
-    confidence_score: float
-    missing_aspects: list[str]
-    supplementary_queries: list[str]
-    context_completeness: float = 0.0
-    source_sufficiency: float = 0.0
-    supplementary_strategy: str = "vector"
-
-
-@dataclass
-class AssembledContext:
-    system_prompt: str
-    messages: list[dict]
-    context_documents: list[RetrievedDocument]
-    collection_info: list[CollectionInfo]
-    estimated_tokens: int
-    mode: ProcessingMode
 
 
 class SSEEventType(Enum):
