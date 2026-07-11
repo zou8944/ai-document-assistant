@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Project Is
 
-AI Document Assistant — a RAG-based document Q&A tool. Users upload files or crawl websites into collections, then chat with an AI agent that retrieves and cites source documents. Built as a web app (React + FastAPI) that also runs as an Electron desktop app.
+AI Document Assistant — a RAG-based document Q&A tool. Users upload files or crawl websites into collections, then chat with an AI agent that retrieves and cites source documents. Built as a web app (React + FastAPI), deployable via Docker.
 
 ## Common Commands
 
