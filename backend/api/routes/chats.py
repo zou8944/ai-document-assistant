@@ -5,6 +5,7 @@ Chat management and conversation routes.
 import asyncio
 import json
 import logging
+from typing import Optional
 
 from fastapi import APIRouter, Request, status
 from sse_starlette.sse import EventSourceResponse
@@ -57,20 +58,22 @@ async def create_chat(request_data: CreateChatRequest, request: Request):
 async def list_chats(
     request: Request,
     offset: int = 0,
-    limit: int = 50
+    limit: int = 50,
+    search: Optional[str] = None
 ):
     """
-    List chat conversations
+    List chat conversations. When `search` is provided, filters by chat name
+    and message content (ILIKE match), ordered by most recent activity.
     """
     chat_service = get_app_state(request).chat_service
 
-    chats = await chat_service.list_chats(offset=offset, limit=limit)
+    chats = await chat_service.list_chats(offset=offset, limit=limit, search=search)
 
     return {
         "chats": [chat.model_dump() for chat in chats],
         "offset": offset,
         "limit": limit,
-        "total": len(chats)  # Could implement proper count if needed
+        "total": len(chats)
     }
 
 

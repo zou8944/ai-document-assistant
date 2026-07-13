@@ -747,11 +747,13 @@ export class DocumentAssistantAPI {
   }
 
   /**
-   * List chats
+   * List chats. When `search` is provided, filters by chat name and message content.
    */
-  async listChats(offset: number = 0, limit: number = 50): Promise<APIResponse<{ chats: Chat[], offset: number, limit: number, total: number }>> {
+  async listChats(offset: number = 0, limit: number = 50, search?: string): Promise<APIResponse<{ chats: Chat[], offset: number, limit: number, total: number }>> {
+    const params = new URLSearchParams({ offset: String(offset), limit: String(limit) })
+    if (search) params.set('search', search)
     return this.request<APIResponse<{ chats: Chat[], offset: number, limit: number, total: number }>>(
-      `/api/v1/chats?offset=${offset}&limit=${limit}`
+      `/api/v1/chats?${params.toString()}`
     )
   }
 

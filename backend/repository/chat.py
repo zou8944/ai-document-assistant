@@ -83,9 +83,25 @@ class ChatRepository(BaseRepository[Chat, ChatDTO]):
             chat.last_message_at = last_message
             return True
 
-    def search_by_name(self, search_term: str) -> list[ChatDTO]:
+    def search(self, search_term: str) -> list[ChatDTO]:
+        """Search chats by name or message content.
+
+        Returns chats where the name matches OR any message content matches,
+        ordered by last_message_at DESC so the most recent activity appears first.
+        """
         with session_context() as session:
-            sql = select(Chat).where(Chat.name.ilike(f"%{search_term}%")).order_by(Chat.last_message_at.desc().nulls_last())
+            name_match = Chat.name.ilike(f"%{search_term}%")
+            message_subq = (
+                select(ChatMessage.chat_id)
+                .where(ChatMessage.content.ilike(f"%{search_term}%"))
+                .distinct()
+                .subquery()
+            )
+            sql = (
+                select(Chat)
+                .where(name_match | Chat.id.in_(select(message_subq.c.chat_id)))
+                .order_by(Chat.last_message_at.desc().nulls_last())
+            )
             entities = list(session.scalars(sql))
             return [self.dto_class.from_orm(item) for item in entities]
 

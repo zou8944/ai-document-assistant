@@ -2,12 +2,14 @@
  * Main sidebar component with three sections: Knowledge, Chat, Settings
  */
 
-import React, { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   BookOpenIcon,
   ChatBubbleLeftRightIcon,
   Cog6ToothIcon,
-  PlusIcon
+  MagnifyingGlassIcon,
+  PlusIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { useAppStore } from '../../store/appStore'
@@ -40,7 +42,38 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
   const [exitingIds, setExitingIds] = useState<Set<string>>(() => new Set())
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<typeof chatSessions | null>(null)
   const toast = useToast()
+  const apiClient = useAPIClient()
+
+  // Debounced chat search
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults(null)
+      return
+    }
+    const timer = window.setTimeout(async () => {
+      try {
+        const res = await apiClient.listChats(0, 1000, searchQuery.trim())
+        const data = extractData(res)
+        setSearchResults(data.chats.map((chat) => ({
+          id: chat.chat_id,
+          name: chat.name,
+          knowledgeBaseIds: chat.collection_ids || [],
+          createdAt: chat.created_at,
+          lastMessageAt: chat.last_message_at || chat.created_at,
+          messageCount: chat.message_count || 0,
+          boundCollectionId: chat.bound_collection_id,
+        })))
+      } catch {
+        setSearchResults([])
+      }
+    }, 400)
+    return () => window.clearTimeout(timer)
+  }, [searchQuery, apiClient])
+
+  const displayedChats = searchResults ?? chatSessions
 
   // 选中指示器：跟随 activeChat 平滑滑动
   const listRef = useRef<HTMLDivElement>(null)
@@ -82,7 +115,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
       // 下一帧再启用动画，避免初始定位时的瞬移有过渡
       requestAnimationFrame(() => setIndicatorAnimated(true))
     }
-  }, [activeChat, chatSessions, exitingIds])
+  }, [activeChat, displayedChats, exitingIds])
 
   const handleSectionClick = (section: SidebarSection) => {
     setActiveSidebarSection(section)
@@ -95,8 +128,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
       setActiveChat(chatSessions[0].id)
     }
   }
-
-  const apiClient = useAPIClient()
 
   const handleAddChat = async () => {
     try {
@@ -307,6 +338,29 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
               <PlusIcon className="w-4 h-4" />
             </button>
           </div>
+          {/* Chat search input */}
+          <div className="relative mt-2">
+            <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="搜索聊天记录..."
+              className="w-full pl-8 pr-8 py-1.5 text-sm bg-white/50 border border-white/30 rounded-lg
+                placeholder-gray-400 text-ink outline-none
+                focus:bg-white/80 focus:border-accent/40 focus:ring-1 focus:ring-accent/30
+                transition-colors"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-gray-200/50 transition-colors"
+                aria-label="清除搜索"
+              >
+                <XMarkIcon className="w-3.5 h-3.5 text-gray-400" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Scrollable chat list */}
@@ -331,7 +385,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
               }}
             />
           )}
-          {chatSessions.map((chat, index) => (
+          {displayedChats.map((chat, index) => (
             <ChatItem
               key={chat.id}
               chat={chat}
@@ -346,19 +400,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
               onDragOver={handleDragOver}
               onDrop={handleDrop}
               onDragEnd={handleDragEnd}
-              totalCount={chatSessions.length}
+              totalCount={displayedChats.length}
               onMoveUp={handleMoveUp}
               onMoveDown={handleMoveDown}
               isDragging={dragIndex === index}
               dragOverIndex={dragOverIndex}
             />
           ))}
-          
-          {chatSessions.length === 0 && (
+
+          {displayedChats.length === 0 && (
             <div className="text-center text-muted text-sm py-8">
               <ChatBubbleLeftRightIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p>暂无聊天记录</p>
-              <p className="text-xs mt-1 opacity-75">点击上方 + 按钮创建新对话</p>
+              <p>{searchResults ? '没有找到匹配的聊天' : '暂无聊天记录'}</p>
+              {!searchResults && (
+                <p className="text-xs mt-1 opacity-75">点击上方 + 按钮创建新对话</p>
+              )}
             </div>
           )}
         </div>

@@ -84,9 +84,12 @@ class ChatService:
 
         return self._to_chat_response(chat)
 
-    async def list_chats(self, offset: int = 0, limit: int = 50) -> list[ChatResponse]:
-        """List chats with pagination"""
-        chats = self.chat_repo.get_all_ordered(offset=offset, limit=limit)
+    async def list_chats(self, offset: int = 0, limit: int = 50, search: Optional[str] = None) -> list[ChatResponse]:
+        """List chats with pagination, optionally filtered by search term."""
+        if search:
+            chats = self.chat_repo.search(search)
+        else:
+            chats = self.chat_repo.get_all_ordered(offset=offset, limit=limit)
 
         return [self._to_chat_response(chat) for chat in chats]
 
