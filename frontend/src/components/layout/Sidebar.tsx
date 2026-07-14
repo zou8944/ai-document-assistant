@@ -17,6 +17,7 @@ import { SidebarSection } from '../../types/app'
 import ChatItem from './ChatItem'
 import { useAPIClient, extractData, CreateChatRequest } from '../../services/apiClient'
 import { useToast } from '../../hooks/useToast'
+import { registerShortcutAction, unregisterShortcutAction, invokeShortcutAction } from '../../hooks/shortcutActions'
 import ConfirmDialog from '../common/ConfirmDialog'
 
 interface SidebarProps {
@@ -44,8 +45,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<typeof chatSessions | null>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const toast = useToast()
   const apiClient = useAPIClient()
+
+  // Register shortcut actions for keyboard shortcuts
+  useEffect(() => {
+    registerShortcutAction('newChat', handleAddChat)
+    registerShortcutAction('focusSearch', () => {
+      searchInputRef.current?.focus()
+      searchInputRef.current?.select()
+    })
+    return () => {
+      unregisterShortcutAction('newChat')
+      unregisterShortcutAction('focusSearch')
+    }
+  })
 
   // Debounced chat search
   useEffect(() => {
@@ -311,6 +326,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
       <div className="flex-shrink-0 p-4 border-b border-white/40">
         <button
           onClick={() => handleSectionClick('knowledge')}
+          title="知识库 (⌘1)"
           className={clsx(
             'w-full flex items-center space-x-3 p-3 rounded-xl transition-all duration-200',
             activeSidebarSection === 'knowledge'
@@ -333,6 +349,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
             <button
               onClick={handleAddChat}
               aria-label="新建聊天"
+              title="新建聊天 (⌘N)"
               className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 rounded-lg hover:bg-white/50 text-muted hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
             >
               <PlusIcon className="w-4 h-4" />
@@ -342,10 +359,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
           <div className="relative mt-2">
             <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
             <input
+              ref={searchInputRef}
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="搜索聊天记录..."
+              placeholder="搜索聊天记录... (⌘K)"
               className="w-full pl-8 pr-8 py-1.5 text-sm bg-white/50 border border-white/30 rounded-lg
                 placeholder-gray-400 text-ink outline-none
                 focus:bg-white/80 focus:border-accent/40 focus:ring-1 focus:ring-accent/30
@@ -413,27 +431,42 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
               <ChatBubbleLeftRightIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
               <p>{searchResults ? '没有找到匹配的聊天' : '暂无聊天记录'}</p>
               {!searchResults && (
-                <p className="text-xs mt-1 opacity-75">点击上方 + 按钮创建新对话</p>
+                <p className="text-xs mt-1 opacity-75">点击 + 或按 ⌘N 创建新对话</p>
               )}
             </div>
           )}
         </div>
       </div>
 
-      {/* Settings Section - Fixed at bottom */}
+      {/* Settings & Help - Fixed at bottom */}
       <div className="flex-shrink-0 p-4 border-t border-white/40">
-        <button
-          onClick={() => handleSectionClick('settings')}
-          className={clsx(
-            'w-full flex items-center space-x-3 p-3 rounded-xl transition-all duration-200',
-            activeSidebarSection === 'settings'
-              ? 'brand-surface shadow-md shadow-accent/20'
-              : 'text-ink hover:bg-white/50'
-          )}
-        >
-          <Cog6ToothIcon className="w-5 h-5" />
-          <span className="font-medium">设置</span>
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => handleSectionClick('settings')}
+            title="设置 (⌘3)"
+            className={clsx(
+              'flex-1 flex items-center space-x-3 p-3 rounded-xl transition-all duration-200',
+              activeSidebarSection === 'settings'
+                ? 'brand-surface shadow-md shadow-accent/20'
+                : 'text-ink hover:bg-white/50'
+            )}
+          >
+            <Cog6ToothIcon className="w-5 h-5" />
+            <span className="font-medium">设置</span>
+          </button>
+          <button
+            onClick={() => invokeShortcutAction('showShortcuts')}
+            title="键盘快捷键 (⌘/)"
+            className="p-2.5 rounded-lg text-muted hover:text-ink hover:bg-white/50 transition-colors
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            aria-label="键盘快捷键"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="6" width="20" height="12" rx="2" />
+              <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Delete chat confirmation */}

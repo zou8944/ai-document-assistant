@@ -3,7 +3,7 @@
  * On <md (768px) the sidebar becomes a slide-over sheet with backdrop.
  */
 
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useAppStore } from '../../store/appStore'
 import Sidebar from './Sidebar'
 import ResizableHandle from './ResizableHandle'
@@ -11,6 +11,9 @@ import KnowledgeBaseOverview from '../knowledge/KnowledgeBaseOverview'
 import KnowledgeBaseManagement from '../knowledge/KnowledgeBaseManagement'
 import ChatInterface from '../chat/ChatInterface'
 import SettingsPage from '../settings/SettingsPage'
+import CommandPalette from '../common/CommandPalette'
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
+import { invokeShortcutAction, registerShortcutAction, unregisterShortcutAction } from '../../hooks/shortcutActions'
 
 interface MainLayoutProps {
   className?: string
@@ -24,7 +27,74 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ className }) => {
     setSidebarWidth,
     mobileSidebarOpen,
     setMobileSidebarOpen,
+    setActiveSidebarSection,
+    navigateChatNext,
+    navigateChatPrev,
   } = useAppStore()
+
+  const [showShortcuts, setShowShortcuts] = useState(false)
+
+  // Register showShortcuts action so Sidebar's "?" button can trigger it
+  useEffect(() => {
+    registerShortcutAction('showShortcuts', () => setShowShortcuts(true))
+    return () => unregisterShortcutAction('showShortcuts')
+  })
+
+  // --- Global keyboard shortcuts ---
+  useKeyboardShortcuts({
+    // New chat
+    'mod+n': (e) => {
+      e.preventDefault()
+      invokeShortcutAction('newChat')
+    },
+    // Focus sidebar search
+    'mod+k': (e) => {
+      e.preventDefault()
+      invokeShortcutAction('focusSearch')
+    },
+    // Toggle shortcuts help
+    'mod+/': (e) => {
+      e.preventDefault()
+      setShowShortcuts((v) => !v)
+    },
+    // Settings
+    'mod+,': (e) => {
+      e.preventDefault()
+      setActiveSidebarSection('settings')
+    },
+    // Chat navigation
+    'mod+shift+arrowdown': (e) => {
+      e.preventDefault()
+      navigateChatNext()
+    },
+    'mod+shift+arrowup': (e) => {
+      e.preventDefault()
+      navigateChatPrev()
+    },
+    // Section navigation (mod+1/2/3)
+    'mod+1': (e) => {
+      e.preventDefault()
+      setActiveSidebarSection('knowledge')
+    },
+    'mod+2': (e) => {
+      e.preventDefault()
+      setActiveSidebarSection('chat')
+    },
+    'mod+3': (e) => {
+      e.preventDefault()
+      setActiveSidebarSection('settings')
+    },
+    // Toggle agent trace
+    'mod+shift+o': (e) => {
+      e.preventDefault()
+      const { agentTraceExpanded, setAgentTraceExpanded } = useAppStore.getState()
+      setAgentTraceExpanded(!agentTraceExpanded)
+    },
+    // Escape closes command palette
+    'escape': () => {
+      if (showShortcuts) setShowShortcuts(false)
+    },
+  })
 
   const renderMainContent = () => {
     switch (activeSidebarSection) {
@@ -108,6 +178,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ className }) => {
           {renderMainContent()}
         </div>
       </div>
+
+      {/* Keyboard shortcuts help */}
+      <CommandPalette open={showShortcuts} onClose={() => setShowShortcuts(false)} />
     </div>
   )
 }

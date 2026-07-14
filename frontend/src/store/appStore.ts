@@ -43,6 +43,10 @@ interface AppStore extends AppState {
   setChatSessions: (chats: ChatSession[]) => void
   updateSettings: (settings: Partial<AppSettings>) => void
 
+  // Chat navigation (for keyboard shortcuts)
+  navigateChatNext: () => void
+  navigateChatPrev: () => void
+
   // Computed getters
   getCurrentKnowledgeBase: () => KnowledgeBase | null
   getCurrentChat: () => ChatSession | null
@@ -181,6 +185,28 @@ export const useAppStore = create<AppStore>()(
 
         setChatSessions: (chats) =>
           set({ chatSessions: chats }),
+
+        navigateChatNext: () => {
+          const state = get()
+          if (state.chatSessions.length === 0) return
+          const idx = state.chatSessions.findIndex((c) => c.id === state.activeChat)
+          const next = idx < state.chatSessions.length - 1 ? idx + 1 : 0
+          set({
+            activeChat: state.chatSessions[next].id,
+            activeSidebarSection: 'chat',
+          })
+        },
+
+        navigateChatPrev: () => {
+          const state = get()
+          if (state.chatSessions.length === 0) return
+          const idx = state.chatSessions.findIndex((c) => c.id === state.activeChat)
+          const prev = idx > 0 ? idx - 1 : state.chatSessions.length - 1
+          set({
+            activeChat: state.chatSessions[prev].id,
+            activeSidebarSection: 'chat',
+          })
+        },
 
         updateSettings: (newSettings) =>
           set((state) => ({
