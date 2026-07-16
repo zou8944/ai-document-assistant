@@ -327,6 +327,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
         <button
           onClick={() => handleSectionClick('knowledge')}
           title="知识库 (⌘1)"
+          data-tour="knowledge"
           className={clsx(
             'w-full flex items-center space-x-3 p-3 rounded-xl transition-all duration-200',
             activeSidebarSection === 'knowledge'
@@ -350,6 +351,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
               onClick={handleAddChat}
               aria-label="新建聊天"
               title="新建聊天 (⌘N)"
+              data-tour="new-chat"
               className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 rounded-lg hover:bg-white/50 text-muted hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
             >
               <PlusIcon className="w-4 h-4" />
@@ -364,6 +366,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="搜索聊天记录... (⌘K)"
+              data-tour="search"
               className="w-full pl-8 pr-8 py-1.5 text-sm bg-white/50 border border-white/30 rounded-lg
                 placeholder-gray-400 text-ink outline-none
                 focus:bg-white/80 focus:border-accent/40 focus:ring-1 focus:ring-accent/30
@@ -444,6 +447,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
           <button
             onClick={() => handleSectionClick('settings')}
             title="设置 (⌘3)"
+            data-tour="settings"
             className={clsx(
               'flex-1 flex items-center space-x-3 p-3 rounded-xl transition-all duration-200',
               activeSidebarSection === 'settings'

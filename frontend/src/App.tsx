@@ -7,6 +7,7 @@ import { Bars3Icon } from '@heroicons/react/24/outline'
 import MainLayout from './components/layout/MainLayout'
 import StartupScreen from './components/StartupScreen'
 import SetupWizard from './components/settings/SetupWizard'
+import OnboardingTour, { TourStep } from './components/common/OnboardingTour'
 import useStartup from './hooks/useStartup'
 import { useAPIClient, extractData } from './services/apiClient'
 import { useAppStore } from './store/appStore'
@@ -15,12 +16,47 @@ import { ErrorBoundary } from './components/common/ErrorBoundary'
 
 const isElectron = typeof window !== 'undefined' && 'electronAPI' in window
 
+const ONBOARDING_STEPS: TourStep[] = [
+  {
+    target: 'knowledge',
+    title: '知识库',
+    description: '在这里管理您的文档集合。上传文件或爬取网页，AI 会自动向量化并建立索引，方便后续问答。',
+    placement: 'right',
+  },
+  {
+    target: 'new-chat',
+    title: '新建聊天',
+    description: '点击加号或按 ⌘N 开始新对话。您可以在对话中引用特定文档，获得更精准的回答。',
+    placement: 'right',
+  },
+  {
+    target: 'search',
+    title: '搜索聊天',
+    description: '当对话变多时，使用搜索栏（⌘K）快速找到历史聊天记录。',
+    placement: 'right',
+  },
+  {
+    target: 'chat-input',
+    title: '开始对话',
+    description: '在这里输入问题，AI 会检索相关文档并给出带引用的回答。使用 @ 可以指定特定文档。',
+    placement: 'top',
+  },
+  {
+    target: 'settings',
+    title: '设置',
+    description: '在这里调整模型配置、查看快捷键列表。按 ⌘, 可快速打开设置。',
+    placement: 'right',
+  },
+]
+
 export const App: React.FC = () => {
   const { isLoading, isReady, error, message } = useStartup()
   const apiClient = useAPIClient()
   const setChatSessions = useAppStore((s) => s.setChatSessions)
   const mobileSidebarOpen = useAppStore((s) => s.mobileSidebarOpen)
   const setMobileSidebarOpen = useAppStore((s) => s.setMobileSidebarOpen)
+  const hasCompletedOnboarding = useAppStore((s) => s.hasCompletedOnboarding)
+  const setHasCompletedOnboarding = useAppStore((s) => s.setHasCompletedOnboarding)
   const bootstrapped = useRef(false)
 
   // Config completeness state
@@ -162,6 +198,14 @@ export const App: React.FC = () => {
         </div>
       </div>
       <ToastContainer />
+
+      {/* Onboarding tour — shown once after first setup */}
+      {configComplete && !hasCompletedOnboarding && (
+        <OnboardingTour
+          steps={ONBOARDING_STEPS}
+          onComplete={() => setHasCompletedOnboarding(true)}
+        />
+      )}
     </ErrorBoundary>
   )
 }

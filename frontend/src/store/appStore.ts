@@ -23,6 +23,9 @@ interface AppStore extends AppState {
   // Agent trace panel global expand/collapse preference
   agentTraceExpanded: boolean
 
+  // Onboarding state
+  hasCompletedOnboarding: boolean
+
   // Actions
   setActiveSidebarSection: (section: SidebarSection) => void
   setActiveKnowledgeBase: (id: string | null) => void
@@ -33,6 +36,7 @@ interface AppStore extends AppState {
   setDocChatSidebarWidth: (width: number) => void
   setDisplayLanguage: (lang: 'source' | 'zh') => void
   setAgentTraceExpanded: (expanded: boolean) => void
+  setHasCompletedOnboarding: (completed: boolean) => void
   addKnowledgeBase: (kb: KnowledgeBase) => void
   updateKnowledgeBase: (id: string, updates: Partial<KnowledgeBase>) => void
   deleteKnowledgeBase: (id: string) => void
@@ -90,6 +94,7 @@ export const useAppStore = create<AppStore>()(
         activeChat: null,
         settings: initialSettings,
         agentTraceExpanded: true,
+        hasCompletedOnboarding: false,
 
         // Actions
         setActiveSidebarSection: (section) =>
@@ -134,6 +139,9 @@ export const useAppStore = create<AppStore>()(
 
         setAgentTraceExpanded: (expanded) =>
           set({ agentTraceExpanded: expanded }),
+
+        setHasCompletedOnboarding: (completed) =>
+          set({ hasCompletedOnboarding: completed }),
 
         addKnowledgeBase: (kb) =>
           set((state) => ({
@@ -251,6 +259,7 @@ export const useAppStore = create<AppStore>()(
           docChatSidebarWidth: state.docChatSidebarWidth,
           displayLanguage: state.displayLanguage,
           agentTraceExpanded: state.agentTraceExpanded,
+          hasCompletedOnboarding: state.hasCompletedOnboarding,
         })
       }
     )
