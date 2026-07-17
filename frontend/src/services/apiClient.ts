@@ -1066,6 +1066,24 @@ export class DocumentAssistantAPI {
       }
     )
   }
+
+  /**
+   * Test connectivity to an LLM / embedding service
+   */
+  async testConnection(request: {
+    service: 'crawl' | 'embedding' | 'agent'
+    api_key: string
+    base_url?: string
+    model?: string
+  }): Promise<APIResponse<{ success: boolean; message: string }>> {
+    return this.request<APIResponse<{ success: boolean; message: string }>>(
+      '/api/v1/settings/test-connection',
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }
+    )
+  }
 }
 
 // Singleton instance management

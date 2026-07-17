@@ -4,6 +4,7 @@ Settings management routes.
 Supports both legacy TOML-based configuration and the new DB-backed settings.
 """
 
+import asyncio
 import logging
 from typing import Any, Optional
 
@@ -165,3 +166,97 @@ async def delete_setting_item(key: str) -> dict[str, Any]:
     if not delete_setting(key):
         raise HTTPException(status_code=404, detail=f"Setting '{key}' not found")
     return {"key": key, "status": "deleted"}
+
+
+# ---------------------------------------------------------------------------
+# Model connection test
+# ---------------------------------------------------------------------------
+
+class ConnectionTestRequest(BaseModel):
+    service: str  # "crawl" | "embedding" | "agent"
+    api_key: str
+    base_url: str = ""
+    model: str = ""
+
+
+@router.post("/test-connection")
+async def test_connection(req: ConnectionTestRequest) -> dict[str, Any]:
+    """Test connectivity to an LLM / embedding service.
+
+    Sends a minimal request to verify that the API key, base URL and model
+    are all correct.  Returns ``{"success": true/false, "message": "..."}``.
+    """
+    try:
+        if req.service == "crawl":
+            return await _test_openai_chat(req.api_key, req.base_url, req.model)
+        elif req.service == "embedding":
+            return await _test_openai_embedding(req.api_key, req.base_url, req.model)
+        elif req.service == "agent":
+            return await _test_anthropic(req.api_key, req.base_url, req.model)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown service: {req.service}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning("Connection test failed for %s: %s", req.service, e)
+        return {"success": False, "message": str(e)}
+
+
+async def _test_openai_chat(api_key: str, base_url: str, model: str) -> dict[str, Any]:
+    """Test an OpenAI-compatible chat endpoint with a minimal request."""
+    from langchain_openai import ChatOpenAI
+
+    if not api_key:
+        return {"success": False, "message": "API Key 不能为空"}
+    if not model:
+        return {"success": False, "message": "Model 不能为空"}
+
+    llm = ChatOpenAI(
+        model=model,
+        api_key=api_key,
+        base_url=base_url or None,
+        max_tokens=16,
+        timeout=30,
+    )
+    await asyncio.wait_for(llm.ainvoke("Hi"), timeout=30)
+    # If we get here, the call succeeded
+    return {"success": True, "message": f"连接成功，模型 {model} 可用"}
+
+
+async def _test_openai_embedding(api_key: str, base_url: str, model: str) -> dict[str, Any]:
+    """Test an OpenAI-compatible embedding endpoint."""
+    from langchain_openai import OpenAIEmbeddings
+
+    if not api_key:
+        return {"success": False, "message": "API Key 不能为空"}
+    if not model:
+        return {"success": False, "message": "Model 不能为空"}
+
+    embeddings = OpenAIEmbeddings(
+        model=model,
+        api_key=api_key,
+        base_url=base_url or None,
+    )
+    await asyncio.wait_for(embeddings.aembed_query("test"), timeout=30)
+    return {"success": True, "message": f"连接成功，模型 {model} 可用"}
+
+
+async def _test_anthropic(api_key: str, base_url: str, model: str) -> dict[str, Any]:
+    """Test an Anthropic endpoint with a minimal messages.create call."""
+    from anthropic import AsyncAnthropic
+
+    if not api_key:
+        return {"success": False, "message": "API Key 不能为空"}
+    if not model:
+        return {"success": False, "message": "Model 不能为空"}
+
+    client = AsyncAnthropic(api_key=api_key, base_url=base_url or None)
+    await asyncio.wait_for(
+        client.messages.create(
+            model=model,
+            max_tokens=16,
+            messages=[{"role": "user", "content": "Hi"}],
+        ),
+        timeout=30,
+    )
+    return {"success": True, "message": f"连接成功，模型 {model} 可用"}

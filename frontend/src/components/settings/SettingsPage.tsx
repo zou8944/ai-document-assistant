@@ -10,6 +10,8 @@ import {
   ChatBubbleLeftRightIcon,
   EyeIcon,
   EyeSlashIcon,
+  CheckCircleIcon,
+  XCircleIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { SettingItem } from '../../services/apiClient'
@@ -142,6 +144,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
     const params = new URLSearchParams(window.location.search)
     return params.get('section') || 'document-preparation'
   })
+  const [testingService, setTestingService] = useState<string | null>(null)
+  const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string }>>({})
 
   const handleSectionChange = (sectionId: string) => {
     setActiveSection(sectionId)
@@ -237,6 +241,38 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
     setValues({ ...originalValues })
   }
 
+  const handleTestConnection = async (service: string) => {
+    setTestingService(service)
+    setTestResults((prev) => {
+      const next = { ...prev }
+      delete next[service]
+      return next
+    })
+
+    const keyPrefix = service === 'crawl' ? 'CRAWL' : service === 'embedding' ? 'EMBEDDING' : 'AGENT'
+    const apiKey = values[`${keyPrefix}_API_KEY`] || ''
+    const baseUrl = values[`${keyPrefix}_BASE_URL`] || ''
+    const model = values[`${keyPrefix}_MODEL`] || ''
+
+    try {
+      const resp = await fetch('/api/v1/settings/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ service, api_key: apiKey, base_url: baseUrl, model }),
+      })
+      const json = await resp.json()
+      const data = json.data ?? json
+      setTestResults((prev) => ({ ...prev, [service]: { success: data.success, message: data.message } }))
+    } catch (err) {
+      setTestResults((prev) => ({
+        ...prev,
+        [service]: { success: false, message: err instanceof Error ? err.message : '请求失败' },
+      }))
+    } finally {
+      setTestingService(null)
+    }
+  }
+
   return (
     <div className={clsx('h-full flex flex-col', className)}>
       <div className="max-w-5xl w-full mx-auto flex flex-col flex-1 min-h-0 p-6">
@@ -289,9 +325,46 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
                   </div>
 
                   <div className="p-6 space-y-4">
-                    {section.subsections.map((sub) => (
+                    {section.subsections.map((sub) => {
+                      const isTestable = ['crawl', 'embedding', 'agent'].includes(sub.category)
+                      return (
                       <div key={sub.title} className="bg-gray-50/60 rounded-lg border border-gray-200/70 p-4">
-                        <h3 className="text-sm font-semibold text-ink/90 mb-3">{sub.title}</h3>
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-sm font-semibold text-ink/90">{sub.title}</h3>
+                          {isTestable && (
+                            <button
+                              type="button"
+                              onClick={() => handleTestConnection(sub.category)}
+                              disabled={testingService === sub.category}
+                              className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white text-ink/70 hover:bg-gray-50 hover:text-ink transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {testingService === sub.category ? (
+                                <>
+                                  <div className="w-3 h-3 border-2 border-gray-300 border-t-accent rounded-full animate-spin" />
+                                  <span>测试中...</span>
+                                </>
+                              ) : (
+                                <span>测试连接</span>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                        {isTestable && testResults[sub.category] && (
+                          <div
+                            className={`flex items-center space-x-2 mb-3 px-3 py-2 rounded-lg text-xs ${
+                              testResults[sub.category].success
+                                ? 'bg-green-50 text-green-700'
+                                : 'bg-red-50 text-red-700'
+                            }`}
+                          >
+                            {testResults[sub.category].success ? (
+                              <CheckCircleIcon className="w-4 h-4 shrink-0" />
+                            ) : (
+                              <XCircleIcon className="w-4 h-4 shrink-0" />
+                            )}
+                            <span>{testResults[sub.category].message}</span>
+                          </div>
+                        )}
                         <div className="space-y-4">
                           {sub.fields.map((field) => (
                             <div key={field.key}>
@@ -373,7 +446,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ className }) => {
                           ))}
                         </div>
                       </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )
