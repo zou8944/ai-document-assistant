@@ -8,7 +8,7 @@ AI 文档阅读助手：聚合 本地文件 / 文件夹 / 网站 作为知识来
 
 核心路径与模块：
 - 后端：`backend/`
-  - 爬虫：`crawler/`（含 Crawl4AI、Scrapy 替代/扩展实现）
+  - 爬虫：`crawler/`（requests/BeautifulSoup 实现）
   - 文本处理：`data_processing/`
   - 向量存储：`vector_store/`（Chroma 客户端）
   - RAG 逻辑：`rag/`（检索链、意图分析、缓存、摘要）

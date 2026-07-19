@@ -13,7 +13,7 @@
     - **后端**: Python 服务（FastAPI + uvicorn），负责爬虫、数据处理、向量化和 RAG 检索。
     - **通信**: 前后端通过 HTTP API 通信。
 - **后端模块划分**:
-    - `crawler/`: 包含使用 `Scrapy` 和 `requests/BeautifulSoup` 的网络爬虫模块，并具备简单的反爬措施。
+    - `crawler/`: 包含使用 `requests/BeautifulSoup` 的网络爬虫模块，并具备简单的反爬措施。
     - `data_processing/`: 负责文本处理，使用 LangChain 的 `RecursiveCharacterTextSplitter` 进行文本切分。
     - `vector_store/`: 管理与 Chroma 向量数据库的交互，包括数据向量化和存储。
     - `rag/`: 实现基于 LangChain 的 RAG 核心逻辑，包括自定义 Prompt 模板和缓存机制。
@@ -44,7 +44,7 @@
     1.  搭建 React + Vite + Tailwind CSS 的前端项目框架。
     2.  实现前后端的 HTTP API 通信机制。
     3.  完成后端的文件/文件夹数据读取功能。
-    4.  集成 `Scrapy` + `requests/BeautifulSoup` 实现网页抓取功能。
+    4.  集成 `requests/BeautifulSoup` 实现网页抓取功能。
     5.  集成 LangChain 实现文本切分、向量化和 Chroma 存储。
     6.  构建完整的 RAG 问答流程，并提供 API 接口。
     7.  在前端界面上实现文件选择、URL 输入和问答交互。
@@ -54,7 +54,7 @@
 - **后端技术栈**:
     - **语言**: Python 3.9+
     - **包管理**: 使用 `uv`（而非 pip）。
-    - **核心库**: `LangChain`, `chroma-client`, `scrapy`, `pydantic`。
+    - **核心库**: `LangChain`, `chroma-client`, `pydantic`。
     - **代码风格**: 遵循 PEP8 规范，使用 `black` + `ruff` 进行格式化与检查，并添加类型提示。
 - **前端技术栈**:
     - **框架**: `React`, `Vite`
