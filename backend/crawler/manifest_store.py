@@ -84,7 +84,7 @@ class ManifestStore:
         with self._lock:
             data = self._read(domain)
             existing = set(data.get(page_url, []))
-            new_links = [l for l in links if l not in existing]
+            new_links = [link for link in links if link not in existing]
             if not new_links:
                 return
             data[page_url] = list(existing) + new_links

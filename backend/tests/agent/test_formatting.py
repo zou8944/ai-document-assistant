@@ -1,7 +1,5 @@
 """Tests for chat.agent.tools._formatting."""
 
-import pytest
-
 from chat.agent.tools._formatting import format_doc_summary, format_grep_match, parse_json_keywords
 
 

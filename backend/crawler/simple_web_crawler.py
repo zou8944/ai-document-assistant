@@ -154,7 +154,7 @@ class SimpleWebCrawler:
         """Check if HTML has an alternate markdown link and return its absolute URL."""
         soup = BeautifulSoup(html, "lxml")
         link = soup.find("link", rel="alternate", type="text/markdown")
-        if link and link.get("href"):
+        if link and isinstance(link, Tag) and link.get("href"):
             return urljoin(base_url, link["href"])
         return None
 

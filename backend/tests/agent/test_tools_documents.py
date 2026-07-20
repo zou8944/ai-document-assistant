@@ -2,8 +2,6 @@
 
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 from chat.agent.cancellation import CancellationToken
 from chat.agent.tools.base import AgentDeps, ToolContext
 from chat.agent.tools.documents import GetDocumentSummaryTool, GetDocumentTool
