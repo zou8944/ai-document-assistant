@@ -5,11 +5,13 @@ Application state management with type safety.
 import logging
 from dataclasses import dataclass
 
+import openai
 from anthropic import AsyncAnthropic
 from fastapi import FastAPI, Request
 
 from chat.agent import AgentConfig
 from chat.agent.llm.claude import ClaudeToolBackend
+from chat.agent.llm.openai import OpenAIToolBackend
 from chat.agent_service import AgentChatService
 from chat.retrieval.chunk_index import ChunkIndex
 from models.config import AppConfig
@@ -49,17 +51,27 @@ class AppState:
             # Agent chat service (tool-use based RAG)
             agent_chat_service: AgentChatService | None = None
             try:
-                config.llm.agent.validate(supported_providers=["anthropic"])
+                provider = config.llm.agent.provider
+                config.llm.agent.validate(supported_providers=["anthropic", "openai"])
 
-                agent_client = AsyncAnthropic(
-                    api_key=config.llm.agent.api_key,
-                    base_url=config.llm.agent.base_url or None,
-                )
-
-                agent_backend = ClaudeToolBackend(
-                    client=agent_client,
-                    model=config.llm.agent.model,
-                )
+                if provider == "openai":
+                    agent_client = openai.AsyncOpenAI(
+                        api_key=config.llm.agent.api_key,
+                        base_url=config.llm.agent.base_url or None,
+                    )
+                    agent_backend = OpenAIToolBackend(
+                        client=agent_client,
+                        model=config.llm.agent.model,
+                    )
+                else:
+                    agent_client = AsyncAnthropic(
+                        api_key=config.llm.agent.api_key,
+                        base_url=config.llm.agent.base_url or None,
+                    )
+                    agent_backend = ClaudeToolBackend(
+                        client=agent_client,
+                        model=config.llm.agent.model,
+                    )
                 from settings_util import get_setting_typed
                 enable_transcript = get_setting_typed("ENABLE_TRANSCRIPT")
                 agent_config = AgentConfig(

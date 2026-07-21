@@ -286,8 +286,8 @@ class AppConfig:
 
     def validate(self) -> None:
         """Validate configuration values."""
-        # Validate agent provider (currently only anthropic is supported)
-        self.llm.agent.validate(supported_providers=["anthropic"])
+        # Validate agent provider
+        self.llm.agent.validate(supported_providers=["anthropic", "openai"])
 
         # Validate crawl provider (currently only openai is supported)
         self.llm.crawl.validate(supported_providers=["openai"])
