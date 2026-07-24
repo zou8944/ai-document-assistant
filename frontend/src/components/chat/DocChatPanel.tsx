@@ -57,10 +57,9 @@ export const DocChatPanel: React.FC<DocChatPanelProps> = ({ chatId, documentId }
   }
 
   const formatTime = (timestamp: string) => {
-    return new Date(timestamp).toLocaleTimeString('zh-CN', {
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+    const d = new Date(timestamp)
+    const pad = (n: number) => n.toString().padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
   }
 
   const hasNoDocument = !documentId
